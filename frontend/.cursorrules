@@ -1,0 +1,57 @@
+# EduGenesis Frontend AI Developer Rules (.cursorrules)
+
+You are an expert React developer assisting with the frontend of "EduGenesis". To maintain consistency, prevent bundle bloat, and protect custom styling, you MUST strictly adhere to the following rules. Do not bypass them under any circumstances.
+
+---
+
+## 🚫 1. Strict Dependency Lock (严禁乱导三方库)
+- **Rule**: DO NOT run `npm install` or add any external rendering libraries (such as `react-markdown`, `mermaid`, `react-flow`, `react-router`, or UI frameworks like Shadcn/Tailwind) without explicit developer permission.
+- **Alternative**: Always write lightweight, zero-dependency custom helper functions or React components to solve specific tasks:
+  - **Markdown Rendering**: Do not install `react-markdown`. Instead, write a custom, regex-based, zero-dependency `<MarkdownRenderer />` component that parses headers (`#`), bold (`**`), code blocks (```` ``` ````), inline code (`` ` ``), and bullet points (`-`). This keeps streaming text fully controllable and lightweight.
+  - **Mindmaps/Flowcharts**: Do not install `mermaid` or `react-flow`. Instead, parse the string structure and render native `<svg>` nodes or style them using standard flex/grid HTML layouts with Vanilla CSS.
+  - **Quizzes**: Implement a custom UI state tree with React `useState` to render options and score totals.
+
+---
+
+## 🎨 2. Style & Design Tokens (严格遵守 index.css 主题变量)
+- **Rule**: Under no circumstances should you generate Tailwind classes, write ad-hoc inline color codes, or overwrite global stylesheet setups.
+- **Alternative**:
+  - Always use the predefined CSS variables from `src/index.css`:
+    - `--primary` (#0f766e, Deep Teal)
+    - `--secondary` (#1d4ed8, Cobalt Blue)
+    - `--accent` (#b45309, Amber Rust)
+    - `--bg-space` (#fbfaf7, Warm White Background)
+    - `--text-main` (#1e293b, Primary Dark Slate)
+    - `--text-muted` (#475569)
+  - Cards must use the `.cyber-card` class container.
+  - Interactive menus must use the `.cyber-nav-tab` class.
+
+---
+
+## 💫 3. GSAP Animation Scope (GSAP 动画安全约束)
+- **Rule**: Do not write vanilla GSAP selectors (`gsap.to(".class", ...)`) without lifecycle cleanup. This causes animations to break or freeze in React 18's StrictMode double-mounting environment.
+- **Alternative**:
+  - Always scope animations using `gsap.context()` inside `useEffect`.
+  - Always return the `revert()` cleanup callback.
+  - *Example*:
+    ```jsx
+    const containerRef = useRef(null);
+    useEffect(() => {
+      const ctx = gsap.context(() => {
+        gsap.from(".anim-target", { opacity: 0, stagger: 0.1 });
+      }, containerRef);
+      return () => ctx.revert();
+    }, []);
+    ```
+
+---
+
+## 📂 4. Component Boundaries & Code Refactoring (禁止大拆大改)
+- **Rule**: Do not rewrite massive parts of `App.jsx` or alter state lifecycles unless explicitly instructed. Do not merge separate components back into a single massive file.
+- **Alternative**:
+  - Keep state logic at the appropriate parent level and pass setters down through props.
+  - Modularize features into clean subcomponents under `src/components/`:
+    - `Sidebar.jsx` (Radar dynamic chart)
+    - `TutorChat.jsx` (Chat viewport & Stream parser)
+    - `PathTimeline.jsx` (Interactive timeline stages)
+    - `ResourceGenerator.jsx` (Lightweight Quiz modal, Slide player, PDF mockup renderer)
