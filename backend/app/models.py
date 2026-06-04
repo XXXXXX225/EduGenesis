@@ -8,6 +8,13 @@ class UserProfile(BaseModel):
     error_patterns: List[str] = Field(default_factory=list, description="List of common student mistake domains")
     learning_goals: List[str] = Field(default_factory=list, description="Target learning topics")
     engagement: int = Field(default=80, ge=0, le=100, description="Student motivation/engagement index")
+    learning_stats: dict = Field(default_factory=lambda: {
+        "study_time": 45,
+        "quiz_accuracy": 85,
+        "mastered_nodes": 1,
+        "streak": [True, True, False, False, False, False, False]
+    }, description="Academic stats for dashboard homepage")
+
 
 class UserMessage(BaseModel):
     role: str = Field(..., description="Role of the sender: 'user' or 'assistant'")

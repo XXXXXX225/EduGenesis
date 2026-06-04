@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { 
-  BookOpen, 
-  MessageSquare, 
-  TrendingUp, 
-  FolderGit2, 
-  Send, 
-  Cpu, 
-  User, 
-  CheckCircle2, 
-  PlayCircle, 
+import {
+  BookOpen,
+  MessageSquare,
+  TrendingUp,
+  FolderGit2,
+  Send,
+  Cpu,
+  User,
+  CheckCircle2,
+  PlayCircle,
   Lock,
   ArrowRight,
   FileText,
@@ -24,16 +24,75 @@ import {
   Download,
   Code2,
   LogOut,
-  GraduationCap
+  GraduationCap,
+  X,
+  Play,
+  Pause,
+  Copy,
+  Check
 } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
-export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentView, setCurrentView] = useState('landing'); // 'landing' | 'auth'
-  const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
+// Route/URL helper functions
+const parseStateFromURL = () => {
+  const path = window.location.pathname;
+  const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+
+  let view = 'landing';
+  let mode = 'login';
+  let tab = 'home';
+
+  if (path === '/signup') {
+    view = 'auth';
+    mode = 'signup';
+  } else if (path === '/login') {
+    view = 'auth';
+    mode = 'login';
+  } else if (path === '/') {
+    view = 'landing';
+  } else {
+    // If not logged in, any dashboard path (/home, /chat, etc.) fallback to landing page
+    if (!loggedIn) {
+      view = 'landing';
+    } else {
+      view = 'dashboard';
+      if (path === '/chat') tab = 'chat';
+      else if (path === '/path') tab = 'path';
+      else if (path === '/resources') tab = 'resources';
+      else tab = 'home';
+    }
+  }
+
+  return { view, mode, tab, loggedIn };
+};
+
+const updateURLFromState = (view, mode, tab, loggedIn) => {
+  let targetPath = '/';
   
+  if (view === 'landing') {
+    targetPath = '/';
+  } else if (view === 'auth') {
+    targetPath = mode === 'signup' ? '/signup' : '/login';
+  } else if (view === 'dashboard') {
+    if (tab === 'home') targetPath = '/home';
+    else if (tab === 'chat') targetPath = '/chat';
+    else if (tab === 'path') targetPath = '/path';
+    else if (tab === 'resources') targetPath = '/resources';
+    else targetPath = '/home';
+  }
+
+  if (window.location.pathname !== targetPath) {
+    window.history.pushState(null, '', targetPath);
+  }
+};
+
+export default function App() {
+  const initialRoute = parseStateFromURL();
+  const [isLoggedIn, setIsLoggedIn] = useState(initialRoute.loggedIn);
+  const [currentView, setCurrentView] = useState(initialRoute.view); // 'landing' | 'auth' | 'dashboard'
+  const [authMode, setAuthMode] = useState(initialRoute.mode); // 'login' | 'signup'
+
   // Interactive Landing Demo states
   const [demoStyle, setDemoStyle] = useState('practical'); // 'practical' | 'theoretical' | 'visual'
   const [demoProfile, setDemoProfile] = useState({
@@ -46,25 +105,25 @@ export default function App() {
   });
   const [stats, setStats] = useState({ activeUsers: 0, efficiency: 0, accuracy: 0 });
   const [activeDemoAgent, setActiveDemoAgent] = useState('executive'); // 'executive' | 'profile' | 'path'
-  
+
   // Registration inputs
-  const [regUsername, setRegUsername] = useState('');
+  const [regUsername, setRegUsername] = useState(() => localStorage.getItem('regUsername') || '');
   const [regPassword, setRegPassword] = useState('');
   const [regCognitiveStyle, setRegCognitiveStyle] = useState('Practical Coding');
   const [regLearningGoal, setRegLearningGoal] = useState('Python Basics');
-  
+
   // Login inputs
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
   // Authentication error state
   const [authError, setAuthError] = useState('');
-  
+
   // Loading orchestration states
   const [isLoadingOrchestration, setIsLoadingOrchestration] = useState(false);
   const [orchestrationStep, setOrchestrationStep] = useState(0);
 
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState(initialRoute.tab);
   const [profile, setProfile] = useState({
     knowledge_base: 40,
     learning_pace: 50,
@@ -73,6 +132,25 @@ export default function App() {
     learning_goals: ["Python Basics"],
     engagement: 80
   });
+
+  // 1a. Listen to URL path changes (e.g. browser back/forward buttons)
+  useEffect(() => {
+    const handlePopState = () => {
+      const state = parseStateFromURL();
+      setIsLoggedIn(state.loggedIn);
+      setCurrentView(state.view);
+      setAuthMode(state.mode);
+      setActiveTab(state.tab);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // 1b. Update URL path when internal navigation states change
+  useEffect(() => {
+    updateURLFromState(currentView, authMode, activeTab, isLoggedIn);
+  }, [currentView, authMode, activeTab, isLoggedIn]);
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -103,11 +181,11 @@ export default function App() {
       setTimeout(() => {
         setOrchestrationStep(1);
       }, 1200);
-      
+
       setTimeout(() => {
         setOrchestrationStep(2);
       }, 2400);
-      
+
       setTimeout(() => {
         setOrchestrationStep(3);
       }, 3600);
@@ -115,14 +193,14 @@ export default function App() {
       setTimeout(async () => {
         try {
           // Fetch updated profile
-          const profileRes = await fetch('http://127.0.0.1:8000/api/profile');
+          const profileRes = await fetch(`http://127.0.0.1:8000/api/profile?username=${regUsername}`);
           if (profileRes.ok) {
             const profileData = await profileRes.json();
             setProfile(profileData);
           }
-          
+
           // Fetch updated path
-          const pathRes = await fetch('http://127.0.0.1:8000/api/path');
+          const pathRes = await fetch(`http://127.0.0.1:8000/api/path?username=${regUsername}`);
           if (pathRes.ok) {
             const pathData = await pathRes.json();
             setPathNodes(pathData.nodes);
@@ -130,8 +208,11 @@ export default function App() {
         } catch (err) {
           console.warn("Error fetching initial states on registration complete:", err);
         } finally {
+          localStorage.setItem('isLoggedIn', 'true');
+          localStorage.setItem('regUsername', regUsername);
           setIsLoadingOrchestration(false);
           setIsLoggedIn(true);
+          setCurrentView('dashboard');
           setActiveTab('home');
         }
       }, 4800);
@@ -178,14 +259,14 @@ export default function App() {
       setTimeout(async () => {
         try {
           // Sync frontend local profile
-          const profileRes = await fetch('http://127.0.0.1:8000/api/profile');
+          const profileRes = await fetch(`http://127.0.0.1:8000/api/profile?username=${resData.username}`);
           if (profileRes.ok) {
             const profileData = await profileRes.json();
             setProfile(profileData);
           }
-          
+
           // Sync frontend local path
-          const pathRes = await fetch('http://127.0.0.1:8000/api/path');
+          const pathRes = await fetch(`http://127.0.0.1:8000/api/path?username=${resData.username}`);
           if (pathRes.ok) {
             const pathData = await pathRes.json();
             setPathNodes(pathData.nodes);
@@ -195,8 +276,11 @@ export default function App() {
         } finally {
           // Set registration username to correct value for Sidebar display
           setRegUsername(resData.username);
+          localStorage.setItem('isLoggedIn', 'true');
+          localStorage.setItem('regUsername', resData.username);
           setIsLoadingOrchestration(false);
           setIsLoggedIn(true);
+          setCurrentView('dashboard');
           setActiveTab('home');
         }
       }, 2400);
@@ -212,7 +296,7 @@ export default function App() {
     if (!isLoggedIn) {
       const ctx = gsap.context(() => {
         if (currentView === 'landing') {
-          gsap.fromTo(".anim-fade-in", 
+          gsap.fromTo(".anim-fade-in",
             { opacity: 0, y: 20 },
             { opacity: 1, y: 0, duration: 0.6, stagger: 0.1, ease: "power2.out" }
           );
@@ -304,7 +388,7 @@ export default function App() {
         }
 
         // Stagger fade-in for feature cards (using fromTo to prevent React double-render stickiness)
-        gsap.fromTo(".grid-cols-3 .cyber-card", 
+        gsap.fromTo(".grid-cols-3 .cyber-card",
           { opacity: 0, y: 35 },
           {
             scrollTrigger: {
@@ -321,7 +405,7 @@ export default function App() {
         );
 
         // Smooth fade-in for sandbox
-        gsap.fromTo("#sandbox .sandbox-grid", 
+        gsap.fromTo("#sandbox .sandbox-grid",
           { opacity: 0, y: 40 },
           {
             scrollTrigger: {
@@ -337,7 +421,7 @@ export default function App() {
         );
 
         // Smooth fade-in for architecture
-        gsap.fromTo("#architecture .cyber-card", 
+        gsap.fromTo("#architecture .cyber-card",
           { opacity: 0, y: 40 },
           {
             scrollTrigger: {
@@ -380,9 +464,46 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   
+  // Member B & C Interactive states
+  const [diagnosticLogs, setDiagnosticLogs] = useState([
+    { time: new Date().toLocaleTimeString(), log: "多智能体协同网络部署完成，开始监听特征变动。" }
+  ]);
+  const [profileAlert, setProfileAlert] = useState('');
+  const [isRegeneratingPath, setIsRegeneratingPath] = useState(false);
+  const [selectedNodeResources, setSelectedNodeResources] = useState(null);
+  const [activeModal, setActiveModal] = useState(null);
+
+  // Slides Player states
+  const [currentSlideIdx, setCurrentSlideIdx] = useState(0);
+  const [isPlayingSlide, setIsPlayingSlide] = useState(false);
+  const [slideTypingText, setSlideTypingText] = useState('');
+
+  // Interactive Quiz states
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizStep, setQuizStep] = useState('intro'); // 'intro' | 'question' | 'completed'
+  const [quizCorrectCount, setQuizCorrectCount] = useState(0);
+  const [quizQuestionIdx, setQuizQuestionIdx] = useState(0);
+  const [quizFeedback, setQuizFeedback] = useState('');
+  const [copyCodeText, setCopyCodeText] = useState('复制源码');
+
   // Refs for GSAP scoping & animation
   const mainContentRef = useRef(null);
   const chatEndRef = useRef(null);
+
+  const goPortalHome = () => {
+    if (currentView === 'landing') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setCurrentView('landing');
+    }
+  };
+
+  const goDashboardHome = () => {
+    setCurrentView('dashboard');
+    setActiveTab('home');
+    mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // 1. Initial Page Load Animation (Stagger Reveal with React 18 StrictMode Safety)
   useEffect(() => {
@@ -415,7 +536,7 @@ export default function App() {
   useEffect(() => {
     if (isLoggedIn) {
       const ctx = gsap.context(() => {
-        gsap.fromTo(".sidebar-anim-item", 
+        gsap.fromTo(".sidebar-anim-item",
           { opacity: 0, x: -30 },
           {
             opacity: 1,
@@ -486,24 +607,69 @@ export default function App() {
 
   // Fetch initial profile and path from backend on mount
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/api/profile')
+    const username = localStorage.getItem('regUsername') || 'default_user';
+    const profileUrl = `http://127.0.0.1:8000/api/profile?username=${username}`;
+    const pathUrl = `http://127.0.0.1:8000/api/path?username=${username}`;
+
+    fetch(profileUrl)
       .then(res => res.json())
-      .then(data => setProfile(data))
+      .then(data => {
+        setProfile(data);
+      })
       .catch(err => console.warn("Backend not running yet, using local mock state.", err));
 
-    fetch('http://127.0.0.1:8000/api/path')
+    fetch(pathUrl)
       .then(res => res.json())
-      .then(data => setPathNodes(data.nodes))
+      .then(data => {
+        setPathNodes(data.nodes);
+        // Find active node and fetch its resources
+        const activeNode = data.nodes.find(n => n.status === 'active') || data.nodes[0];
+        if (activeNode) {
+          fetchNodeResources(activeNode.id);
+        }
+      })
       .catch(err => console.warn("Backend not running yet, using local mock state.", err));
   }, []);
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!chatInput.trim() || isStreaming) return;
+  const fetchNodeResources = async (nodeId) => {
+    // Show spinner if we fetch again
+    setSelectedNodeResources(null);
+    try {
+      const username = localStorage.getItem('regUsername') || 'default_user';
+      const res = await fetch(`http://127.0.0.1:8000/api/resources?node_id=${nodeId}&username=${username}`);
+      if (res.ok) {
+        const data = await res.json();
+        // Fallback to mock data if backend has no resources generated yet to avoid blank page
+        if (Object.keys(data).length === 0) {
+           setSelectedNodeResources({
+             pdf: { content: "mock" },
+             slide: { content: "mock" },
+             mindmap: { content: "mock" },
+             code: { content: "mock" },
+             quiz: { content: "mock" }
+           });
+        } else {
+           setSelectedNodeResources(data);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching resources:", err);
+      // If backend is not available, show mock resources
+      setSelectedNodeResources({
+        pdf: { content: "mock" },
+        slide: { content: "mock" },
+        mindmap: { content: "mock" },
+        code: { content: "mock" },
+        quiz: { content: "mock" }
+      });
+    }
+  };
 
-    const userMessage = { role: 'user', content: chatInput };
+  const submitChatMessage = async (messageText) => {
+    if (isStreaming || !messageText.trim()) return;
+
+    const userMessage = { role: 'user', content: messageText };
     setChatHistory(prev => [...prev, userMessage]);
-    setChatInput('');
     setIsStreaming(true);
     setTutorStatus('🧠 [主管智能体] 正在唤醒协同网络...');
 
@@ -511,7 +677,8 @@ export default function App() {
     setChatHistory(prev => [...prev, { role: 'assistant', content: '' }]);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/chat', {
+      const username = localStorage.getItem('regUsername') || 'default_user';
+      const response = await fetch(`http://127.0.0.1:8000/api/chat?username=${username}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -539,7 +706,7 @@ export default function App() {
           if (trimmed.startsWith('data: ')) {
             try {
               const data = JSON.parse(trimmed.slice(6));
-              
+
               if (data.type === 'status') {
                 setTutorStatus(data.status);
               } else if (data.type === 'content') {
@@ -552,6 +719,15 @@ export default function App() {
                 });
               } else if (data.type === 'profile_update') {
                 setProfile(data.profile);
+                setProfileAlert('主管智能体已为您同步更新 6 维学习画像！');
+                setTimeout(() => setProfileAlert(''), 4000);
+                setDiagnosticLogs(prev => [
+                  ...prev,
+                  {
+                    time: new Date().toLocaleTimeString(),
+                    log: `画像指标变动: 知识库=${data.profile.knowledge_base}%, 节奏=${data.profile.learning_pace}%, 风格=${data.profile.cognitive_style}`
+                  }
+                ]);
               } else if (data.type === 'path_update') {
                 setPathNodes(data.nodes);
               } else if (data.type === 'done') {
@@ -577,6 +753,299 @@ export default function App() {
     }
   };
 
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isStreaming) return;
+    submitChatMessage(chatInput);
+    setChatInput('');
+  };
+
+  const handleRegeneratePath = async () => {
+    setIsRegeneratingPath(true);
+    try {
+      const username = localStorage.getItem('regUsername') || 'default_user';
+      const res = await fetch(`http://127.0.0.1:8000/api/path/regenerate?username=${username}`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPathNodes(data.nodes);
+        
+        // Add a diagnostic log
+        setDiagnosticLogs(prev => [
+          ...prev,
+          {
+            time: new Date().toLocaleTimeString(),
+            log: "路径智能体已重新编排并下发您的定制学习节点。"
+          }
+        ]);
+        setProfileAlert("学习路径重构成功！");
+        setTimeout(() => setProfileAlert(''), 3000);
+      }
+    } catch (err) {
+      console.error("Path regeneration failed:", err);
+    } finally {
+      setIsRegeneratingPath(false);
+    }
+  };
+
+
+  // --- TTS voice synthesis player helper ---
+  const handleSlideSpeech = (text) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-CN';
+      utterance.rate = 1.0;
+      utterance.onend = () => {
+        setIsPlayingSlide(false);
+      };
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // --- Quiz completing effect ---
+  const handleCompleteQuiz = async (score, total) => {
+    const wrongCount = total - score;
+    const username = localStorage.getItem('regUsername') || 'default_user';
+    const updatedStats = {
+      ...profile.learning_stats,
+      study_time: (profile.learning_stats?.study_time || 45) + 10,
+      quiz_accuracy: Math.round(((profile.learning_stats?.quiz_accuracy || 80) + (score / total) * 100) / 2)
+    };
+    
+    // Decrement parameters if wrong answers exist
+    const updatedProfile = {
+      ...profile,
+      knowledge_base: Math.max(10, profile.knowledge_base - (wrongCount > 0 ? wrongCount * 4 : -5)),
+      engagement: Math.min(100, profile.engagement + 5),
+      learning_stats: updatedStats
+    };
+    
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/profile?username=${username}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedProfile)
+      });
+      if (res.ok) {
+        const newData = await res.json();
+        setProfile(newData);
+        setProfileAlert("自适应测验已完成！答题指标已同步更新到您的画像。");
+        setTimeout(() => setProfileAlert(''), 4000);
+        setDiagnosticLogs(prev => [
+          ...prev,
+          {
+            time: new Date().toLocaleTimeString(),
+            log: `测验完成: 正确率=${Math.round((score/total)*100)}%, 学习画像自动微调反馈已送达！`
+          }
+        ]);
+      }
+    } catch (err) {
+      console.error("Failed to update profile after quiz:", err);
+    }
+    setQuizStep('completed');
+  };
+
+  // Slide content typing text effect
+  useEffect(() => {
+    if (activeModal === 'slide' && selectedNodeResources?.slide) {
+      const currentText = selectedNodeResources.slide[currentSlideIdx]?.content || '';
+      setSlideTypingText('');
+      
+      let i = 0;
+      const interval = setInterval(() => {
+        setSlideTypingText(prev => prev + currentText.charAt(i));
+        i++;
+        if (i >= currentText.length) {
+          clearInterval(interval);
+        }
+      }, 35);
+      
+      if (isPlayingSlide) {
+        handleSlideSpeech(selectedNodeResources.slide[currentSlideIdx]?.title + ". " + currentText);
+      }
+      
+      gsap.fromTo(".slide-content-card", 
+        { opacity: 0, scale: 0.96, y: 8 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.35, ease: "power2.out" }
+      );
+      
+      return () => {
+        clearInterval(interval);
+        window.speechSynthesis.cancel();
+      };
+    }
+  }, [currentSlideIdx, isPlayingSlide, activeModal, selectedNodeResources]);
+
+  // Modal styling definitions
+  const modalBackdropStyle = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100vw',
+    height: '100vh',
+    background: 'rgba(10, 15, 30, 0.45)',
+    backdropFilter: 'blur(8px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000
+  };
+
+  const modalContentStyle = {
+    width: '90%',
+    maxHeight: '90vh',
+    background: '#ffffff',
+    borderColor: 'var(--border-neon)',
+    padding: '28px',
+    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15), 0 10px 10px -5px rgba(0,0,0,0.08)',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px'
+  };
+
+  const modalHeaderStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: '16px',
+    borderBottom: '1px solid rgba(0, 0, 0, 0.08)'
+  };
+
+  const modalCloseButtonStyle = {
+    background: 'rgba(0,0,0,0.03)',
+    border: '1px solid rgba(0,0,0,0.08)',
+    borderRadius: '10px',
+    padding: '6px 14px',
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '700'
+  };
+
+  const parseMarkdownToReact = (text) => {
+    if (!text) return null;
+    const lines = text.split('\n');
+    return lines.map((line, idx) => {
+      if (line.startsWith('# ')) {
+        return <h1 key={idx} style={{ fontSize: '22px', fontWeight: '900', margin: '20px 0 10px', color: 'var(--text-main)' }}>{line.slice(2)}</h1>;
+      }
+      if (line.startsWith('## ')) {
+        return <h2 key={idx} style={{ fontSize: '18px', fontWeight: '800', margin: '16px 0 8px', color: 'var(--text-main)', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: '4px' }}>{line.slice(3)}</h2>;
+      }
+      if (line.startsWith('### ')) {
+        return <h3 key={idx} style={{ fontSize: '15px', fontWeight: '700', margin: '12px 0 6px', color: 'var(--text-main)' }}>{line.slice(4)}</h3>;
+      }
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        return <li key={idx} style={{ marginLeft: '20px', marginBottom: '6px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.6' }}>{line.slice(2)}</li>;
+      }
+      if (line.startsWith('1. ') || line.startsWith('2. ') || line.startsWith('3. ')) {
+        return <li key={idx} style={{ marginLeft: '20px', marginBottom: '6px', fontSize: '13px', color: 'var(--text-muted)', listStyleType: 'decimal', lineHeight: '1.6' }}>{line.slice(3)}</li>;
+      }
+      if (line.startsWith('```')) {
+        return null;
+      }
+      if (line.trim() === '') return <div key={idx} style={{ height: '8px' }} />;
+      return <p key={idx} style={{ fontSize: '13.5px', color: 'var(--text-muted)', lineHeight: '1.7', marginBottom: '10px' }}>{line}</p>;
+    });
+  };
+
+  const drawMindmapSVG = (mindmapText) => {
+    const nodes = [
+      { id: 'root', label: selectedNode?.title || "Python Basics", x: 250, y: 180, r: 45, color: 'var(--primary-neon)' },
+      { id: 'c1', label: "核心概念定义", x: 120, y: 80, r: 35, color: 'var(--secondary)' },
+      { id: 'c2', label: "防御性安全编码", x: 380, y: 80, r: 35, color: 'var(--warning)' },
+      { id: 'c3', label: "断言测试集", x: 120, y: 280, r: 35, color: 'var(--accent)' },
+      { id: 'c4', label: "多智能体微调", x: 380, y: 280, r: 35, color: 'var(--success)' },
+    ];
+    
+    return (
+      <svg width="500" height="360" style={{ background: '#0e1726', borderRadius: '16px' }}>
+        {nodes.slice(1).map(node => (
+          <line
+            key={node.id}
+            x1="250"
+            y1="180"
+            x2={node.x}
+            y2={node.y}
+            stroke="rgba(255,255,255,0.12)"
+            strokeWidth="3"
+            strokeDasharray="4,4"
+          />
+        ))}
+        {nodes.map(node => (
+          <g key={node.id}>
+            <circle
+              cx={node.x}
+              cy={node.y}
+              r={node.r + 5}
+              fill="none"
+              stroke={node.color}
+              strokeWidth="2"
+              opacity="0.3"
+              style={{ filter: 'blur(2px)' }}
+            />
+            <circle
+              cx={node.x}
+              cy={node.y}
+              r={node.r}
+              fill="rgba(255,255,255,0.06)"
+              stroke={node.color}
+              strokeWidth="2.5"
+              style={{ cursor: 'pointer' }}
+              onClick={() => {
+                gsap.fromTo(`.mindmap-text-${node.id}`, 
+                  { scale: 0.8 }, 
+                  { scale: 1, duration: 0.3, ease: "back.out(1.5)" }
+                );
+              }}
+            />
+            <text
+              x={node.x}
+              y={node.y + 4}
+              fill="#ffffff"
+              fontSize="12"
+              fontWeight="800"
+              textAnchor="middle"
+              className={`mindmap-text-${node.id}`}
+              style={{ pointerEvents: 'none' }}
+            >
+              {node.label}
+            </text>
+          </g>
+        ))}
+      </svg>
+    );
+  };
+
+  const highlightPythonCode = (codeText) => {
+    if (!codeText) return null;
+    const keywords = ['def', 'import', 'assert', 'if', 'print', 'return', 'class', 'from', 'in'];
+    const lines = codeText.split('\n');
+    return lines.map((line, idx) => {
+      let elements = [];
+      const parts = line.split(/(\s+)/);
+      parts.forEach((part, pidx) => {
+        if (keywords.includes(part.trim())) {
+          elements.push(<span key={pidx} style={{ color: '#c084fc', fontWeight: 'bold' }}>{part}</span>);
+        } else if (part.startsWith('#')) {
+          elements.push(<span key={pidx} style={{ color: '#9ca3af', fontStyle: 'italic' }}>{part}</span>);
+        } else if (part.includes('"') || part.includes("'")) {
+          elements.push(<span key={pidx} style={{ color: '#34d399' }}>{part}</span>);
+        } else {
+          elements.push(part);
+        }
+      });
+      return <div key={idx} style={{ display: 'flex', fontSize: '12px', fontFamily: 'monospace', lineHeight: '1.6' }}>
+        <span style={{ width: '28px', color: 'rgba(255,255,255,0.25)', userSelect: 'none', marginRight: '12px' }}>{idx + 1}</span>
+        <span>{elements}</span>
+      </div>;
+    });
+  };
+
+
   // SVG Radar coordinates generator
   const renderRadarChart = (profileData) => {
     const width = 220;
@@ -586,7 +1055,7 @@ export default function App() {
     const r = 58;
     const sides = 6;
     const angles = Array.from({ length: sides }, (_, i) => (i * 2 * Math.PI) / sides - Math.PI / 2);
-    
+
     const dimensions = [
       { name: "知识库", key: "knowledge_base" },
       { name: "学习节奏", key: "learning_pace" },
@@ -617,35 +1086,35 @@ export default function App() {
     const valPath = valueCoords.map(c => `${c.x},${c.y}`).join(' ');
 
     return (
-      <svg 
-        width={width} 
-        height={height} 
-        viewBox={`0 0 ${width} ${height}`} 
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
         className="radar-svg"
         style={{ flexShrink: 0, display: 'block', margin: '0 auto' }}
       >
         {/* Background grids */}
         {hexagons.map((points, idx) => (
-          <polygon 
-            key={idx} 
-            points={points.map(p => `${p.x},${p.y}`).join(' ')} 
-            fill="none" 
-            stroke="rgba(15, 118, 110, 0.12)" 
-            strokeWidth="1.5" 
+          <polygon
+            key={idx}
+            points={points.map(p => `${p.x},${p.y}`).join(' ')}
+            fill="none"
+            stroke="rgba(15, 118, 110, 0.12)"
+            strokeWidth="1.5"
           />
         ))}
         {/* Dimension axes */}
         {angles.map((angle, idx) => {
           const outerPoint = getCoord(angle, 1.0);
           return (
-            <line 
-              key={idx} 
-              x1={cx} 
-              y1={cy} 
-              x2={outerPoint.x} 
-              y2={outerPoint.y} 
-              stroke="rgba(15, 118, 110, 0.12)" 
-              strokeWidth="1.5" 
+            <line
+              key={idx}
+              x1={cx}
+              y1={cy}
+              x2={outerPoint.x}
+              y2={outerPoint.y}
+              stroke="rgba(15, 118, 110, 0.12)"
+              strokeWidth="1.5"
             />
           );
         })}
@@ -653,18 +1122,18 @@ export default function App() {
         {valPath && (
           <>
             {/* outer neon stroke glow */}
-            <polygon 
-              points={valPath} 
-              fill="none" 
-              stroke="rgba(29, 78, 216, 0.25)" 
-              strokeWidth="6" 
+            <polygon
+              points={valPath}
+              fill="none"
+              stroke="rgba(29, 78, 216, 0.25)"
+              strokeWidth="6"
               filter="blur(4px)"
             />
-            <polygon 
-              points={valPath} 
-              fill="rgba(15, 118, 110, 0.15)" 
-              stroke="url(#gradient-accent)" 
-              strokeWidth="2.5" 
+            <polygon
+              points={valPath}
+              fill="rgba(15, 118, 110, 0.15)"
+              stroke="url(#gradient-accent)"
+              strokeWidth="2.5"
             />
           </>
         )}
@@ -682,12 +1151,12 @@ export default function App() {
           else if (Math.cos(angle) < -0.1) textAnchor = "end";
 
           return (
-            <text 
-              key={idx} 
-              x={coord.x} 
-              y={coord.y + 4} 
-              fill="var(--text-muted)" 
-              fontSize="11" 
+            <text
+              key={idx}
+              x={coord.x}
+              y={coord.y + 4}
+              fill="var(--text-muted)"
+              fontSize="11"
               fontWeight="600"
               textAnchor={textAnchor}
             >
@@ -716,13 +1185,13 @@ export default function App() {
       default: return <FileText size={16} />;
     }
   };
-  if (!isLoggedIn) {
+  if (currentView === 'landing' || currentView === 'auth' || !isLoggedIn) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative', overflowX: 'hidden' }}>
         {/* Ambient background orbs */}
         <div className="glow-orb-1" style={{ position: 'absolute', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(15, 118, 110, 0.05) 0%, transparent 70%)', top: '15%', right: '10%', pointerEvents: 'none', zIndex: 0 }}></div>
         <div className="glow-orb-2" style={{ position: 'absolute', width: '420px', height: '420px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(29, 78, 216, 0.04) 0%, transparent 70%)', bottom: '10%', left: '5%', pointerEvents: 'none', zIndex: 0 }}></div>
-        
+
         {/* Loading Overlay */}
         {isLoadingOrchestration && (
           <div className="loading-overlay">
@@ -743,7 +1212,18 @@ export default function App() {
 
         {/* 1. Header Navigation Bar */}
         <header className="landing-nav">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={goPortalHome}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                goPortalHome();
+              }
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
+          >
             <div style={{ padding: '8px', background: 'linear-gradient(135deg, rgba(15, 118, 110, 0.12) 0%, rgba(29, 78, 216, 0.08) 100%)', borderRadius: '10px', border: '1px solid rgba(15, 118, 110, 0.2)', display: 'flex' }}>
               <GraduationCap size={20} style={{ color: 'var(--primary-neon)' }} />
             </div>
@@ -756,21 +1236,31 @@ export default function App() {
           </div>
 
           <nav className="landing-nav-links">
-            <a onClick={() => setCurrentView('landing')} className="landing-nav-link">门户首页</a>
+            <a onClick={() => {
+              if (currentView === 'landing') {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              } else {
+                setCurrentView('landing');
+              }
+            }} className="landing-nav-link">门户首页</a>
             <a href="#features" className="landing-nav-link">系统特色</a>
             <a href="#architecture" className="landing-nav-link">智能体架构</a>
           </nav>
 
           <div>
-            <button 
+            <button
               onClick={() => {
-                setAuthMode('login');
-                setCurrentView('auth');
+                if (isLoggedIn) {
+                  setCurrentView('dashboard');
+                } else {
+                  setAuthMode('login');
+                  setCurrentView('auth');
+                }
               }}
               className="cyber-btn"
               style={{ padding: '10px 20px', fontSize: '12px' }}
             >
-              登录系统
+              {isLoggedIn ? '进入工作台' : '登录系统'}
             </button>
           </div>
         </header>
@@ -789,24 +1279,28 @@ export default function App() {
                   EduGenesis 是一套学术级别的多智能体自适应学习系统。由<b>主管智能体</b>、<b>画像智能体</b>与<b>路径智能体</b>组成强大的协同网络，通过自然语言对话实时推演您的6维认知雷达，动态编排生成专属于您的多模态学习链路。
                 </p>
                 <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-                  <button 
+                  <button
                     onClick={() => {
-                      setAuthMode('signup');
-                      setCurrentView('auth');
+                      if (isLoggedIn) {
+                        setCurrentView('dashboard');
+                      } else {
+                        setAuthMode('signup');
+                        setCurrentView('auth');
+                      }
                     }}
                     className="cyber-btn"
                     style={{ padding: '14px 28px', fontSize: '14px' }}
                   >
-                    创建您的学术账户 <ArrowRight size={16} />
+                    {isLoggedIn ? '进入我的工作台' : '创建您的学术账户'} <ArrowRight size={16} />
                   </button>
-                  <a 
-                    href="#sandbox" 
+                  <a
+                    href="#sandbox"
                     className="cyber-btn"
-                    style={{ 
-                      padding: '14px 28px', 
-                      fontSize: '14px', 
-                      background: 'rgba(255,255,255,0.7)', 
-                      border: '1px solid var(--border-neon)', 
+                    style={{
+                      padding: '14px 28px',
+                      fontSize: '14px',
+                      background: 'rgba(255,255,255,0.7)',
+                      border: '1px solid var(--border-neon)',
                       color: 'var(--text-main)',
                       boxShadow: 'none'
                     }}
@@ -874,8 +1368,8 @@ export default function App() {
                   {/* Left Controls */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '8px', color: 'var(--text-main)' }}>选择您的模拟学术特征：</h3>
-                    
-                    <button 
+
+                    <button
                       onClick={() => setDemoStyle('practical')}
                       className={`demo-style-btn ${demoStyle === 'practical' ? 'selected' : ''}`}
                     >
@@ -888,7 +1382,7 @@ export default function App() {
                       </span>
                     </button>
 
-                    <button 
+                    <button
                       onClick={() => setDemoStyle('theoretical')}
                       className={`demo-style-btn ${demoStyle === 'theoretical' ? 'selected' : ''}`}
                     >
@@ -901,7 +1395,7 @@ export default function App() {
                       </span>
                     </button>
 
-                    <button 
+                    <button
                       onClick={() => setDemoStyle('visual')}
                       className={`demo-style-btn ${demoStyle === 'visual' ? 'selected' : ''}`}
                     >
@@ -922,7 +1416,7 @@ export default function App() {
 
                   {/* Right Output Panels */}
                   <div className="cyber-card" style={{ padding: '24px', background: '#ffffff', border: '1px solid var(--border-neon-hover)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                    
+
                     {/* Morphing Radar */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', marginBottom: '8px', letterSpacing: '0.05em' }}>实时自适应认知雷达</span>
@@ -942,7 +1436,7 @@ export default function App() {
                     {/* Simulated Path adaptivity */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', marginBottom: '4px', letterSpacing: '0.05em' }}>生成的个性化路径关卡</span>
-                      
+
                       {demoStyle === 'practical' && (
                         <>
                           <div className="demo-path-node">
@@ -1020,17 +1514,17 @@ export default function App() {
                           </div>
                         </>
                       )}
-                      
-                      <button 
+
+                      <button
                         onClick={() => {
                           setRegCognitiveStyle(
-                            demoStyle === 'practical' ? 'Practical Coding' : 
-                            demoStyle === 'theoretical' ? 'Theoretical/Self-Paced' : 'Visual/Guided'
+                            demoStyle === 'practical' ? 'Practical Coding' :
+                              demoStyle === 'theoretical' ? 'Theoretical/Self-Paced' : 'Visual/Guided'
                           );
                           setAuthMode('signup');
                           setCurrentView('auth');
                         }}
-                        className="cyber-btn" 
+                        className="cyber-btn"
                         style={{ marginTop: 'auto', padding: '10px', fontSize: '11px', textTransform: 'none', justifyContent: 'center' }}
                       >
                         使用此风格注册并开启系统 <ArrowRight size={12} />
@@ -1052,7 +1546,7 @@ export default function App() {
                   </h2>
                   <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '6px' }}>我们专注于通过自研智能体提升学术和工程的交付质量</p>
                 </div>
-                
+
                 <div className="grid-cols-3">
                   <div className="cyber-card" style={{ padding: '28px', background: '#ffffff' }}>
                     <div style={{ display: 'inline-flex', padding: '12px', background: 'rgba(15, 118, 110, 0.05)', borderRadius: '14px', marginBottom: '20px', border: '1px solid rgba(15, 118, 110, 0.1)' }}>
@@ -1115,7 +1609,7 @@ export default function App() {
               </div>
 
               <div className="cyber-card" style={{ padding: '40px', background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, var(--bg-card-active) 100%)', display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '40px', alignItems: 'center' }}>
-                
+
                 {/* Left Interactive SVG Topology Map */}
                 <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', marginBottom: '20px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -1201,7 +1695,7 @@ export default function App() {
                         <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', lineHeight: '1.5' }}>主管核心负责实时捕获学生的文本或答题动态，将特征解析并下发任务，确保子节点协同工作。</p>
                       </div>
                     </div>
-                    
+
                     <div style={{ display: 'flex', gap: '14px' }}>
                       <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(15, 118, 110, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', color: 'var(--primary)', flexShrink: 0 }}>2</div>
                       <div>
@@ -1220,7 +1714,7 @@ export default function App() {
                   </div>
 
                   <div style={{ marginTop: '28px', borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '20px' }}>
-                    <button 
+                    <button
                       onClick={() => {
                         setAuthMode('signup');
                         setCurrentView('auth');
@@ -1267,7 +1761,7 @@ export default function App() {
 
               {/* Mode Selector Tabs */}
               <div style={{ display: 'flex', gap: '4px', background: 'rgba(245, 243, 237, 0.9)', padding: '4px', borderRadius: '10px', marginBottom: '28px' }}>
-                <button 
+                <button
                   onClick={() => setAuthMode('login')}
                   style={{
                     flex: 1,
@@ -1285,7 +1779,7 @@ export default function App() {
                 >
                   验证登录
                 </button>
-                <button 
+                <button
                   onClick={() => setAuthMode('signup')}
                   style={{
                     flex: 1,
@@ -1306,15 +1800,15 @@ export default function App() {
               </div>
 
               {authError && (
-                <div 
-                  className="cyber-card" 
-                  style={{ 
-                    padding: '12px 16px', 
-                    background: 'rgba(190, 18, 60, 0.05)', 
-                    borderColor: 'var(--danger)', 
-                    color: 'var(--danger)', 
-                    fontSize: '12px', 
-                    fontWeight: '600', 
+                <div
+                  className="cyber-card"
+                  style={{
+                    padding: '12px 16px',
+                    background: 'rgba(190, 18, 60, 0.05)',
+                    borderColor: 'var(--danger)',
+                    color: 'var(--danger)',
+                    fontSize: '12px',
+                    fontWeight: '600',
                     marginBottom: '20px',
                     borderRadius: '10px'
                   }}
@@ -1327,25 +1821,25 @@ export default function App() {
                 <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
                   <div className="form-group">
                     <label className="form-label">学术通行证 (用户名/邮箱)</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       required
                       value={loginUsername}
                       onChange={(e) => setLoginUsername(e.target.value)}
-                      placeholder="输入您的账号..." 
-                      className="cyber-input" 
+                      placeholder="输入您的账号..."
+                      className="cyber-input"
                       style={{ padding: '12px 18px' }}
                     />
                   </div>
                   <div className="form-group" style={{ marginBottom: '24px' }}>
                     <label className="form-label">通行密码</label>
-                    <input 
-                      type="password" 
+                    <input
+                      type="password"
                       required
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="输入账户密码..." 
-                      className="cyber-input" 
+                      placeholder="输入账户密码..."
+                      className="cyber-input"
                       style={{ padding: '12px 18px' }}
                     />
                   </div>
@@ -1366,25 +1860,25 @@ export default function App() {
                 <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
                   <div className="form-group">
                     <label className="form-label">注册用户名</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       required
                       value={regUsername}
                       onChange={(e) => setRegUsername(e.target.value)}
-                      placeholder="设置您的学术昵称..." 
-                      className="cyber-input" 
+                      placeholder="设置您的学术昵称..."
+                      className="cyber-input"
                       style={{ padding: '12px 18px' }}
                     />
                   </div>
                   <div className="form-group">
                     <label className="form-label">账户密码</label>
-                    <input 
-                      type="password" 
+                    <input
+                      type="password"
                       required
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="设置您的安全密码..." 
-                      className="cyber-input" 
+                      placeholder="设置您的安全密码..."
+                      className="cyber-input"
                       style={{ padding: '12px 18px' }}
                     />
                   </div>
@@ -1393,21 +1887,21 @@ export default function App() {
                   <div className="form-group">
                     <label className="form-label">首选认知风格评估</label>
                     <div className="radio-card-grid">
-                      <div 
+                      <div
                         className={`radio-card ${regCognitiveStyle === 'Practical Coding' ? 'selected' : ''}`}
                         onClick={() => setRegCognitiveStyle('Practical Coding')}
                       >
                         <span className="radio-card-title">实操编码型 (Practical Coding)</span>
                         <span className="radio-card-desc">偏好代码实战与测试驱动，以源码阅读和诊断测试为主。</span>
                       </div>
-                      <div 
+                      <div
                         className={`radio-card ${regCognitiveStyle === 'Theoretical/Self-Paced' ? 'selected' : ''}`}
                         onClick={() => setRegCognitiveStyle('Theoretical/Self-Paced')}
                       >
                         <span className="radio-card-title">理论自导型 (Theoretical/Self-Paced)</span>
                         <span className="radio-card-desc">侧重于深层的理论基础、公式讲解，提供更详尽的思维图。</span>
                       </div>
-                      <div 
+                      <div
                         className={`radio-card ${regCognitiveStyle === 'Visual/Guided' ? 'selected' : ''}`}
                         onClick={() => setRegCognitiveStyle('Visual/Guided')}
                       >
@@ -1421,7 +1915,7 @@ export default function App() {
                   <div className="form-group" style={{ marginBottom: '28px' }}>
                     <label className="form-label">学习目标主题</label>
                     <div style={{ display: 'flex', gap: '10px' }}>
-                      <div 
+                      <div
                         className={`cyber-card`}
                         style={{
                           flex: 1,
@@ -1437,7 +1931,7 @@ export default function App() {
                       >
                         Python 编程基础
                       </div>
-                      <div 
+                      <div
                         className={`cyber-card`}
                         style={{
                           flex: 1,
@@ -1480,7 +1974,16 @@ export default function App() {
       {/* 🚀 LEFT SIDEBAR */}
       <aside className="sidebar">
         {/* Logo Section */}
-        <div className="sidebar-anim-item" style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '32px', flexShrink: 0 }}>
+        <a
+          href="#"
+          className="sidebar-anim-item"
+          style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '32px', flexShrink: 0, cursor: 'pointer', pointerEvents: 'auto', textDecoration: 'none', color: 'inherit' }}
+          onClick={(e) => {
+            e.preventDefault();
+            console.log("Logo title clicked, navigating to portal home");
+            goPortalHome();
+          }}
+        >
           <div style={{ padding: '10px', background: 'linear-gradient(135deg, rgba(15, 118, 110, 0.15) 0%, rgba(29, 78, 216, 0.1) 100%)', borderRadius: '14px', border: '1px solid rgba(15, 118, 110, 0.25)', display: 'flex' }}>
             <GraduationCap size={24} style={{ color: 'var(--primary-neon)' }} />
           </div>
@@ -1490,7 +1993,7 @@ export default function App() {
             </h1>
             <span style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: '700' }}>多智能体协同系统</span>
           </div>
-        </div>
+        </a>
 
         {/* Dynamic Profile Panel */}
         <div className="cyber-card sidebar-anim-item" style={{ padding: '20px', marginBottom: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(255, 255, 255, 0.65)', borderColor: 'rgba(15, 118, 110, 0.12)', flexShrink: 0 }}>
@@ -1515,28 +2018,28 @@ export default function App() {
 
         {/* Navigation Menu */}
         <nav className="sidebar-anim-item" style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexGrow: '1', flexShrink: 0 }}>
-          <div 
+          <div
             className={`cyber-nav-tab ${activeTab === 'home' ? 'active' : ''}`}
             onClick={() => setActiveTab('home')}
           >
             <BookOpen size={18} />
             <span>仪表盘首页</span>
           </div>
-          <div 
+          <div
             className={`cyber-nav-tab ${activeTab === 'chat' ? 'active' : ''}`}
             onClick={() => setActiveTab('chat')}
           >
             <MessageSquare size={18} />
             <span>智能画像导师</span>
           </div>
-          <div 
+          <div
             className={`cyber-nav-tab ${activeTab === 'path' ? 'active' : ''}`}
             onClick={() => setActiveTab('path')}
           >
             <TrendingUp size={18} />
             <span>定制路径规划</span>
           </div>
-          <div 
+          <div
             className={`cyber-nav-tab ${activeTab === 'resources' ? 'active' : ''}`}
             onClick={() => setActiveTab('resources')}
           >
@@ -1556,19 +2059,21 @@ export default function App() {
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>已认证学术空间</span>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => {
+              localStorage.removeItem('isLoggedIn');
+              localStorage.removeItem('regUsername');
               setIsLoggedIn(false);
               setCurrentView('landing');
               setRegUsername('');
               setRegPassword('');
             }}
             className="cyber-btn"
-            style={{ 
-              width: '100%', 
-              background: 'rgba(190, 18, 60, 0.04)', 
-              borderColor: 'rgba(190, 18, 60, 0.12)', 
-              color: 'var(--danger)', 
+            style={{
+              width: '100%',
+              background: 'rgba(190, 18, 60, 0.04)',
+              borderColor: 'rgba(190, 18, 60, 0.12)',
+              color: 'var(--danger)',
               boxShadow: 'none',
               padding: '8px 16px',
               fontSize: '11px',
@@ -1584,7 +2089,7 @@ export default function App() {
 
       {/* 🖥️ MAIN PANELS */}
       <main className="main-content" ref={mainContentRef}>
-        
+
         {/* 🏠 HOME TAB */}
         {activeTab === 'home' && (
           <>
@@ -1605,6 +2110,111 @@ export default function App() {
                 </div>
               </div>
             </header>
+
+            {/* Stats, Streak and Recommendation Section */}
+            <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', margin: '24px 0' }}>
+              
+              {/* Left Column: Stats & Streak */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Stats Overview */}
+                <div className="cyber-card" style={{ padding: '24px', background: 'rgba(255, 255, 255, 0.65)', backdropFilter: 'blur(10px)' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <TrendingUp size={16} style={{ color: 'var(--primary)' }} /> 学习统计看板
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', textAlign: 'center' }}>
+                    <div style={{ padding: '12px 8px', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                      <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--primary-neon)', display: 'block' }}>
+                        {profile.learning_stats?.study_time || 0}
+                      </span>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>累计时长 (分)</span>
+                    </div>
+                    <div style={{ padding: '12px 8px', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                      <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--secondary)', display: 'block' }}>
+                        {profile.learning_stats?.quiz_accuracy || 0}%
+                      </span>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>习题正确率</span>
+                    </div>
+                    <div style={{ padding: '12px 8px', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                      <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--accent)', display: 'block' }}>
+                        {profile.learning_stats?.mastered_nodes || 0} / 5
+                      </span>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>已掌握知识点</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Streak Tracker */}
+                <div className="cyber-card" style={{ padding: '24px', background: 'rgba(255, 255, 255, 0.65)', backdropFilter: 'blur(10px)' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={16} style={{ color: 'var(--success)' }} /> 霓虹打卡连续周报
+                  </h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, idx) => {
+                      const active = profile.learning_stats?.streak?.[idx] || false;
+                      return (
+                        <div key={day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{day}</span>
+                          <div
+                            className={active ? 'pulse-glow' : ''}
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '8px',
+                              background: active ? 'linear-gradient(135deg, var(--primary-neon) 0%, var(--secondary) 100%)' : 'rgba(0, 0, 0, 0.05)',
+                              border: active ? 'none' : '1px dashed rgba(0,0,0,0.15)',
+                              boxShadow: active ? '0 0 10px rgba(15, 118, 110, 0.4)' : 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            {active && <CheckCircle2 size={14} style={{ color: '#ffffff' }} />}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Smart Recommendation */}
+              <div className="cyber-card" style={{ padding: '24px', background: 'rgba(255, 255, 255, 0.65)', backdropFilter: 'blur(10px)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Sparkles size={16} style={{ color: 'var(--accent)' }} /> 智能体今日推荐
+                    </h3>
+                    <span className="neon-badge neon-badge-warning" style={{ fontSize: '9px' }}>画像匹配率 98%</span>
+                  </div>
+                  
+                  <div style={{ padding: '16px', background: 'rgba(180, 83, 9, 0.02)', borderLeft: '3px solid var(--accent)', borderRadius: '0 8px 8px 0', marginBottom: '16px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-main)', marginBottom: '8px' }}>
+                      {profile.cognitive_style.includes("Practical") 
+                        ? "💻 动手实践：控制流逻辑 pytest 断言用例" 
+                        : profile.cognitive_style.includes("Visual")
+                        ? "🎨 视觉讲解：变量引用与内存分配动态脑图"
+                        : "📚 深度理论：Python 底层对象与内存指针对齐论文精读"}
+                    </h4>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: '1.6' }}>
+                      系统分析您的 6 维学习画像，针对您较薄弱的知识点进行防御性加强，并推荐了当前匹配您<b>{profile.cognitive_style}</b>风格的自适应学习包。
+                    </p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    const activeNodeObj = pathNodes.find(n => n.status === 'active') || pathNodes[0];
+                    setSelectedNode(activeNodeObj);
+                    setActiveTab('path');
+                  }}
+                  className="cyber-btn"
+                  style={{ width: '100%', justifyContent: 'center', padding: '10px' }}
+                >
+                  进入当前关卡学习 <ChevronRight size={16} />
+                </button>
+              </div>
+
+            </section>
 
             {/* Core Feature Grid */}
             <section className="grid-cols-3">
@@ -1658,112 +2268,231 @@ export default function App() {
 
         {/* 💬 CHAT TAB */}
         {activeTab === 'chat' && (
-          <section className="cyber-card" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', border: '1px solid var(--border-neon)' }}>
-            {/* Header */}
-            <div style={{ padding: '20px 28px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ fontSize: '16px', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '700' }}>
-                  <MessageSquare size={18} style={{ color: 'var(--primary-neon)' }} /> 智能画像导师
-                </h3>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>与您的专属助教对话，动态更新左侧画像雷达数据</span>
-              </div>
-              <span className="neon-badge neon-badge-success">多智能体在线</span>
-            </div>
-
-            {/* Dialog Area */}
-            <div style={{ flexGrow: '1', padding: '28px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {chatHistory.map((msg, index) => (
-                <div 
-                  key={index}
-                  style={{ 
-                    display: 'flex', 
-                    justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                    alignItems: 'flex-start',
-                    gap: '14px'
-                  }}
-                >
-                  {msg.role !== 'user' && (
-                    <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(15, 118, 110, 0.06)', border: '1px solid rgba(15, 118, 110, 0.2)', flexShrink: 0 }}>
-                      <Cpu size={16} style={{ color: 'var(--primary-neon)' }} />
-                    </div>
-                  )}
-                  <div 
-                    className="cyber-card chat-bubble-anim"
-                    style={{ 
-                      padding: '14px 20px', 
-                      maxWidth: '70%', 
-                      borderRadius: msg.role === 'user' ? '20px 4px 20px 20px' : '4px 20px 20px 20px',
-                      background: msg.role === 'user' ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'var(--bg-card)',
-                      borderColor: msg.role === 'user' ? 'var(--primary-neon)' : 'var(--border-neon)',
-                      color: msg.role === 'user' ? '#ffffff' : 'var(--text-main)',
-                      fontSize: '14px',
-                      whiteSpace: 'pre-wrap',
-                      lineHeight: '1.6'
-                    }}
-                  >
-                    {msg.content}
-                  </div>
-                  {msg.role === 'user' && (
-                    <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(0, 0, 0, 0.03)', border: '1px solid rgba(0, 0, 0, 0.06)', flexShrink: 0 }}>
-                      <User size={16} style={{ color: 'var(--text-muted)' }} />
-                    </div>
-                  )}
-                </div>
-              ))}
+          <div style={{ display: 'flex', gap: '24px', height: 'calc(100vh - 120px)', position: 'relative', width: '100%' }}>
+            {/* Left section: Chat area */}
+            <section className="cyber-card" style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, border: '1px solid var(--border-neon)', height: '100%', position: 'relative' }}>
               
-              {/* Agent Orchestration thinking status */}
-              {tutorStatus && (
-                <div style={{ display: 'flex', gap: '14px', alignItems: 'center', paddingLeft: '14px' }}>
-                  <div className="pulse-glow" style={{ width: '8px', height: '8px', background: 'var(--accent-cyan)', borderRadius: '50%' }}></div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{tutorStatus}</span>
+              {/* Profile Alert Alert Bubble */}
+              {profileAlert && (
+                <div className="pulse-glow" style={{
+                  position: 'absolute',
+                  top: '80px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)',
+                  padding: '10px 22px',
+                  borderRadius: '24px',
+                  border: '1.5px solid var(--primary-neon)',
+                  color: '#ffffff',
+                  fontSize: '12px',
+                  fontWeight: '800',
+                  zIndex: 100,
+                  boxShadow: '0 4px 20px rgba(15, 118, 110, 0.45)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <Sparkles size={14} style={{ animation: 'spin 1.5s linear infinite' }} />
+                  {profileAlert}
                 </div>
               )}
-              
-              <div ref={chatEndRef} />
-            </div>
 
-            {/* Input form */}
-            <form onSubmit={handleSendMessage} style={{ padding: '20px 28px', borderTop: '1px solid rgba(0, 0, 0, 0.06)', background: 'rgba(245, 243, 237, 0.7)' }}>
-              <div style={{ display: 'flex', gap: '14px' }}>
-                <input 
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder={isStreaming ? "导师正在调用多智能体协同优化画像..." : "输入“我想学机器学习”或说明你的基础，定制画像和路径..."}
-                  disabled={isStreaming}
-                  className="cyber-input"
-                />
-                <button 
-                  type="submit"
-                  disabled={isStreaming || !chatInput.trim()}
-                  className="cyber-btn"
-                  style={{
-                    padding: '16px 20px',
-                    borderRadius: '14px',
-                    flexShrink: 0,
-                    opacity: (isStreaming || !chatInput.trim()) ? 0.4 : 1,
-                  }}
-                >
-                  <Send size={16} />
-                </button>
+              {/* Header */}
+              <div style={{ padding: '20px 28px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '700' }}>
+                    <MessageSquare size={18} style={{ color: 'var(--primary-neon)' }} /> 智能画像导师
+                    <a
+                      href="#"
+                      role="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        console.log("Header link clicked, navigating to home tab");
+                        goDashboardHome();
+                      }}
+                      style={{ fontSize: '11px', fontWeight: 'normal', color: 'var(--primary-neon)', cursor: 'pointer', marginLeft: '12px', opacity: 0.8, textDecoration: 'underline' }}
+                    >
+                      返回首页
+                    </a>
+                  </h3>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>与您的专属助教对话，动态更新左侧画像雷达数据</span>
+                </div>
+                <span className="neon-badge neon-badge-success">多智能体在线</span>
               </div>
-            </form>
-          </section>
+
+              {/* Dialog Area */}
+              <div style={{ flexGrow: '1', padding: '28px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {chatHistory.map((msg, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                      alignItems: 'flex-start',
+                      gap: '14px'
+                    }}
+                  >
+                    {msg.role !== 'user' && (
+                      <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(15, 118, 110, 0.06)', border: '1px solid rgba(15, 118, 110, 0.2)', flexShrink: 0 }}>
+                        <Cpu size={16} style={{ color: 'var(--primary-neon)' }} />
+                      </div>
+                    )}
+                    <div
+                      className="cyber-card chat-bubble-anim"
+                      style={{
+                        padding: '14px 20px',
+                        maxWidth: '75%',
+                        borderRadius: msg.role === 'user' ? '20px 4px 20px 20px' : '4px 20px 20px 20px',
+                        background: msg.role === 'user' ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'var(--bg-card)',
+                        borderColor: msg.role === 'user' ? 'var(--primary-neon)' : 'var(--border-neon)',
+                        color: msg.role === 'user' ? '#ffffff' : 'var(--text-main)',
+                        fontSize: '14px',
+                        whiteSpace: 'pre-wrap',
+                        lineHeight: '1.6'
+                      }}
+                    >
+                      {msg.content}
+                    </div>
+                    {msg.role === 'user' && (
+                      <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(0, 0, 0, 0.03)', border: '1px solid rgba(0, 0, 0, 0.06)', flexShrink: 0 }}>
+                        <User size={16} style={{ color: 'var(--text-muted)' }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Agent Orchestration thinking status */}
+                {tutorStatus && (
+                  <div style={{ display: 'flex', gap: '14px', alignItems: 'center', paddingLeft: '14px' }}>
+                    <div className="pulse-glow" style={{ width: '8px', height: '8px', background: 'var(--accent-cyan)', borderRadius: '50%' }}></div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{tutorStatus}</span>
+                  </div>
+                )}
+
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Suggestion Chips */}
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', padding: '10px 24px', background: 'rgba(0,0,0,0.01)', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
+                {['我想学 Python 基础', '测试我的机器学习基础', '根据我的画像调整路线', '我觉得当前的学习节奏太快了'].map(chip => (
+                  <button
+                    key={chip}
+                    disabled={isStreaming}
+                    onClick={() => {
+                      submitChatMessage(chip);
+                    }}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '20px',
+                      background: '#ffffff',
+                      border: '1px solid var(--border-neon)',
+                      color: 'var(--text-muted)',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      transition: 'all 0.2s',
+                    }}
+                    className="hover-neon-border"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+
+              {/* Input form */}
+              <form onSubmit={handleSendMessage} style={{ padding: '20px 28px', borderTop: '1px solid rgba(0, 0, 0, 0.06)', background: 'rgba(245, 243, 237, 0.7)' }}>
+                <div style={{ display: 'flex', gap: '14px' }}>
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder={isStreaming ? "导师正在调用多智能体协同优化画像..." : "输入“我想学机器学习”或说明你的基础，定制画像和路径..."}
+                    disabled={isStreaming}
+                    className="cyber-input"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isStreaming || !chatInput.trim()}
+                    className="cyber-btn"
+                    style={{
+                      padding: '16px 20px',
+                      borderRadius: '14px',
+                      flexShrink: 0,
+                      opacity: (isStreaming || !chatInput.trim()) ? 0.4 : 1,
+                    }}
+                  >
+                    <Send size={16} />
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            {/* Right Panel: Diagnostic logs */}
+            <aside className="cyber-card" style={{ width: '270px', flexShrink: 0, padding: '24px', display: 'flex', flexDirection: 'column', height: '100%', background: 'rgba(255,255,255,0.65)', backdropFilter: 'blur(10px)', overflowY: 'auto' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '800', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)' }}>
+                <Cpu size={15} style={{ color: 'var(--primary)' }} /> 画像评估诊断日志
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexGrow: 1, overflowY: 'auto' }}>
+                {diagnosticLogs.map((log, idx) => (
+                  <div key={idx} style={{ padding: '10px 12px', background: 'rgba(0,0,0,0.02)', borderLeft: '3px solid var(--secondary)', borderRadius: '0 8px 8px 0', fontSize: '11px', fontFamily: 'monospace' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '9px', marginBottom: '4px' }}>[{log.time}]</div>
+                    <div style={{ color: 'var(--text-main)', lineHeight: '1.4' }}>{log.log}</div>
+                  </div>
+                ))}
+              </div>
+            </aside>
+          </div>
         )}
 
         {/* 🗺️ PATH PLANNER TAB */}
         {activeTab === 'path' && (
           <>
-            <header>
-              <h2 style={{ fontSize: '24px', marginBottom: '4px', fontWeight: '800' }}>定制路径规划与推送系统</h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-                多智能体协同路径算法为您生成的专业轨迹。点击右侧的卡片查看智能体为您生成的多模态资源包。
-              </p>
+            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div>
+                <h2 style={{ fontSize: '24px', marginBottom: '4px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  定制路径规划与推送系统
+                  <a
+                    href="#"
+                    role="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      goDashboardHome();
+                    }}
+                    style={{ fontSize: '12px', fontWeight: 'normal', color: 'var(--primary-neon)', cursor: 'pointer', opacity: 0.8, textDecoration: 'underline' }}
+                  >
+                    返回首页
+                  </a>
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+                  多智能体协同路径算法为您生成的专业轨迹。点击右侧的卡片查看智能体为您生成的多模态资源包。
+                </p>
+              </div>
+
+              <button
+                onClick={handleRegeneratePath}
+                disabled={isRegeneratingPath}
+                className="cyber-btn"
+                style={{
+                  padding: '10px 18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  opacity: isRegeneratingPath ? 0.7 : 1
+                }}
+              >
+                <Sparkles
+                  size={16}
+                  style={{
+                    animation: isRegeneratingPath ? 'spin 1.5s linear infinite' : 'none'
+                  }}
+                />
+                {isRegeneratingPath ? "路径重构中..." : "让路径智能体重新规划"}
+              </button>
             </header>
 
             {/* Flowchart Timeline */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', position: 'relative', padding: '10px 0' }}>
-              
+
               {/* Connecting line */}
               <div className="flowchart-line" />
 
@@ -1786,8 +2515,8 @@ export default function App() {
                 }
 
                 return (
-                  <div 
-                    key={node.id} 
+                  <div
+                    key={node.id}
                     style={{ display: 'flex', gap: '28px', zIndex: 1, cursor: 'pointer' }}
                     onClick={() => setSelectedNode(node)}
                   >
@@ -1808,11 +2537,11 @@ export default function App() {
                     </div>
 
                     {/* Path Card */}
-                    <div 
+                    <div
                       className="cyber-card"
-                      style={{ 
-                        flexGrow: 1, 
-                        padding: '20px 24px', 
+                      style={{
+                        flexGrow: 1,
+                        padding: '20px 24px',
                         borderColor: cardBorder,
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -1832,12 +2561,12 @@ export default function App() {
                       {/* Right icons preview */}
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         {node.resources.map(res => (
-                          <div 
-                            key={res} 
-                            style={{ 
-                              padding: '6px', 
-                              borderRadius: '8px', 
-                              background: 'rgba(255,255,255,0.02)', 
+                          <div
+                            key={res}
+                            style={{
+                              padding: '6px',
+                              borderRadius: '8px',
+                              background: 'rgba(255,255,255,0.02)',
                               border: '1px solid rgba(255,255,255,0.05)',
                               display: 'flex',
                               alignItems: 'center'
@@ -1857,62 +2586,93 @@ export default function App() {
 
             {/* Selected Node Panel */}
             {selectedNode && (
-              <div 
-                className="cyber-card" 
-                style={{ 
-                  padding: '24px 32px', 
-                  borderTop: '4px solid var(--secondary)', 
+              <div
+                className="cyber-card"
+                style={{
+                  padding: '24px 32px',
+                  borderTop: '4px solid var(--secondary)',
                   marginTop: '12px',
                   background: 'linear-gradient(135deg, var(--bg-card-active) 0%, rgba(255,255,255,0.95) 100%)'
                 }}
               >
-                <div style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
-                    <span style={{ fontSize: '10px', color: 'var(--secondary)', fontWeight: '700', letterSpacing: '0.08em' }}>RESOURCE PACKAGE</span>
+                    <span style={{ fontSize: '10px', color: 'var(--secondary)', fontWeight: '700', letterSpacing: '0.08em' }}>STAGE PARAMETERS</span>
                     <h3 style={{ fontSize: '20px', fontWeight: '800', marginTop: '4px' }}>{selectedNode.title} 核心资源包</h3>
                     <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>{selectedNode.description}</p>
+                    
+                    {/* Node statistics / Meta parameters */}
+                    <div style={{ display: 'flex', gap: '20px', marginTop: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                      <div>预计时长: <span style={{ color: 'var(--text-main)', fontWeight: '700' }}>{selectedNode.id === 'node5' ? '120分钟' : '45分钟'}</span></div>
+                      <div>难度系数: <span style={{ color: 'var(--secondary)', fontWeight: '700' }}>{selectedNode.id === 'node1' ? '⭐️' : selectedNode.id === 'node5' ? '⭐️⭐️⭐️' : '⭐️⭐️'}</span></div>
+                      <div>状态: <span style={{ color: selectedNode.status === 'completed' ? 'var(--success)' : 'var(--primary)', fontWeight: '700' }}>
+                        {selectedNode.status === 'completed' ? '已通关' : selectedNode.status === 'active' ? '正在探索' : '未解锁'}
+                      </span></div>
+                    </div>
                   </div>
-                  <button 
-                    onClick={() => setSelectedNode(null)}
-                    style={{
-                      background: 'rgba(255,255,255,0.02)',
-                      border: '1px solid rgba(255,255,255,0.06)',
-                      borderRadius: '8px',
-                      padding: '6px 12px',
-                      color: 'var(--text-muted)',
-                      cursor: 'pointer',
-                      fontSize: '11px',
-                      fontWeight: '700'
-                    }}
-                  >
-                    关闭面板
-                  </button>
+                  
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    {/* Enter Learning Button */}
+                    <button
+                      onClick={async () => {
+                        await fetchNodeResources(selectedNode.id);
+                        setActiveTab('resources');
+                      }}
+                      className="cyber-btn"
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: '11px',
+                        fontWeight: '700'
+                      }}
+                    >
+                      进入当前关卡学习 <ArrowRight size={12} />
+                    </button>
+                    
+                    <button
+                      onClick={() => setSelectedNode(null)}
+                      style={{
+                        background: 'rgba(0,0,0,0.04)',
+                        border: '1px solid rgba(0,0,0,0.08)',
+                        borderRadius: '8px',
+                        padding: '8px 14px',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        fontWeight: '700'
+                      }}
+                    >
+                      关闭
+                    </button>
+                  </div>
                 </div>
-                
+
                 <h4 style={{ fontSize: '12px', color: 'var(--text-main)', marginBottom: '14px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>智能体生成产物 (共 {selectedNode.resources.length} 项)</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
                   {selectedNode.resources.map(res => (
-                    <div 
-                      key={res} 
-                      className="cyber-card" 
-                      style={{ 
-                        padding: '16px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '14px', 
+                    <div
+                      key={res}
+                      className="cyber-card"
+                      style={{
+                        padding: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '14px',
                         background: 'rgba(255, 255, 255, 0.65)',
                         cursor: 'pointer'
                       }}
-                      onClick={() => setActiveTab('resources')}
+                      onClick={async () => {
+                        await fetchNodeResources(selectedNode.id);
+                        setActiveTab('resources');
+                      }}
                     >
                       <div style={{ padding: '8px', background: 'rgba(0, 0, 0, 0.02)', borderRadius: '10px', display: 'flex' }}>
                         {getResourceIcon(res)}
                       </div>
                       <div>
                         <h5 style={{ fontSize: '13px', fontWeight: '700' }}>
-                          {res === 'slide' ? '音画幻灯片' : res === 'quiz' ? '测验题库' : res === 'code' ? '实操源码' : res === 'pdf' ? '讲解课本' : '思维脑图'}
+                          {res === 'slide' ? '音画幻灯片' : res === 'quiz' ? '自适应测验' : res === 'code' ? '实操源码' : res === 'pdf' ? '讲解课本' : '思维脑图'}
                         </h5>
-                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>点击前往资源生成库</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>点击获取并前往生成库</span>
                       </div>
                     </div>
                   ))}
@@ -1926,118 +2686,184 @@ export default function App() {
         {activeTab === 'resources' && (
           <>
             <header>
-              <h2 style={{ fontSize: '24px', marginBottom: '4px', fontWeight: '800' }}>多智能体资源生成库</h2>
+              <h2 style={{ fontSize: '24px', marginBottom: '4px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                多智能体资源生成库
+                <a
+                  href="#"
+                  role="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    console.log("Header link clicked, navigating to home tab");
+                    goDashboardHome();
+                  }}
+                  style={{ fontSize: '12px', fontWeight: 'normal', color: 'var(--primary-neon)', cursor: 'pointer', opacity: 0.8, textDecoration: 'underline' }}
+                >
+                  返回首页
+                </a>
+              </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
                 由不同角色智能体根据您左侧画像生成的五类多模态教学资源包。
               </p>
             </header>
 
-            {/* Cyber resource grid layout */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: '24px' }}>
-              
-              {/* Card 1: PDF */}
-              <article className="cyber-card" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ padding: '10px', background: 'rgba(2, 132, 199, 0.06)', borderRadius: '12px', border: '1px solid rgba(2, 132, 199, 0.15)', display: 'flex' }}>
-                    <FileText className="text-blue-400" size={24} style={{ color: 'var(--accent-cyan)' }} />
-                  </div>
-                  <span className="neon-badge neon-badge-success">PDF 生成完毕</span>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>《专业内容讲解课本.pdf》</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.6' }}>
-                    针对您的认知风格<b>“{profile.cognitive_style}”</b>定制的讲解教材。内含学术引用校验，实现大模型防幻觉过滤。
-                  </p>
-                </div>
-                <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                  <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><Download size={14} /> 1.2 MB</span>
-                  <span style={{ color: 'var(--accent-cyan)', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>阅读全文 <ArrowRight size={14} /></span>
-                </div>
-              </article>
+            {!selectedNodeResources ? (
+              <div style={{ padding: '60px', textAlign: 'center', background: 'rgba(255,255,255,0.4)', borderRadius: '16px', border: '1px dashed var(--border-neon)', marginTop: '20px' }}>
+                <div className="spinner-academic" style={{ margin: '0 auto 20px' }}></div>
+                <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '8px' }}>智能资源包拼装中...</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>正在为您唤醒主管智能体，并根据画像组装课本、思维树、测验与源码用例。</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: '24px', marginTop: '20px' }}>
 
-              {/* Card 2: Sound slide (T2V simulation) */}
-              <article className="cyber-card" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ padding: '10px', background: 'rgba(29, 78, 216, 0.06)', borderRadius: '12px', border: '1px solid rgba(29, 78, 216, 0.15)', display: 'flex' }}>
-                    <Video className="text-purple-400" size={24} style={{ color: 'var(--secondary)' }} />
-                  </div>
-                  <span className="neon-badge neon-badge-warning">音画对齐完毕</span>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>《音画同步动画讲解》</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.6' }}>
-                    大模型生成的课件内容，结合讯飞 TTS 语音。前端利用 GSAP 时间轴引擎实现音画同步动画，极速渲染。
-                  </p>
-                </div>
-                <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>时长: 03:15 分钟</span>
-                  <span style={{ color: 'var(--secondary)', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>开启播放 <ArrowRight size={14} /></span>
-                </div>
-              </article>
+                {/* Card 1: PDF */}
+                {selectedNodeResources.pdf && (
+                  <article
+                    className="cyber-card hover-neon-border"
+                    style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', cursor: 'pointer', background: 'rgba(255,255,255,0.65)' }}
+                    onClick={() => setActiveModal('pdf')}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ padding: '10px', background: 'rgba(2, 132, 199, 0.06)', borderRadius: '12px', border: '1px solid rgba(2, 132, 199, 0.15)', display: 'flex' }}>
+                        <FileText className="text-blue-400" size={24} style={{ color: 'var(--accent-cyan)' }} />
+                      </div>
+                      <span className="neon-badge neon-badge-success">PDF 生成完毕</span>
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>《专业内容讲解课本.pdf》</h3>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.6' }}>
+                        针对您的认知风格<b>“{profile.cognitive_style}”</b>定制的讲解教材。内含学术引用校验，实现大模型防幻觉过滤。
+                      </p>
+                    </div>
+                    <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><Download size={14} /> 1.2 MB</span>
+                      <span style={{ color: 'var(--accent-cyan)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>阅读全文 <ArrowRight size={14} /></span>
+                    </div>
+                  </article>
+                )}
 
-              {/* Card 3: Mindmap */}
-              <article className="cyber-card" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ padding: '10px', background: 'rgba(180, 83, 9, 0.06)', borderRadius: '12px', border: '1px solid rgba(180, 83, 9, 0.15)', display: 'flex' }}>
-                    <Map className="text-yellow-400" size={24} style={{ color: 'var(--warning)' }} />
-                  </div>
-                  <span className="neon-badge neon-badge-success">思维导图就绪</span>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>《知识点思维脑图.svg》</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.6' }}>
-                    通过大模型生成 Mermaid 配置，并在前端渲染出动态可收缩的思维节点图，快速辅助学生理清概念脉络。
-                  </p>
-                </div>
-                <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>大小: 45 KB</span>
-                  <span style={{ color: 'var(--warning)', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>查看思维树 <ArrowRight size={14} /></span>
-                </div>
-              </article>
+                {/* Card 2: Sound slide */}
+                {selectedNodeResources.slide && (
+                  <article
+                    className="cyber-card hover-neon-border"
+                    style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', cursor: 'pointer', background: 'rgba(255,255,255,0.65)' }}
+                    onClick={() => {
+                      setActiveModal('slide');
+                      setCurrentSlideIdx(0);
+                      setIsPlayingSlide(false);
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ padding: '10px', background: 'rgba(29, 78, 216, 0.06)', borderRadius: '12px', border: '1px solid rgba(29, 78, 216, 0.15)', display: 'flex' }}>
+                        <Video className="text-purple-400" size={24} style={{ color: 'var(--secondary)' }} />
+                      </div>
+                      <span className="neon-badge neon-badge-warning">音画对齐完毕</span>
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>《音画同步动画讲解》</h3>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.6' }}>
+                        大模型生成的课件内容，结合讯飞 TTS 语音。前端利用 GSAP 时间轴引擎实现音画同步动画，极速渲染。
+                      </p>
+                    </div>
+                    <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>时长: 03:15 分钟</span>
+                      <span style={{ color: 'var(--secondary)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>开启播放 <ArrowRight size={14} /></span>
+                    </div>
+                  </article>
+                )}
 
-              {/* Card 4: Quiz */}
-              <article className="cyber-card" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ padding: '10px', background: 'rgba(21, 128, 61, 0.06)', borderRadius: '12px', border: '1px solid rgba(21, 128, 61, 0.15)', display: 'flex' }}>
-                    <HelpCircle className="text-green-400" size={24} style={{ color: 'var(--success)' }} />
-                  </div>
-                  <span className="neon-badge neon-badge-success">测试生成就绪</span>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>《自适应画像评估测验》</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.6' }}>
-                    针对您的易错范畴<b>“{profile.error_patterns.join('/')}”</b>出具 of 10 道单选题。答题结果会回传用以微调画像指标。
-                  </p>
-                </div>
-                <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>题量: 10 道诊断题</span>
-                  <span style={{ color: 'var(--success)', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>开始测评 <ArrowRight size={14} /></span>
-                </div>
-              </article>
+                {/* Card 3: Mindmap */}
+                {selectedNodeResources.mindmap && (
+                  <article
+                    className="cyber-card hover-neon-border"
+                    style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', cursor: 'pointer', background: 'rgba(255,255,255,0.65)' }}
+                    onClick={() => setActiveModal('mindmap')}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ padding: '10px', background: 'rgba(180, 83, 9, 0.06)', borderRadius: '12px', border: '1px solid rgba(180, 83, 9, 0.15)', display: 'flex' }}>
+                        <Map className="text-yellow-400" size={24} style={{ color: 'var(--warning)' }} />
+                      </div>
+                      <span className="neon-badge neon-badge-success">思维导图就绪</span>
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>《知识点思维脑图.svg》</h3>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.6' }}>
+                        通过大模型生成 Mermaid 配置，并在前端渲染出动态可收缩的思维节点图，快速辅助学生理清概念脉络。
+                      </p>
+                    </div>
+                    <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>大小: 45 KB</span>
+                      <span style={{ color: 'var(--warning)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>查看思维树 <ArrowRight size={14} /></span>
+                    </div>
+                  </article>
+                )}
 
-              {/* Card 5: Code Case */}
-              <article className="cyber-card" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ padding: '10px', background: 'rgba(15, 118, 110, 0.06)', borderRadius: '12px', border: '1px solid rgba(15, 118, 110, 0.15)', display: 'flex' }}>
-                    <Code2 className="text-cyan-400" size={24} style={{ color: 'var(--accent)' }} />
-                  </div>
-                  <span className="neon-badge neon-badge-success">代码用例生成</span>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>《实操代码与断言测验.py》</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.6' }}>
-                    大模型自动补齐的带有完整断言测试（PyTest）的代码案例。学生可复制后在本地 IDE 进行代码补齐实践。
-                  </p>
-                </div>
-                <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '16px', display: 'flex', justifycontent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>案例数: 3 个实操项目</span>
-                  <span style={{ color: 'var(--accent)', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>复制代码 <ArrowRight size={14} /></span>
-                </div>
-              </article>
+                {/* Card 4: Quiz */}
+                {selectedNodeResources.quiz && (
+                  <article
+                    className="cyber-card hover-neon-border"
+                    style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', cursor: 'pointer', background: 'rgba(255,255,255,0.65)' }}
+                    onClick={() => {
+                      setActiveModal('quiz');
+                      setQuizStep('intro');
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ padding: '10px', background: 'rgba(21, 128, 61, 0.06)', borderRadius: '12px', border: '1px solid rgba(21, 128, 61, 0.15)', display: 'flex' }}>
+                        <HelpCircle className="text-green-400" size={24} style={{ color: 'var(--success)' }} />
+                      </div>
+                      <span className="neon-badge neon-badge-success">测试生成就绪</span>
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>《自适应画像评估测验》</h3>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.6' }}>
+                        针对您的易错范畴<b>“{profile.error_patterns.join('/')}”</b>出具的自适应测评题。答题结果会回传用以微调画像指标。
+                      </p>
+                    </div>
+                    <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>题量: {selectedNodeResources.quiz.length} 道诊断题</span>
+                      <span style={{ color: 'var(--success)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>开始测评 <ArrowRight size={14} /></span>
+                    </div>
+                  </article>
+                )}
 
-            </div>
+                {/* Card 5: Code Case */}
+                {selectedNodeResources.code && (
+                  <article
+                    className="cyber-card hover-neon-border"
+                    style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', cursor: 'pointer', background: 'rgba(255,255,255,0.65)' }}
+                    onClick={() => setActiveModal('code')}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ padding: '10px', background: 'rgba(15, 118, 110, 0.06)', borderRadius: '12px', border: '1px solid rgba(15, 118, 110, 0.15)', display: 'flex' }}>
+                        <Code2 className="text-cyan-400" size={24} style={{ color: 'var(--accent)' }} />
+                      </div>
+                      <span className="neon-badge neon-badge-success">代码用例生成</span>
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>《实操代码与断言测验.py》</h3>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.6' }}>
+                        大模型自动补齐的带有完整断言测试（PyTest）的代码案例。学生可复制后在本地 IDE 进行代码补齐实践。
+                      </p>
+                    </div>
+                    <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>大小: 12 KB</span>
+                      <span style={{ color: 'var(--accent)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>查看源码 <ArrowRight size={14} /></span>
+                    </div>
+                  </article>
+                )}
+
+              </div>
+            )}
           </>
         )}
+
+        {/* 🎬 Interactive Modals */}
+        {activeModal === 'pdf' && renderPdfModal()}
+        {activeModal === 'slide' && renderSlideModal()}
+        {activeModal === 'quiz' && renderQuizModal()}
+        {activeModal === 'mindmap' && renderMindmapModal()}
+        {activeModal === 'code' && renderCodeModal()}
+
 
       </main>
     </div>

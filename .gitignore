@@ -28,6 +28,13 @@ env/
 *.db
 *.log
 
+# Local environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
 # OS temporary files
 .DS_Store
 Thumbs.db
