@@ -15,7 +15,6 @@ class UserProfile(BaseModel):
         "streak": [True, True, False, False, False, False, False]
     }, description="Academic stats for dashboard homepage")
 
-
 class UserMessage(BaseModel):
     role: str = Field(..., description="Role of the sender: 'user' or 'assistant'")
     content: str = Field(..., description="Content of the message")
@@ -30,3 +29,45 @@ class PathNode(BaseModel):
     status: str = Field(default="locked", description="'locked', 'active', or 'completed'")
     description: str
     resources: List[str] = Field(default_factory=list, description="Types of resources available")
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    cognitive_style: str
+    learning_goals: List[str]
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class ResourceGenerateRequest(BaseModel):
+    node_id: str
+    username: Optional[str] = None
+
+class SandboxRunRequest(BaseModel):
+    code: str
+    node_id: str
+    username: Optional[str] = None
+
+class SandboxDiagnoseRequest(BaseModel):
+    code: str
+    node_id: str
+    username: Optional[str] = None
+
+class ErrorDiagnoseRequest(BaseModel):
+    error_id: str
+    username: Optional[str] = None
+
+class ErrorRemedyRequest(BaseModel):
+    error_id: str
+    username: Optional[str] = None
+
+class ConsoleLogRequest(BaseModel):
+    sender: str
+    message: str
+    log_type: str = "info"
+    username: Optional[str] = None
+
+class CompleteNodeRequest(BaseModel):
+    node_id: str
+    username: Optional[str] = None
