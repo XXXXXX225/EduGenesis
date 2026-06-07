@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, HTTPException, status
+from fastapi import APIRouter, Body, HTTPException, status, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.models import UserProfile, ChatRequest, PathNode
@@ -11,6 +11,92 @@ import re
 import requests
 from typing import List, Optional
 from dotenv import load_dotenv
+import time
+from threading import Lock
+from collections import defaultdict
+import ast
+
+# Thread-safe in-memory sliding window rate limiter
+class RateLimiter:
+    def __init__(self, requests_limit: int, window_seconds: int):
+        self.requests_limit = requests_limit
+        self.window_seconds = window_seconds
+        self.history = defaultdict(list)
+        self.lock = Lock()
+
+    def check(self, key: str) -> bool:
+        with self.lock:
+            now = time.time()
+            before_len = len(self.history[key])
+            self.history[key] = [t for t in self.history[key] if now - t < self.window_seconds]
+            after_len = len(self.history[key])
+            print(f"[DEBUG check] id={id(self)}, key={key}, before_len={before_len}, after_len={after_len}, limit={self.requests_limit}")
+            if len(self.history[key]) >= self.requests_limit:
+                return False
+            self.history[key].append(now)
+            return True
+
+# Initialize limiters
+chat_limiter = RateLimiter(requests_limit=5, window_seconds=10)
+resource_limiter = RateLimiter(requests_limit=2, window_seconds=10)
+
+def rate_limit_chat(request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    allowed = chat_limiter.check(client_ip)
+    print(f"[DEBUG rate_limit_chat] ip={client_ip}, allowed={allowed}")
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="您的对话请求过于频繁，请稍候再试（安全校验智能体限制）。"
+        )
+
+def rate_limit_resource(request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    allowed = resource_limiter.check(client_ip)
+    print(f"[DEBUG rate_limit_resource] ip={client_ip}, allowed={allowed}")
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="资源生成、沙盒测试或路线更新过于频繁，请稍候再试（安全校验智能体限制）。"
+        )
+
+# AST static analyzer for python sandbox safety
+def is_code_safe(code: str) -> (bool, str):
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        # If the code has compile errors, pass check and let pytest show error details
+        return True, ""
+
+    allowed_modules = {"math"}
+    forbidden_calls = {"eval", "exec", "open", "compile", "globals", "locals", "getattr", "setattr", "delattr", "dir", "vars", "breakpoint"}
+
+    for node in ast.walk(tree):
+        # 1. Imports check
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name not in allowed_modules:
+                    return False, f"在安全沙盒中不允许导入模块 '{alias.name}'（安全校验智能体限制）。"
+        elif isinstance(node, ast.ImportFrom):
+            if node.module not in allowed_modules:
+                return False, f"在安全沙盒中不允许从模块 '{node.module}' 导入（安全校验智能体限制）。"
+
+        # 2. Dangerous function calls
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                if node.func.id in forbidden_calls:
+                    return False, f"不允许使用危险的内置函数 '{node.func.id}'（安全校验智能体限制）。"
+            elif isinstance(node.func, ast.Attribute):
+                if node.func.attr in forbidden_calls:
+                    return False, f"不允许调用危险属性/函数 '{node.func.attr}'（安全校验智能体限制）。"
+
+        # 3. Dunder attribute access
+        if isinstance(node, ast.Attribute):
+            blocked_dunders = {"__class__", "__subclasses__", "__globals__", "__code__", "__dict__", "__init__", "__new__"}
+            if node.attr in blocked_dunders:
+                return False, f"安全校验智能体拦截：禁止访问系统内部属性 '{node.attr}'。"
+
+    return True, ""
 
 env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
 load_dotenv(dotenv_path=env_path)
@@ -370,9 +456,13 @@ if __name__ == "__main__":
         "mindmap": mindmap_content
     }
 
-# Password hashing helper function
-def get_password_hash(password: str) -> str:
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+# Password hashing helper function (PBKDF2-HMAC-SHA256 with user-specific salt)
+def get_password_hash(password: str, username: str) -> str:
+    iterations = 100000
+    salt = username.encode('utf-8')
+    pwd_bytes = password.encode('utf-8')
+    h = hashlib.pbkdf2_hmac('sha256', pwd_bytes, salt, iterations)
+    return f"pbkdf2_sha256${iterations}${username}${h.hex()}"
 
 # Database Helper Functions
 def db_get_profile(username: str) -> UserProfile:
@@ -574,9 +664,10 @@ def init_db():
     """)
     
     # Seed default user for immediate out-of-the-box frontend access
-    cursor.execute("SELECT username FROM users WHERE username = 'default_user'")
-    if not cursor.fetchone():
-        pwd_hash = get_password_hash("default_password")
+    cursor.execute("SELECT username, password_hash FROM users WHERE username = 'default_user'")
+    row = cursor.fetchone()
+    if not row:
+        pwd_hash = get_password_hash("default_password", "default_user")
         cursor.execute(
             "INSERT INTO users (username, password_hash, cognitive_style, learning_goals) VALUES (?, ?, ?, ?)",
             ("default_user", pwd_hash, "Practical Coding", "Python Basics")
@@ -614,6 +705,11 @@ def init_db():
                     "INSERT INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
                     ("default_user", node.id, res_type, content_val)
                 )
+    else:
+        stored_hash = row[1]
+        if not stored_hash.startswith("pbkdf2_sha256$"):
+            new_hash = get_password_hash("default_password", "default_user")
+            cursor.execute("UPDATE users SET password_hash = ? WHERE username = 'default_user'", (new_hash,))
 
     conn.commit()
     conn.close()
@@ -847,7 +943,6 @@ def call_llm_resource_agent(topic: str, resources: List[str], profile: UserProfi
 # --- Router Endpoints ---
 @router.post("/auth/register")
 def register_user(request: RegisterRequest):
-    global logged_in_username
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT username FROM users WHERE username = ?", (request.username,))
@@ -858,7 +953,7 @@ def register_user(request: RegisterRequest):
             detail="该用户名已被占用，请重新选择昵称。"
         )
     
-    pwd_hash = get_password_hash(request.password)
+    pwd_hash = get_password_hash(request.password, request.username)
     goals_str = ",".join(request.learning_goals)
     cursor.execute(
         "INSERT INTO users (username, password_hash, cognitive_style, learning_goals) VALUES (?, ?, ?, ?)",
@@ -884,12 +979,10 @@ def register_user(request: RegisterRequest):
     # Seed default errors and logs to prevent blank pages on tab initialization
     seed_errors_and_logs_for_user(request.username)
     
-    logged_in_username = request.username
-    return {"status": "success", "detail": "注册成功，学术环境已初始化。"}
+    return {"status": "success", "detail": "注册成功，学术环境已初始化。", "username": request.username}
 
 @router.post("/auth/login")
 def login_user(request: LoginRequest):
-    global logged_in_username
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT password_hash, cognitive_style, learning_goals FROM users WHERE username = ?", (request.username,))
@@ -906,13 +999,28 @@ def login_user(request: LoginRequest):
     cognitive_style = row[1]
     learning_goals = row[2].split(",") if row[2] else []
     
-    if get_password_hash(request.password) != pwd_hash:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="密码错误，请重新输入学术密码。"
-        )
-    
-    logged_in_username = request.username
+    if not pwd_hash.startswith("pbkdf2_sha256$"):
+        # Migrate from old SHA-256 hash
+        old_hash = hashlib.sha256(request.password.encode('utf-8')).hexdigest()
+        if old_hash != pwd_hash:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="密码错误，请重新输入学术密码。"
+            )
+        # Convert to PBKDF2
+        new_pwd_hash = get_password_hash(request.password, request.username)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET password_hash = ? WHERE username = ?", (new_pwd_hash, request.username))
+        conn.commit()
+        conn.close()
+    else:
+        # PBKDF2 verify
+        if get_password_hash(request.password, request.username) != pwd_hash:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="密码错误，请重新输入学术密码。"
+            )
     
     # Self-heal profile and path nodes if missing in DB
     existing_profile = db_get_profile(request.username)
@@ -1071,7 +1179,7 @@ def call_llm_path_planner(goals: List[str], style: str, username: str = "default
         
     return []
 
-@router.post("/path/regenerate")
+@router.post("/path/regenerate", dependencies=[Depends(rate_limit_resource)])
 def regenerate_path(username: Optional[str] = None):
     target_user = username if username else logged_in_username
     profile = db_get_profile(target_user)
@@ -1155,7 +1263,7 @@ def regenerate_path(username: Optional[str] = None):
     return {"status": "success", "nodes": new_nodes}
 
 
-@router.post("/chat")
+@router.post("/chat", dependencies=[Depends(rate_limit_chat)])
 async def chat_interaction(request: ChatRequest, username: Optional[str] = None):
     target_user = username if username else logged_in_username
     current_profile = db_get_profile(target_user)
@@ -1400,7 +1508,7 @@ def get_resources(node_id: str, username: Optional[str] = None):
     return result
 
 
-@router.post("/resources/generate")
+@router.post("/resources/generate", dependencies=[Depends(rate_limit_resource)])
 def generate_resources(request: ResourceGenerateRequest):
     target_user = request.username if request.username else logged_in_username
     node_id = request.node_id
@@ -1904,7 +2012,7 @@ def get_sandbox_challenge(node_id: Optional[str] = None, username: Optional[str]
     }
 
 
-@router.post("/sandbox/run")
+@router.post("/sandbox/run", dependencies=[Depends(rate_limit_resource)])
 def run_sandbox_code(request: SandboxRunRequest):
     import subprocess
     import sys
@@ -1912,16 +2020,14 @@ def run_sandbox_code(request: SandboxRunRequest):
     code = request.code
     node_id = request.node_id
     
-    code_lower = code.lower()
-    unsafe_keywords = ["import os", "import sys", "import subprocess", "import shutil", "eval(", "exec(", "open(", "socket", "urllib", "requests"]
-    for kw in unsafe_keywords:
-        if kw in code_lower:
-            db_log_agent_action(target_user, "安全校验智能体", f"在节点 [{node_id}] 中拦截到不安全代码执行，检测到关键词: [{kw}]", "danger")
-            return {
-                "status": "failed",
-                "error": f"安全检查未通过：代码中包含禁止使用的系统敏感函数或模块 [{kw}]。请仅使用纯粹的 Python 逻辑进行解题！",
-                "console_output": "Security Violation: Access denied."
-            }
+    is_safe, err_msg = is_code_safe(code)
+    if not is_safe:
+        db_log_agent_action(target_user, "安全校验智能体", f"在节点 [{node_id}] 中拦截到不安全代码执行：{err_msg}", "danger")
+        return {
+            "status": "failed",
+            "error": f"安全检查未通过：{err_msg}请仅使用纯粹的 Python 逻辑进行解题！",
+            "console_output": "Security Violation: Access denied."
+        }
             
     profile = db_get_profile(target_user)
     is_ml = any("Machine Learning" in g for g in profile.learning_goals)
@@ -2025,12 +2131,18 @@ def run_sandbox_code(request: SandboxRunRequest):
         }
 
 
-@router.post("/sandbox/diagnose")
+@router.post("/sandbox/diagnose", dependencies=[Depends(rate_limit_resource)])
 def diagnose_sandbox_code(request: SandboxDiagnoseRequest):
     target_user = request.username if request.username else logged_in_username
     profile = db_get_profile(target_user)
     api_key = os.getenv("LLM_API_KEY")
     
+    is_safe, err_msg = is_code_safe(request.code)
+    if not is_safe:
+        db_log_agent_action(target_user, "安全校验智能体", f"在节点 [{request.node_id}] 中拦截到不安全代码诊断请求：{err_msg}", "danger")
+        blocked_msg = f"❌ 安全检查未通过：{err_msg}请仅使用纯粹的 Python 逻辑进行解题！"
+        return {"diagnostic": blocked_msg, "advice": blocked_msg}
+        
     if api_key:
         try:
             api_base = os.getenv("LLM_API_BASE", "https://spark-api-open.xf-yun.com/v1")
@@ -2064,13 +2176,13 @@ Provide a friendly, encouraging analysis highlighting what is wrong (e.g. indent
                 res_data = response.json()
                 explanation = res_data["choices"][0]["message"]["content"].strip()
                 db_log_agent_action(target_user, "画像智能体", f"为用户生成代码诊断评估报告成功。", "consensus")
-                return {"diagnostic": explanation}
+                return {"diagnostic": explanation, "advice": explanation}
         except Exception as e:
             print(f"Xunfei Sandbox Diagnosis failed: {e}")
             
     explanation = f"✨ **[自适应画像智能体诊断报告]**\n\n您的代码包含基本 Python 逻辑。建议检查：\n1. 函数缩进是否为标准的 4 个空格。\n2. 是否正确返回了题目要求的结果（而非直接打印）。\n3. 变量生命周期及作用域是否合规。\n\n学习特征提示：基于您的 **{profile.cognitive_style}** 认知风格，建议通过手写 debug 输出方式调试核心逻辑。"
     db_log_agent_action(target_user, "画像智能体", "完成本地规则适配诊断生成。", "consensus")
-    return {"diagnostic": explanation}
+    return {"diagnostic": explanation, "advice": explanation}
 
 
 @router.get("/errors")
@@ -2103,7 +2215,7 @@ def get_errors(username: Optional[str] = None):
     return result
 
 
-@router.post("/errors/diagnose")
+@router.post("/errors/diagnose", dependencies=[Depends(rate_limit_resource)])
 def diagnose_error(request: ErrorDiagnoseRequest):
     target_user = request.username if request.username else logged_in_username
     error_id = request.error_id
