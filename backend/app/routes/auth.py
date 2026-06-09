@@ -1,7 +1,7 @@
-import sqlite3
 import hashlib
-from typing import Optional
+import sqlite3
 from fastapi import APIRouter, HTTPException, status
+from app.auth_utils import create_access_token
 from app.models import RegisterRequest, LoginRequest, UserProfile
 from app.db import (
     DB_PATH,
@@ -52,7 +52,14 @@ def register_user(request: RegisterRequest):
     # Seed default errors and logs to prevent blank pages on tab initialization
     seed_errors_and_logs_for_user(request.username)
     
-    return {"status": "success", "detail": "注册成功，学术环境已初始化。", "username": request.username}
+    access_token = create_access_token(request.username)
+    return {
+        "status": "success",
+        "detail": "注册成功，学术环境已初始化。",
+        "username": request.username,
+        "access_token": access_token,
+        "token_type": "bearer",
+    }
 
 @router.post("/auth/login")
 def login_user(request: LoginRequest):
@@ -96,7 +103,7 @@ def login_user(request: LoginRequest):
             )
     
     # Self-heal profile and path nodes if missing in DB
-    existing_profile = db_get_profile(request.username)
+    db_get_profile(request.username)
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT username FROM user_profiles WHERE username = ?", (request.username,))
@@ -117,4 +124,12 @@ def login_user(request: LoginRequest):
     # Seed default errors and logs to prevent blank pages on tab initialization
     seed_errors_and_logs_for_user(request.username)
         
-    return {"status": "success", "username": request.username, "cognitive_style": cognitive_style, "learning_goals": learning_goals}
+    access_token = create_access_token(request.username)
+    return {
+        "status": "success",
+        "username": request.username,
+        "cognitive_style": cognitive_style,
+        "learning_goals": learning_goals,
+        "access_token": access_token,
+        "token_type": "bearer",
+    }

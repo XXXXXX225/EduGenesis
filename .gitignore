@@ -35,6 +35,10 @@ env/
 .env.test.local
 .env.production.local
 
+# Trae IDE skill/cache
+.trae/
+.codegraph/
+
 # OS temporary files
 .DS_Store
 Thumbs.db

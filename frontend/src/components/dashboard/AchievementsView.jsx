@@ -1,5 +1,6 @@
 import React from 'react';
 import { BookOpen, Cpu, Code2, TrendingUp, Download } from 'lucide-react';
+import { apiGetRaw } from '../../utils/api';
 
 export default function AchievementsView({
   profile,
@@ -90,11 +91,27 @@ export default function AchievementsView({
 
           <button
             type="button"
-            onClick={() => {
-              const username = localStorage.getItem('regUsername') || 'default_user';
+            onClick={async () => {
               setProfileAlert("🎓 正在为您签发PDF结业证书，请稍候...");
-              setTimeout(() => setProfileAlert(''), 3000);
-              window.open(`http://127.0.0.1:8000/api/achievements/certificate?username=${username}`, '_blank');
+              try {
+                const response = await apiGetRaw('/achievements/certificate');
+                if (!response.ok) {
+                  throw new Error('证书下载失败');
+                }
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = 'certificate.pdf';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(downloadUrl);
+              } catch (err) {
+                setProfileAlert(`❌ ${err.message}`);
+              } finally {
+                setTimeout(() => setProfileAlert(''), 3000);
+              }
             }}
             className="cyber-btn"
             style={{ width: '100%', justifyContent: 'center' }}

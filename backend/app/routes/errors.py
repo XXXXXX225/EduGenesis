@@ -4,9 +4,9 @@ import json
 import sqlite3
 import io
 import requests
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from app.auth_utils import get_current_username
 from app.models import ErrorDiagnoseRequest, ErrorRemedyRequest
 from app.db import (
     DB_PATH,
@@ -17,11 +17,10 @@ from app.db import (
 from app.limiter import rate_limit_resource
 
 router = APIRouter()
-logged_in_username = "default_user"
 
 @router.get("/errors")
-def get_errors(username: Optional[str] = None):
-    target_user = username if username else logged_in_username
+def get_errors(current_username: str = Depends(get_current_username)):
+    target_user = current_username
     seed_errors_and_logs_for_user(target_user)
     
     conn = sqlite3.connect(DB_PATH)
@@ -49,8 +48,8 @@ def get_errors(username: Optional[str] = None):
     return result
 
 @router.post("/errors/diagnose", dependencies=[Depends(rate_limit_resource)])
-def diagnose_error(request: ErrorDiagnoseRequest):
-    target_user = request.username if request.username else logged_in_username
+def diagnose_error(request: ErrorDiagnoseRequest, current_username: str = Depends(get_current_username)):
+    target_user = current_username
     error_id = request.error_id
     
     conn = sqlite3.connect(DB_PATH)
@@ -138,8 +137,8 @@ Output STRICTLY a JSON object (no code block backticks, no preamble) with keys:
     }
 
 @router.post("/errors/generate-remedy")
-def generate_remedy(request: ErrorRemedyRequest):
-    target_user = request.username if request.username else logged_in_username
+def generate_remedy(request: ErrorRemedyRequest, current_username: str = Depends(get_current_username)):
+    target_user = current_username
     error_id = request.error_id
     
     conn = sqlite3.connect(DB_PATH)
@@ -225,8 +224,8 @@ Output STRICTLY a JSON object (no markdown, no backticks, no preamble) matching 
     return quiz_data
 
 @router.get("/achievements/certificate")
-def download_certificate(username: Optional[str] = None):
-    target_user = username if username else logged_in_username
+def download_certificate(current_username: str = Depends(get_current_username)):
+    target_user = current_username
     profile = db_get_profile(target_user)
     
     db_log_agent_action(target_user, "主管智能体", f"用户 [{target_user}] 提交结业证明签发申请。开始校验全部 8 个关卡探索状态...", "info")

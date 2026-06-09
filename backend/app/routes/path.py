@@ -1,8 +1,8 @@
 import os
 import json
 import sqlite3
-from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends
+from app.auth_utils import get_current_username
 from app.models import PathNode, CompleteNodeRequest
 from app.db import (
     DB_PATH,
@@ -19,17 +19,15 @@ from app.limiter import rate_limit_resource
 from app.llm_client import call_llm_path_planner
 
 router = APIRouter()
-logged_in_username = "default_user"
 
 @router.get("/path")
-def get_path(username: Optional[str] = None):
-    target_user = username if username else logged_in_username
-    nodes = db_get_path_nodes(target_user)
+def get_path(current_username: str = Depends(get_current_username)):
+    nodes = db_get_path_nodes(current_username)
     return {"nodes": nodes}
 
 @router.post("/path/regenerate", dependencies=[Depends(rate_limit_resource)])
-def regenerate_path(username: Optional[str] = None):
-    target_user = username if username else logged_in_username
+def regenerate_path(current_username: str = Depends(get_current_username)):
+    target_user = current_username
     profile = db_get_profile(target_user)
     goals = profile.learning_goals
     
@@ -111,8 +109,8 @@ def regenerate_path(username: Optional[str] = None):
     return {"status": "success", "nodes": new_nodes}
 
 @router.post("/path/complete-node")
-def complete_node(request: CompleteNodeRequest):
-    target_user = request.username if request.username else logged_in_username
+def complete_node(request: CompleteNodeRequest, current_username: str = Depends(get_current_username)):
+    target_user = current_username
     nodes = db_get_path_nodes(target_user)
     
     node_found = False

@@ -1,6 +1,6 @@
 import sqlite3
-from typing import Optional
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.auth_utils import get_current_username
 from app.models import ConsoleLogRequest
 from app.db import (
     DB_PATH,
@@ -9,11 +9,10 @@ from app.db import (
 )
 
 router = APIRouter()
-logged_in_username = "default_user"
 
 @router.get("/console/logs")
-def get_console_logs(username: Optional[str] = None):
-    target_user = username if username else logged_in_username
+def get_console_logs(current_username: str = Depends(get_current_username)):
+    target_user = current_username
     seed_errors_and_logs_for_user(target_user)
     
     conn = sqlite3.connect(DB_PATH)
@@ -36,7 +35,7 @@ def get_console_logs(username: Optional[str] = None):
     return result
 
 @router.post("/console/log-action")
-def log_console_action(request: ConsoleLogRequest):
-    target_user = request.username if request.username else logged_in_username
+def log_console_action(request: ConsoleLogRequest, current_username: str = Depends(get_current_username)):
+    target_user = current_username
     db_log_agent_action(target_user, request.sender, request.message, request.log_type)
     return {"status": "success"}

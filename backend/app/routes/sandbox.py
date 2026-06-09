@@ -5,8 +5,8 @@ import sqlite3
 import tempfile
 import subprocess
 import requests
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+from app.auth_utils import get_current_username
 from app.models import SandboxRunRequest, SandboxDiagnoseRequest
 from app.db import (
     DB_PATH,
@@ -20,11 +20,10 @@ from app.security import is_code_safe
 from app.limiter import rate_limit_resource
 
 router = APIRouter()
-logged_in_username = "default_user"
 
 @router.get("/sandbox/challenge")
-def get_sandbox_challenge(node_id: Optional[str] = None, username: Optional[str] = None):
-    target_user = username if username else logged_in_username
+def get_sandbox_challenge(node_id: str | None = None, current_username: str = Depends(get_current_username)):
+    target_user = current_username
     profile = db_get_profile(target_user)
     is_ml = any("Machine Learning" in g for g in profile.learning_goals)
     challenges = ML_CHALLENGES if is_ml else PYTHON_CHALLENGES
@@ -50,8 +49,8 @@ def get_sandbox_challenge(node_id: Optional[str] = None, username: Optional[str]
     }
 
 @router.post("/sandbox/run", dependencies=[Depends(rate_limit_resource)])
-def run_sandbox_code(request: SandboxRunRequest):
-    target_user = request.username if request.username else logged_in_username
+def run_sandbox_code(request: SandboxRunRequest, current_username: str = Depends(get_current_username)):
+    target_user = current_username
     code = request.code
     node_id = request.node_id
     
@@ -165,8 +164,8 @@ def run_sandbox_code(request: SandboxRunRequest):
         }
 
 @router.post("/sandbox/diagnose", dependencies=[Depends(rate_limit_resource)])
-def diagnose_sandbox_code(request: SandboxDiagnoseRequest):
-    target_user = request.username if request.username else logged_in_username
+def diagnose_sandbox_code(request: SandboxDiagnoseRequest, current_username: str = Depends(get_current_username)):
+    target_user = current_username
     profile = db_get_profile(target_user)
     api_key = os.getenv("LLM_API_KEY")
     

@@ -9,7 +9,24 @@ def is_code_safe(code: str) -> (bool, str):
         return True, ""
 
     allowed_modules = {"math"}
-    forbidden_calls = {"eval", "exec", "open", "compile", "globals", "locals", "getattr", "setattr", "delattr", "dir", "vars", "breakpoint"}
+    forbidden_calls = {
+        "__import__",
+        "eval",
+        "exec",
+        "open",
+        "compile",
+        "globals",
+        "locals",
+        "getattr",
+        "setattr",
+        "delattr",
+        "dir",
+        "vars",
+        "breakpoint",
+        "input",
+        "help",
+    }
+    forbidden_names = {"__builtins__", "__loader__", "__spec__"}
 
     for node in ast.walk(tree):
         # 1. Imports check
@@ -20,6 +37,10 @@ def is_code_safe(code: str) -> (bool, str):
         elif isinstance(node, ast.ImportFrom):
             if node.module not in allowed_modules:
                 return False, f"在安全沙盒中不允许从模块 '{node.module}' 导入（安全校验智能体限制）。"
+
+        # 1.5 Dangerous symbol references that often lead to import/builtin escapes
+        if isinstance(node, ast.Name) and node.id in forbidden_names:
+            return False, f"安全校验智能体拦截：禁止访问敏感运行时对象 '{node.id}'。"
 
         # 2. Dangerous function calls
         if isinstance(node, ast.Call):

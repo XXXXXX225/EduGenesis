@@ -1,10 +1,23 @@
 // Unified API fetch layer for EduGenesis
+import { getAccessToken } from './session';
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
+
+function buildHeaders(extraHeaders = {}) {
+  const token = getAccessToken();
+  const headers = { ...extraHeaders };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 export async function apiGet(path, params = {}) {
   const qs = new URLSearchParams(params).toString();
   const url = qs ? `${API_BASE}${path}?${qs}` : `${API_BASE}${path}`;
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: buildHeaders(),
+  });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || `API ${path} returned ${res.status}`);
@@ -15,7 +28,7 @@ export async function apiGet(path, params = {}) {
 export async function apiPost(path, body = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -33,7 +46,7 @@ export async function apiPost(path, body = {}) {
 export async function apiSSEStream(path, body, onChunk) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`API ${path} connection failed`);
@@ -58,6 +71,14 @@ export async function apiSSEStream(path, body, onChunk) {
       }
     }
   }
+}
+
+export async function apiGetRaw(path, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const url = qs ? `${API_BASE}${path}?${qs}` : `${API_BASE}${path}`;
+  return fetch(url, {
+    headers: buildHeaders(),
+  });
 }
 
 export { API_BASE };

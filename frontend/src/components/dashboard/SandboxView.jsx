@@ -1,4 +1,5 @@
 import React from 'react';
+import { apiGet, apiPost } from '../../utils/api';
 
 export default function SandboxView({
   sandboxChallenge,
@@ -75,22 +76,11 @@ export default function SandboxView({
                   onClick={async () => {
                     setSandboxAIAdvice('🧠 [主管智能体] 正在扫描代码特征中...');
                     try {
-                      const username = localStorage.getItem('regUsername') || 'default_user';
-                      const response = await fetch('http://127.0.0.1:8000/api/sandbox/diagnose', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          code: sandboxCode,
-                          node_id: sandboxChallenge?.node_id || 'node3',
-                          username: username
-                        })
+                      const result = await apiPost('/sandbox/diagnose', {
+                        code: sandboxCode,
+                        node_id: sandboxChallenge?.node_id || 'node3',
                       });
-                      if (response.ok) {
-                        const result = await response.json();
-                        setSandboxAIAdvice(result.advice);
-                      } else {
-                        setSandboxAIAdvice('❌ 诊断失败：无法连接导师智能体。');
-                      }
+                      setSandboxAIAdvice(result.advice);
                     } catch (err) {
                       setSandboxAIAdvice(`❌ 诊断异常：${err.message}`);
                     }
@@ -106,32 +96,17 @@ export default function SandboxView({
                     setIsSandboxRunning(true);
                     setSandboxTerminal(prev => [...prev, ">>> PyTest test_main.py -v", "运行中..."]);
                     try {
-                      const username = localStorage.getItem('regUsername') || 'default_user';
-                      const response = await fetch('http://127.0.0.1:8000/api/sandbox/run', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          code: sandboxCode,
-                          node_id: sandboxChallenge?.node_id || 'node3',
-                          username: username
-                        })
+                      const result = await apiPost('/sandbox/run', {
+                        code: sandboxCode,
+                        node_id: sandboxChallenge?.node_id || 'node3',
                       });
-                      if (response.ok) {
-                        const result = await response.json();
-                        setSandboxTerminal(prev => [
-                          ...prev,
-                          ...result.output.split('\n')
-                        ]);
-                        if (result.passed) {
-                          // Refresh user profile to reflect the updated stats
-                          const profileRes = await fetch(`http://127.0.0.1:8000/api/profile?username=${username}`);
-                          if (profileRes.ok) {
-                            const updatedProfile = await profileRes.json();
-                            setProfile(updatedProfile);
-                          }
-                        }
-                      } else {
-                        setSandboxTerminal(prev => [...prev, "❌ 运行失败：无法连接沙箱服务器。"]);
+                      setSandboxTerminal(prev => [
+                        ...prev,
+                        ...(result.console_output || '').split('\n').filter(Boolean)
+                      ]);
+                      if (result.status === 'success') {
+                        const updatedProfile = await apiGet('/profile');
+                        setProfile(updatedProfile);
                       }
                     } catch (err) {
                       setSandboxTerminal(prev => [...prev, `❌ 运行失败：${err.message}`]);

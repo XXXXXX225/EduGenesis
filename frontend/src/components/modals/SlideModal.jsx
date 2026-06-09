@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Video, Play, Pause, ChevronRight } from 'lucide-react';
 import { gsap } from 'gsap';
+import { API_BASE } from '../../utils/api';
 
 const modalHeaderStyle = {
   display: 'flex',
@@ -59,7 +60,7 @@ export default function SlideModal({ isOpen, onClose, slides, nodeTitle }) {
 
   const handleSlideSpeech = (text) => {
     stopSlideSpeech();
-    const audioUrl = `http://127.0.0.1:8000/api/tts?text=${encodeURIComponent(text)}`;
+    const audioUrl = `${API_BASE}/tts?text=${encodeURIComponent(text)}`;
     const audio = new Audio(audioUrl);
     slideAudioRef.current = audio;
 

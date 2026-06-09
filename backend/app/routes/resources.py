@@ -10,9 +10,9 @@ import time
 from urllib.parse import urlencode, urlparse
 from wsgiref.handlers import format_date_time
 import websocket
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from app.auth_utils import get_current_username
 from app.models import ResourceGenerateRequest
 from app.db import (
     DB_PATH,
@@ -25,7 +25,6 @@ from app.limiter import rate_limit_resource
 from app.llm_client import call_llm_resource_agent
 
 router = APIRouter()
-logged_in_username = "default_user"
 
 def call_xfyun_tts(text: str) -> bytes:
     appid = os.getenv("TTS_APPID")
@@ -63,7 +62,12 @@ def call_xfyun_tts(text: str) -> bytes:
     }
     auth_url = f"{ws_url}?" + urlencode(params)
 
-    ws = websocket.create_connection(auth_url, sslopt={"cert_reqs": ssl.CERT_NONE})
+    allow_insecure_ssl = os.getenv("TTS_ALLOW_INSECURE_SSL", "").lower() in {"1", "true", "yes"}
+    ssl_options = None
+    if allow_insecure_ssl:
+        ssl_options = {"cert_reqs": ssl.CERT_NONE}
+
+    ws = websocket.create_connection(auth_url, sslopt=ssl_options)
     text_b64 = base64.b64encode(text.encode("utf-8")).decode("utf-8")
     
     payload = {
@@ -112,8 +116,8 @@ def call_xfyun_tts(text: str) -> bytes:
     return audio_data
 
 @router.get("/resources")
-def get_resources(node_id: str, username: Optional[str] = None):
-    target_user = username if username else logged_in_username
+def get_resources(node_id: str, current_username: str = Depends(get_current_username)):
+    target_user = current_username
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
@@ -211,8 +215,8 @@ def get_resources(node_id: str, username: Optional[str] = None):
     return result
 
 @router.post("/resources/generate", dependencies=[Depends(rate_limit_resource)])
-def generate_resources(request: ResourceGenerateRequest):
-    target_user = request.username if request.username else logged_in_username
+def generate_resources(request: ResourceGenerateRequest, current_username: str = Depends(get_current_username)):
+    target_user = current_username
     node_id = request.node_id
     
     # Get current profile
@@ -273,7 +277,7 @@ def generate_resources(request: ResourceGenerateRequest):
     conn.commit()
     conn.close()
     
-    return get_resources(node_id, target_user)
+    return get_resources(node_id=node_id, current_username=current_username)
 
 @router.get("/tts")
 def get_tts(text: str):

@@ -34,6 +34,10 @@ import {
   Moon,
   Terminal
 } from 'lucide-react';
+import InteractiveChatBubble from './components/shared/InteractiveChatBubble';
+import { apiGet, apiPost, apiSSEStream, API_BASE } from './utils/api';
+import { clearSession, getStoredUsername, isAuthenticated, saveSession } from './utils/session';
+import { useRouteSync } from './utils/routing';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -51,355 +55,6 @@ import SlideModal from './components/modals/SlideModal';
 import QuizModal from './components/modals/QuizModal';
 import MindmapModal from './components/modals/MindmapModal';
 import CodeModal from './components/modals/CodeModal';
-
-
-// Route/URL helper functions
-const parseStateFromURL = () => {
-  const path = window.location.pathname;
-  const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
-
-  let view = 'landing';
-  let mode = 'login';
-  let tab = 'home';
-
-  if (path === '/signup') {
-    view = 'auth';
-    mode = 'signup';
-  } else if (path === '/login') {
-    view = 'auth';
-    mode = 'login';
-  } else if (path === '/') {
-    view = 'landing';
-  } else {
-    // If not logged in, any dashboard path (/home, /chat, etc.) fallback to landing page
-    if (!loggedIn) {
-      view = 'landing';
-    } else {
-      view = 'dashboard';
-      if (path === '/chat') tab = 'chat';
-      else if (path === '/path') tab = 'path';
-      else if (path === '/resources') tab = 'resources';
-      else if (path === '/sandbox') tab = 'sandbox';
-      else if (path === '/errors') tab = 'errors';
-      else if (path === '/console') tab = 'agent-console';
-      else if (path === '/achievements') tab = 'achievements';
-      else tab = 'home';
-    }
-  }
-
-  return { view, mode, tab, loggedIn };
-};
-
-const updateURLFromState = (view, mode, tab, loggedIn) => {
-  let targetPath = '/';
-
-  if (view === 'landing') {
-    targetPath = '/';
-  } else if (view === 'auth') {
-    targetPath = mode === 'signup' ? '/signup' : '/login';
-  } else if (view === 'dashboard') {
-    if (tab === 'home') targetPath = '/home';
-    else if (tab === 'chat') targetPath = '/chat';
-    else if (tab === 'path') targetPath = '/path';
-    else if (tab === 'resources') targetPath = '/resources';
-    else if (tab === 'sandbox') targetPath = '/sandbox';
-    else if (tab === 'errors') targetPath = '/errors';
-    else if (tab === 'agent-console') targetPath = '/console';
-    else if (tab === 'achievements') targetPath = '/achievements';
-    else targetPath = '/home';
-  }
-
-  if (window.location.pathname !== targetPath) {
-    window.history.pushState(null, '', targetPath);
-  }
-};
-
-const InteractiveChatBubble = ({ msg, handleSlideSpeech, stopSlideSpeech }) => {
-  const [selectedStep, setSelectedStep] = useState(0);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const [videoProgress, setVideoProgress] = useState(0);
-  const progressIntervalRef = useRef(null);
-
-  useEffect(() => {
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
-  }, []);
-
-  const content = msg.content;
-  if (!content) return null;
-
-  // Regexes
-  const diagramRegex = /\[DIAGRAM:\s*([^\]|]+)\s*\|\s*([^\]]+)\]/g;
-  const videoRegex = /\[VIDEO:\s*([^\]|]+)\s*\|\s*([^\]]+)\]/g;
-
-  const diagramMatch = [...content.matchAll(diagramRegex)][0];
-  const videoMatch = [...content.matchAll(videoRegex)][0];
-
-  let cleanText = content
-    .replace(diagramRegex, "")
-    .replace(videoRegex, "")
-    .trim();
-
-  const textElement = cleanText ? (
-    <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{cleanText}</div>
-  ) : null;
-
-  // 1. Render Diagram Card if matched
-  let diagramCard = null;
-  if (diagramMatch) {
-    const stepsStr = diagramMatch[1].trim();
-    const detailsStr = diagramMatch[2].trim();
-
-    const steps = stepsStr.split("->").map(s => s.trim());
-    const detailsMap = {};
-
-    steps.forEach(step => {
-      const escapeStep = step.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const regex = new RegExp(`${escapeStep}\\s*:\\s*([^\\n.]+)(?:\\.|\\n|$)`, 'i');
-      const match = detailsStr.match(regex);
-      if (match) {
-        detailsMap[step] = match[1].trim();
-      } else {
-        detailsMap[step] = "点击查看此步骤的学术详情。";
-      }
-    });
-
-    const activeStepName = steps[selectedStep] || steps[0];
-    const activeStepDetail = detailsMap[activeStepName];
-
-    diagramCard = (
-      <div
-        className="multimodal-card"
-        style={{
-          marginTop: '14px',
-          background: 'var(--bg-modal-content, rgba(9, 13, 22, 0.7))',
-          border: '1px solid var(--border-neon)',
-          borderRadius: '12px',
-          padding: '16px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-          overflow: 'hidden'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary-neon)' }} className="pulse-glow" />
-          <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '0.05em' }}>互动拓扑知识链</span>
-        </div>
-
-        {/* Steps Flow */}
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
-          {steps.map((step, idx) => {
-            const isActive = idx === selectedStep;
-            return (
-              <React.Fragment key={idx}>
-                <button
-                  onClick={() => setSelectedStep(idx)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    fontSize: '11.5px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    transition: 'all 0.25s',
-                    background: isActive ? 'var(--primary-neon)' : 'rgba(255,255,255,0.04)',
-                    color: isActive ? '#000000' : 'var(--text-muted)',
-                    border: isActive ? '1px solid var(--primary-neon)' : '1px solid rgba(255,255,255,0.08)',
-                    boxShadow: isActive ? '0 0 12px rgba(15, 118, 110, 0.4)' : 'none'
-                  }}
-                >
-                  {step}
-                </button>
-                {idx < steps.length - 1 && (
-                  <span style={{ color: 'var(--text-muted)', opacity: 0.3, fontSize: '12px', fontWeight: '800' }}>→</span>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </div>
-
-        {/* Detailed Explanation Panel */}
-        <div
-          style={{
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255,255,255,0.04)',
-            borderRadius: '8px',
-            padding: '12px 14px',
-            fontSize: '12.5px',
-            color: 'var(--text-muted)',
-            lineHeight: '1.6',
-            minHeight: '44px',
-            transition: 'all 0.2s'
-          }}
-        >
-          <strong style={{ color: 'var(--primary-neon)', display: 'block', marginBottom: '4px', fontSize: '11px', textTransform: 'uppercase' }}>
-            {activeStepName} 详情：
-          </strong>
-          {activeStepDetail}
-        </div>
-      </div>
-    );
-  }
-
-  // 2. Render Video Card if matched
-  let videoCard = null;
-  if (videoMatch) {
-    const videoTitle = videoMatch[1].trim();
-    const videoDesc = videoMatch[2].trim();
-
-    const togglePlayVideo = () => {
-      if (isVideoPlaying) {
-        stopSlideSpeech();
-        setIsVideoPlaying(false);
-        if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-        }
-        setVideoProgress(0);
-      } else {
-        handleSlideSpeech(videoDesc);
-        setIsVideoPlaying(true);
-        setVideoProgress(0);
-
-        const duration = 12000;
-        const stepTime = 100;
-        let elapsed = 0;
-
-        if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-        }
-
-        progressIntervalRef.current = setInterval(() => {
-          elapsed += stepTime;
-          const ratio = Math.min(100, (elapsed / duration) * 100);
-          setVideoProgress(ratio);
-          if (ratio >= 100) {
-            clearInterval(progressIntervalRef.current);
-            setIsVideoPlaying(false);
-            setVideoProgress(0);
-          }
-        }, stepTime);
-      }
-    };
-
-    videoCard = (
-      <div
-        className="multimodal-card"
-        style={{
-          marginTop: '14px',
-          background: 'var(--bg-modal-content, rgba(9, 13, 22, 0.7))',
-          border: '1px solid var(--border-neon)',
-          borderRadius: '12px',
-          padding: '16px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-          overflow: 'hidden'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }} className="pulse-glow" />
-            <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '0.05em' }}>
-              多模态微视频课程
-            </span>
-          </div>
-          <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-            PCM / MP3 讯飞合成中
-          </span>
-        </div>
-
-        {/* Video Visual Body */}
-        <div
-          style={{
-            position: 'relative',
-            background: '#04060a',
-            height: '140px',
-            borderRadius: '8px',
-            border: '1px solid rgba(255,255,255,0.04)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            overflow: 'hidden'
-          }}
-        >
-          {isVideoPlaying ? (
-            <div style={{ zIndex: 1, padding: '14px', textAlign: 'center', maxWidth: '85%' }}>
-              <p style={{ fontSize: '12px', color: '#ffffff', lineHeight: '1.5', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
-                {videoDesc.length > 70 ? videoDesc.slice(0, 67) + "..." : videoDesc}
-              </p>
-            </div>
-          ) : (
-            <div style={{ zIndex: 1, textAlign: 'center' }}>
-              <h5 style={{ fontSize: '13.5px', fontWeight: '800', color: '#ffffff', marginBottom: '4px' }}>{videoTitle}</h5>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>自适应学术讲解微课</p>
-            </div>
-          )}
-
-          {isVideoPlaying && (
-            <div style={{ display: 'flex', gap: '3px', position: 'absolute', bottom: '12px', zIndex: 1 }}>
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(idx => (
-                <div
-                  key={idx}
-                  style={{
-                    width: '2px',
-                    height: '12px',
-                    background: 'var(--primary-neon)',
-                    borderRadius: '1px',
-                    animation: `bounceWave 0.6s infinite alternate ease-in-out`,
-                    animationDelay: `${idx * 0.08}s`
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Video Controls bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px' }}>
-          <button
-            onClick={togglePlayVideo}
-            style={{
-              background: isVideoPlaying ? 'rgba(239, 68, 68, 0.12)' : 'rgba(15, 118, 110, 0.12)',
-              border: isVideoPlaying ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid var(--primary-neon)',
-              borderRadius: '50%',
-              width: '32px',
-              height: '32px',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              cursor: 'pointer',
-              color: isVideoPlaying ? '#ef4444' : 'var(--primary-neon)',
-              transition: 'all 0.2s',
-              flexShrink: 0
-            }}
-          >
-            {isVideoPlaying ? <Pause size={14} /> : <Play size={14} style={{ marginLeft: '2px' }} />}
-          </button>
-
-          <div style={{ flexGrow: 1, background: 'rgba(255,255,255,0.06)', height: '4px', borderRadius: '2px', overflow: 'hidden' }}>
-            <div
-              style={{
-                width: `${videoProgress}%`,
-                background: 'var(--primary-neon)',
-                height: '100%',
-                transition: 'width 0.1s linear',
-                boxShadow: '0 0 8px var(--primary-neon)'
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {textElement}
-      {diagramCard}
-      {videoCard}
-    </div>
-  );
-};
 
 const handleCardMouseMove = (e) => {
   const card = e.currentTarget;
@@ -764,8 +419,7 @@ const RadarCustomizer = () => {
 };
 
 export default function App() {
-  const initialRoute = parseStateFromURL();
-  const [isLoggedIn, setIsLoggedIn] = useState(initialRoute.loggedIn);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => isAuthenticated());
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
 
   useEffect(() => {
@@ -777,8 +431,8 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const [currentView, setCurrentView] = useState(initialRoute.view); // 'landing' | 'auth' | 'dashboard'
-  const [authMode, setAuthMode] = useState(initialRoute.mode); // 'login' | 'signup'
+  const [currentView, setCurrentView] = useState('landing'); // 'landing' | 'auth' | 'dashboard'
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
 
   // Interactive Landing Demo states
   const [demoStyle, setDemoStyle] = useState('practical'); // 'practical' | 'theoretical' | 'visual'
@@ -799,7 +453,7 @@ export default function App() {
   const [simIsRunning, setSimIsRunning] = useState(false);
 
   // Registration inputs
-  const [regUsername, setRegUsername] = useState(() => localStorage.getItem('regUsername') || '');
+  const [regUsername, setRegUsername] = useState(() => getStoredUsername());
   const [regPassword, setRegPassword] = useState('');
   const [regCognitiveStyle, setRegCognitiveStyle] = useState('Practical Coding');
   const [regLearningGoal, setRegLearningGoal] = useState('Python Basics');
@@ -815,7 +469,7 @@ export default function App() {
   const [isLoadingOrchestration, setIsLoadingOrchestration] = useState(false);
   const [orchestrationStep, setOrchestrationStep] = useState(0);
 
-  const [activeTab, setActiveTab] = useState(initialRoute.tab);
+  const [activeTab, setActiveTab] = useState('home');
   const [profile, setProfile] = useState({
     knowledge_base: 40,
     learning_pace: 50,
@@ -825,24 +479,16 @@ export default function App() {
     engagement: 80
   });
 
-  // 1a. Listen to URL path changes (e.g. browser back/forward buttons)
-  useEffect(() => {
-    const handlePopState = () => {
-      const state = parseStateFromURL();
-      setIsLoggedIn(state.loggedIn);
-      setCurrentView(state.view);
-      setAuthMode(state.mode);
-      setActiveTab(state.tab);
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  // 1b. Update URL path when internal navigation states change
-  useEffect(() => {
-    updateURLFromState(currentView, authMode, activeTab, isLoggedIn);
-  }, [currentView, authMode, activeTab, isLoggedIn]);
+  useRouteSync({
+    currentView,
+    authMode,
+    activeTab,
+    isLoggedIn,
+    setCurrentView,
+    setAuthMode,
+    setActiveTab,
+    setIsLoggedIn,
+  });
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -850,21 +496,15 @@ export default function App() {
     setAuthError('');
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: regUsername,
-          password: regPassword,
-          cognitive_style: regCognitiveStyle,
-          learning_goals: [regLearningGoal]
-        })
+      const resData = await apiPost('/auth/register', {
+        username: regUsername,
+        password: regPassword,
+        cognitive_style: regCognitiveStyle,
+        learning_goals: [regLearningGoal]
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || '注册失败，请检查学术网络或更换昵称。');
-      }
+      saveSession({ accessToken: resData.access_token, username: resData.username });
+      setRegUsername(resData.username);
+      setIsLoggedIn(true);
 
       // If successful, trigger loading orchestration animation
       setIsLoadingOrchestration(true);
@@ -884,26 +524,11 @@ export default function App() {
 
       setTimeout(async () => {
         try {
-          // Fetch updated profile
-          const profileRes = await fetch(`http://127.0.0.1:8000/api/profile?username=${regUsername}`);
-          if (profileRes.ok) {
-            const profileData = await profileRes.json();
-            setProfile(profileData);
-          }
-
-          // Fetch updated path
-          const pathRes = await fetch(`http://127.0.0.1:8000/api/path?username=${regUsername}`);
-          if (pathRes.ok) {
-            const pathData = await pathRes.json();
-            setPathNodes(pathData.nodes);
-          }
+          await loadDashboardState();
         } catch (err) {
           console.warn("Error fetching initial states on registration complete:", err);
         } finally {
-          localStorage.setItem('isLoggedIn', 'true');
-          localStorage.setItem('regUsername', regUsername);
           setIsLoadingOrchestration(false);
-          setIsLoggedIn(true);
           setCurrentView('dashboard');
           setActiveTab('home');
         }
@@ -965,21 +590,13 @@ export default function App() {
     setAuthError('');
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: loginUsername,
-          password: loginPassword
-        })
+      const resData = await apiPost('/auth/login', {
+        username: loginUsername,
+        password: loginPassword
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || '登录失败，请核对您的账户凭证。');
-      }
-
-      const resData = await response.json();
+      saveSession({ accessToken: resData.access_token, username: resData.username });
+      setRegUsername(resData.username);
+      setIsLoggedIn(true);
 
       // If login successful, show short loading orchestration
       setIsLoadingOrchestration(true);
@@ -995,28 +612,11 @@ export default function App() {
 
       setTimeout(async () => {
         try {
-          // Sync frontend local profile
-          const profileRes = await fetch(`http://127.0.0.1:8000/api/profile?username=${resData.username}`);
-          if (profileRes.ok) {
-            const profileData = await profileRes.json();
-            setProfile(profileData);
-          }
-
-          // Sync frontend local path
-          const pathRes = await fetch(`http://127.0.0.1:8000/api/path?username=${resData.username}`);
-          if (pathRes.ok) {
-            const pathData = await pathRes.json();
-            setPathNodes(pathData.nodes);
-          }
+          await loadDashboardState();
         } catch (err) {
           console.warn("Error fetching states on login complete:", err);
         } finally {
-          // Set registration username to correct value for Sidebar display
-          setRegUsername(resData.username);
-          localStorage.setItem('isLoggedIn', 'true');
-          localStorage.setItem('regUsername', resData.username);
           setIsLoadingOrchestration(false);
-          setIsLoggedIn(true);
           setCurrentView('dashboard');
           setActiveTab('home');
         }
@@ -1327,6 +927,22 @@ export default function App() {
   const chatEndRef = useRef(null);
   const slideAudioRef = useRef(null);
 
+  const loadDashboardState = async () => {
+    const [profileData, pathData] = await Promise.all([
+      apiGet('/profile'),
+      apiGet('/path'),
+    ]);
+
+    setProfile(profileData);
+    setPathNodes(pathData.nodes);
+
+    const activeNode = pathData.nodes.find((node) => node.status === 'active') || pathData.nodes[0];
+    if (activeNode) {
+      setSelectedNode(activeNode);
+      await fetchNodeResources(activeNode.id);
+    }
+  };
+
 
   const goPortalHome = () => {
     if (currentView === 'landing') {
@@ -1444,60 +1060,36 @@ export default function App() {
 
   // Fetch initial profile and path from backend on mount
   useEffect(() => {
-    const username = localStorage.getItem('regUsername') || 'default_user';
-    const profileUrl = `http://127.0.0.1:8000/api/profile?username=${username}`;
-    const pathUrl = `http://127.0.0.1:8000/api/path?username=${username}`;
-
-    fetch(profileUrl)
-      .then(res => res.json())
-      .then(data => {
-        setProfile(data);
-      })
-      .catch(err => console.warn("Backend not running yet, using local mock state.", err));
-
-    fetch(pathUrl)
-      .then(res => res.json())
-      .then(data => {
-        setPathNodes(data.nodes);
-        // Find active node and fetch its resources
-        const activeNode = data.nodes.find(n => n.status === 'active') || data.nodes[0];
-        if (activeNode) {
-          fetchNodeResources(activeNode.id);
-        }
-      })
-      .catch(err => console.warn("Backend not running yet, using local mock state.", err));
-  }, []);
+    if (!isLoggedIn) return;
+    loadDashboardState().catch(err => console.warn("Backend not running yet, using local mock state.", err));
+  }, [isLoggedIn]);
 
   const fetchNodeResources = async (nodeId) => {
     // Show spinner if we fetch again
     setSelectedNodeResources(null);
     try {
-      const username = localStorage.getItem('regUsername') || 'default_user';
-      const res = await fetch(`http://127.0.0.1:8000/api/resources?node_id=${nodeId}&username=${username}`);
-      if (res.ok) {
-        const data = await res.json();
-        // Fallback to mock data if backend has no resources generated yet to avoid blank page
-        if (Object.keys(data).length === 0) {
-          setSelectedNodeResources({
-            pdf: `# ${selectedNode?.title || "自适应课本"}讲解\n\n本章节知识点由自适应多智能体网络根据您的画像诊断定制编排。\n\n## 1. 核心定义与概念\n在自适应学习中，理解底层机制是掌握本章节的关键。建议通过旁边的“知识脑图”直观理清概念拓扑关系。\n\n## 2. 防御性安全编码规约\n请注意，在设计复杂的网络架构或算法单元时，务必保障类型一致性，防范空指针或解构异常。`,
-            slide: [
-              { title: `第1页: 欢迎学习 ${selectedNode?.title || "自适应模块"}`, content: "我们将通过结合多模态语音播放与动画特效，带您深入浅出地掌握本章核心逻辑。" },
-              { title: "第2页: 核心避坑指南与错误模式", content: "根据系统对您常见错误的画像诊断，本章节已强化防幻觉和防御性断言测试校验。" }
-            ],
-            mindmap: "graph TD\nA[核心概念] --> B[基础应用]\nA --> C[安全规范]",
-            code: "# -*- coding: utf-8 -*-\n# EduGenesis 默认实操校验脚本\n\ndef check_even(num):\n    # 验证是否为偶数\n    return num % 2 == 0\n\ndef test_check_even():\n    assert check_even(2) is True\n    assert check_even(3) is False\n",
-            quiz: [
-              {
-                question: "根据系统的认知风格适配，下列哪种学习方式能提供最高的吸收效率？",
-                options: ["阅读无图解的长篇学术论文", "结合图解说明、音画对齐课件与手写代码实践", "死记硬背语法规则", "完全依赖大模型而不加校验"],
-                answer: 1,
-                explanation: "结合图解、语音播报和代码实践符合自适应画像的多模态认知偏好，也是本系统的核心设计宗旨。"
-              }
-            ]
-          });
-        } else {
-          setSelectedNodeResources(data);
-        }
+      const data = await apiGet('/resources', { node_id: nodeId });
+      // Fallback to mock data if backend has no resources generated yet to avoid blank page
+      if (Object.keys(data).length === 0) {
+        setSelectedNodeResources({
+          pdf: `# ${selectedNode?.title || "自适应课本"}讲解\n\n本章节知识点由自适应多智能体网络根据您的画像诊断定制编排。\n\n## 1. 核心定义与概念\n在自适应学习中，理解底层机制是掌握本章节的关键。建议通过旁边的“知识脑图”直观理清概念拓扑关系。\n\n## 2. 防御性安全编码规约\n请注意，在设计复杂的网络架构或算法单元时，务必保障类型一致性，防范空指针或解构异常。`,
+          slide: [
+            { title: `第1页: 欢迎学习 ${selectedNode?.title || "自适应模块"}`, content: "我们将通过结合多模态语音播放与动画特效，带您深入浅出地掌握本章核心逻辑。" },
+            { title: "第2页: 核心避坑指南与错误模式", content: "根据系统对您常见错误的画像诊断，本章节已强化防幻觉和防御性断言测试校验。" }
+          ],
+          mindmap: "graph TD\nA[核心概念] --> B[基础应用]\nA --> C[安全规范]",
+          code: "# -*- coding: utf-8 -*-\n# EduGenesis 默认实操校验脚本\n\ndef check_even(num):\n    # 验证是否为偶数\n    return num % 2 == 0\n\ndef test_check_even():\n    assert check_even(2) is True\n    assert check_even(3) is False\n",
+          quiz: [
+            {
+              question: "根据系统的认知风格适配，下列哪种学习方式能提供最高的吸收效率？",
+              options: ["阅读无图解的长篇学术论文", "结合图解说明、音画对齐课件与手写代码实践", "死记硬背语法规则", "完全依赖大模型而不加校验"],
+              answer: 1,
+              explanation: "结合图解、语音播报和代码实践符合自适应画像的多模态认知偏好，也是本系统的核心设计宗旨。"
+            }
+          ]
+        });
+      } else {
+        setSelectedNodeResources(data);
       }
     } catch (err) {
       console.error("Error fetching resources:", err);
@@ -1524,14 +1116,9 @@ export default function App() {
 
   const fetchSandboxChallenge = async (nodeId = null) => {
     try {
-      const username = localStorage.getItem('regUsername') || 'default_user';
-      const nodeParam = nodeId ? `&node_id=${nodeId}` : '';
-      const res = await fetch(`http://127.0.0.1:8000/api/sandbox/challenge?username=${username}${nodeParam}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSandboxChallenge(data);
-        setSandboxCode(data.initial_code);
-      }
+      const data = await apiGet('/sandbox/challenge', nodeId ? { node_id: nodeId } : {});
+      setSandboxChallenge(data);
+      setSandboxCode(data.initial_code);
     } catch (err) {
       console.warn("Failed to fetch sandbox challenge:", err);
     }
@@ -1539,12 +1126,8 @@ export default function App() {
 
   const fetchErrors = async () => {
     try {
-      const username = localStorage.getItem('regUsername') || 'default_user';
-      const res = await fetch(`http://127.0.0.1:8000/api/errors?username=${username}`);
-      if (res.ok) {
-        const data = await res.json();
-        setErrorQuestions(data);
-      }
+      const data = await apiGet('/errors');
+      setErrorQuestions(data);
     } catch (err) {
       console.warn("Failed to fetch error notebook questions:", err);
     }
@@ -1552,12 +1135,8 @@ export default function App() {
 
   const fetchConsoleLogs = async () => {
     try {
-      const username = localStorage.getItem('regUsername') || 'default_user';
-      const res = await fetch(`http://127.0.0.1:8000/api/console/logs?username=${username}`);
-      if (res.ok) {
-        const data = await res.json();
-        setAgentLogs(data);
-      }
+      const data = await apiGet('/console/logs');
+      setAgentLogs(data);
     } catch (err) {
       console.warn("Failed to fetch console logs:", err);
     }
@@ -1581,27 +1160,11 @@ export default function App() {
       ai_explanation: "🧠 [画像与导师智能体] 正在进行深度多维学术特征提取与诊断中，请稍候..."
     });
     try {
-      const username = localStorage.getItem('regUsername') || 'default_user';
-      const response = await fetch('http://127.0.0.1:8000/api/errors/diagnose', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          error_id: eq.id,
-          username: username
-        })
+      const result = await apiPost('/errors/diagnose', { error_id: eq.id });
+      setSelectedErrorExp({
+        ...eq,
+        ai_explanation: result.explanation
       });
-      if (response.ok) {
-        const result = await response.json();
-        setSelectedErrorExp({
-          ...eq,
-          ai_explanation: result.explanation
-        });
-      } else {
-        setSelectedErrorExp({
-          ...eq,
-          ai_explanation: "❌ 诊断获取失败，请稍后重试。"
-        });
-      }
     } catch (err) {
       setSelectedErrorExp({
         ...eq,
@@ -1613,36 +1176,21 @@ export default function App() {
   const handleRemedyPractice = async (eq) => {
     setProfileAlert("🧠 [画像智能体] 正在为您生成自适应同类强化测试题...");
     try {
-      const username = localStorage.getItem('regUsername') || 'default_user';
-      const response = await fetch('http://127.0.0.1:8000/api/errors/generate-remedy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          error_id: eq.id,
-          username: username
-        })
+      const quizData = await apiPost('/errors/generate-remedy', { error_id: eq.id });
+      setSelectedNodeResources({
+        quiz: [quizData]
       });
-      if (response.ok) {
-        const quizData = await response.json();
-        // Temporary mock/override node resources with this quiz
-        setSelectedNodeResources({
-          quiz: [quizData]
-        });
-        setQuizAnswers({});
-        setQuizSubmitted(false);
-        setQuizStep('intro');
-        setQuizQuestionIdx(0);
-        setQuizCorrectCount(0);
-        setQuizFeedback('');
+      setQuizAnswers({});
+      setQuizSubmitted(false);
+      setQuizStep('intro');
+      setQuizQuestionIdx(0);
+      setQuizCorrectCount(0);
+      setQuizFeedback('');
 
-        setTimeout(() => {
-          setProfileAlert('');
-          setActiveModal('quiz');
-        }, 800);
-      } else {
-        setProfileAlert("❌ 同类题生成失败。");
-        setTimeout(() => setProfileAlert(''), 2000);
-      }
+      setTimeout(() => {
+        setProfileAlert('');
+        setActiveModal('quiz');
+      }, 800);
     } catch (err) {
       setProfileAlert(`❌ 异常：${err.message}`);
       setTimeout(() => setProfileAlert(''), 2000);
@@ -1661,69 +1209,38 @@ export default function App() {
     setChatHistory(prev => [...prev, { role: 'assistant', content: '' }]);
 
     try {
-      const username = localStorage.getItem('regUsername') || 'default_user';
-      const response = await fetch(`http://127.0.0.1:8000/api/chat?username=${username}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...chatHistory, userMessage],
-          current_profile: profile
-        })
-      });
-
-      if (!response.ok) throw new Error("API Connection failed");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-
-              if (data.type === 'status') {
-                setTutorStatus(data.status);
-              } else if (data.type === 'content') {
-                setTutorStatus('');
-                assistantMessageText += data.content;
-                setChatHistory(prev => {
-                  const updated = [...prev];
-                  updated[updated.length - 1].content = assistantMessageText;
-                  return updated;
-                });
-              } else if (data.type === 'profile_update') {
-                setProfile(data.profile);
-                setProfileAlert('主管智能体已为您同步更新 6 维学习画像！');
-                setTimeout(() => setProfileAlert(''), 4000);
-                setDiagnosticLogs(prev => [
-                  ...prev,
-                  {
-                    time: new Date().toLocaleTimeString(),
-                    log: `画像指标变动: 知识库=${data.profile.knowledge_base}%, 节奏=${data.profile.learning_pace}%, 风格=${data.profile.cognitive_style}`
-                  }
-                ]);
-              } else if (data.type === 'path_update') {
-                setPathNodes(data.nodes);
-              } else if (data.type === 'done') {
-                setIsStreaming(false);
-                setTutorStatus('');
-              }
-            } catch (err) {
-              console.error("SSE Parse Error:", trimmed);
+      await apiSSEStream('/chat', {
+        messages: [...chatHistory, userMessage],
+        current_profile: profile
+      }, (data) => {
+        if (data.type === 'status') {
+          setTutorStatus(data.status);
+        } else if (data.type === 'content') {
+          setTutorStatus('');
+          assistantMessageText += data.content;
+          setChatHistory(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1].content = assistantMessageText;
+            return updated;
+          });
+        } else if (data.type === 'profile_update') {
+          setProfile(data.profile);
+          setProfileAlert('主管智能体已为您同步更新 6 维学习画像！');
+          setTimeout(() => setProfileAlert(''), 4000);
+          setDiagnosticLogs(prev => [
+            ...prev,
+            {
+              time: new Date().toLocaleTimeString(),
+              log: `画像指标变动: 知识库=${data.profile.knowledge_base}%, 节奏=${data.profile.learning_pace}%, 风格=${data.profile.cognitive_style}`
             }
-          }
+          ]);
+        } else if (data.type === 'path_update') {
+          setPathNodes(data.nodes);
+        } else if (data.type === 'done') {
+          setIsStreaming(false);
+          setTutorStatus('');
         }
-      }
+      });
     } catch (error) {
       console.error("Connection error:", error);
       setChatHistory(prev => {
@@ -1747,25 +1264,18 @@ export default function App() {
   const handleRegeneratePath = async () => {
     setIsRegeneratingPath(true);
     try {
-      const username = localStorage.getItem('regUsername') || 'default_user';
-      const res = await fetch(`http://127.0.0.1:8000/api/path/regenerate?username=${username}`, {
-        method: 'POST'
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPathNodes(data.nodes);
+      const data = await apiPost('/path/regenerate');
+      setPathNodes(data.nodes);
 
-        // Add a diagnostic log
-        setDiagnosticLogs(prev => [
-          ...prev,
-          {
-            time: new Date().toLocaleTimeString(),
-            log: "路径智能体已重新编排并下发您的定制学习节点。"
-          }
-        ]);
-        setProfileAlert("学习路径重构成功！");
-        setTimeout(() => setProfileAlert(''), 3000);
-      }
+      setDiagnosticLogs(prev => [
+        ...prev,
+        {
+          time: new Date().toLocaleTimeString(),
+          log: "路径智能体已重新编排并下发您的定制学习节点。"
+        }
+      ]);
+      setProfileAlert("学习路径重构成功！");
+      setTimeout(() => setProfileAlert(''), 3000);
     } catch (err) {
       console.error("Path regeneration failed:", err);
     } finally {
@@ -1794,7 +1304,7 @@ export default function App() {
     stopSlideSpeech();
 
     // Attempt to use Xunfei TTS from backend
-    const audioUrl = `http://127.0.0.1:8000/api/tts?text=${encodeURIComponent(text)}`;
+    const audioUrl = `${API_BASE}/tts?text=${encodeURIComponent(text)}`;
     const audio = new Audio(audioUrl);
     slideAudioRef.current = audio;
 
@@ -1833,7 +1343,6 @@ export default function App() {
   // --- Quiz completing effect ---
   const handleCompleteQuiz = async (score, total) => {
     const wrongCount = total - score;
-    const username = localStorage.getItem('regUsername') || 'default_user';
     const accuracy = Math.round((score / total) * 100);
     const passed = accuracy >= 60;
 
@@ -1852,57 +1361,40 @@ export default function App() {
     };
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/profile?username=${username}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedProfile)
-      });
-      if (res.ok) {
-        const newData = await res.json();
-        setProfile(newData);
+      const newData = await apiPost('/profile', updatedProfile);
+      setProfile(newData);
 
-        if (passed && selectedNode) {
-          // Send request to complete the node and unlock the next one
-          const pathRes = await fetch(`http://127.0.0.1:8000/api/path/complete-node`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              node_id: selectedNode.id,
-              username: username
-            })
-          });
-          if (pathRes.ok) {
-            const pathData = await pathRes.json();
-            setPathNodes(pathData.nodes);
+      if (passed && selectedNode) {
+        const pathData = await apiPost('/path/complete-node', {
+          node_id: selectedNode.id
+        });
+        setPathNodes(pathData.nodes);
 
-            // Find the updated node object to reflect status change in current selection
-            const currentUpdatedNode = pathData.nodes.find(n => n.id === selectedNode.id);
-            if (currentUpdatedNode) {
-              setSelectedNode(currentUpdatedNode);
-            }
-
-            setProfileAlert("恭喜通关！自适应答题合格，下一阶段关卡及资源已成功解锁。");
-            setDiagnosticLogs(prev => [
-              ...prev,
-              {
-                time: new Date().toLocaleTimeString(),
-                log: `关卡解锁: 节点 [${selectedNode.title}] 已通关！下一节点已开启。`
-              }
-            ]);
-          }
-        } else {
-          setProfileAlert("自适应测验已完成！答题指标已同步更新到您的画像。但由于正确率未达标（要求 60%），关卡未能晋级，建议重新阅读课本后重试。");
+        const currentUpdatedNode = pathData.nodes.find(n => n.id === selectedNode.id);
+        if (currentUpdatedNode) {
+          setSelectedNode(currentUpdatedNode);
         }
 
-        setTimeout(() => setProfileAlert(''), 5000);
+        setProfileAlert("恭喜通关！自适应答题合格，下一阶段关卡及资源已成功解锁。");
         setDiagnosticLogs(prev => [
           ...prev,
           {
             time: new Date().toLocaleTimeString(),
-            log: `测验分析: 答对=${score}/${total}, 正确率=${accuracy}%, 自适应反馈分析计算完成。`
+            log: `关卡解锁: 节点 [${selectedNode.title}] 已通关！下一节点已开启。`
           }
         ]);
+      } else {
+        setProfileAlert("自适应测验已完成！答题指标已同步更新到您的画像。但由于正确率未达标（要求 60%），关卡未能晋级，建议重新阅读课本后重试。");
       }
+
+      setTimeout(() => setProfileAlert(''), 5000);
+      setDiagnosticLogs(prev => [
+        ...prev,
+        {
+          time: new Date().toLocaleTimeString(),
+          log: `测验分析: 答对=${score}/${total}, 正确率=${accuracy}%, 自适应反馈分析计算完成。`
+        }
+      ]);
     } catch (err) {
       console.error("Failed to update profile and path after quiz:", err);
     }
@@ -3329,8 +2821,7 @@ export default function App() {
             </div>
             <button
               onClick={() => {
-                localStorage.removeItem('isLoggedIn');
-                localStorage.removeItem('regUsername');
+                clearSession();
                 setIsLoggedIn(false);
                 setCurrentView('landing');
                 setRegUsername('');

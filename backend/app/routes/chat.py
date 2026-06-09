@@ -1,8 +1,8 @@
 import os
 import json
 import asyncio
-from typing import Optional
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
+from app.auth_utils import get_current_username
 from fastapi.responses import StreamingResponse
 from app.models import ChatRequest
 from app.db import (
@@ -15,11 +15,10 @@ from app.limiter import rate_limit_chat
 from app.llm_client import call_llm_structured_analysis, call_llm_stream_tutor
 
 router = APIRouter()
-logged_in_username = "default_user"
 
 @router.post("/chat", dependencies=[Depends(rate_limit_chat)])
-async def chat_interaction(request: ChatRequest, username: Optional[str] = None):
-    target_user = username if username else logged_in_username
+async def chat_interaction(request: ChatRequest, current_username: str = Depends(get_current_username)):
+    target_user = current_username
     current_profile = db_get_profile(target_user)
     api_key = os.getenv("LLM_API_KEY")
     
