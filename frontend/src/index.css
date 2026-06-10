@@ -1330,4 +1330,30 @@ body.dark-mode .timeline-badge-wrapper {
   transform: scale(1.25);
 }
 
+/* ==========================================
+   Model Configuration Switch Toggle & Spinner Styles
+   ========================================== */
+.switch-container {
+  display: inline-flex;
+  align-items: center;
+}
+
+.switch-slider {
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+.switch-slider:hover {
+  filter: brightness(1.1);
+}
+
+.switch-slider.active {
+  box-shadow: 0 0 10px rgba(13, 148, 136, 0.3);
+}
+
+.spin-anim {
+  animation: spin 1s linear infinite;
+}
+
+
 

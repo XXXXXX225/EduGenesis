@@ -12,7 +12,7 @@ from app.db import (
     db_sync_path_nodes_by_goals
 )
 from app.limiter import rate_limit_chat
-from app.llm_client import call_llm_structured_analysis, call_llm_stream_tutor
+from app.llm_client import call_llm_structured_analysis, call_llm_stream_tutor, get_route_llm_params
 
 router = APIRouter()
 
@@ -20,7 +20,7 @@ router = APIRouter()
 async def chat_interaction(request: ChatRequest, current_username: str = Depends(get_current_username)):
     target_user = current_username
     current_profile = db_get_profile(target_user)
-    api_key = os.getenv("LLM_API_KEY")
+    _, api_key, _ = get_route_llm_params(target_user, 'chat')
     
     async def event_generator():
         # Step 1: Supervisor orchestrator thinking state
@@ -31,7 +31,7 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             # Step 2: Structured Analyzer Call
             yield f"data: {json.dumps({'type': 'status', 'status': '📊 [画像智能体] 正在对您的认知指标进行多维提取与诊断...'})}\n\n"
             
-            analysis = await asyncio.to_thread(call_llm_structured_analysis, request.messages, current_profile)
+            analysis = await asyncio.to_thread(call_llm_structured_analysis, request.messages, current_profile, target_user)
             
             profile_updated = False
             path_updated = False
@@ -60,7 +60,7 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             
             yield f"data: {json.dumps({'type': 'status', 'status': '💬 [导师智能体] 正在根据新画像为您生成个性化讲义...'})}\n\n"
             
-            stream_response = await asyncio.to_thread(call_llm_stream_tutor, request.messages, current_profile)
+            stream_response = await asyncio.to_thread(call_llm_stream_tutor, request.messages, current_profile, target_user)
             
             if stream_response and stream_response.status_code == 200:
                 yield f"data: {json.dumps({'type': 'status', 'status': ''})}\n\n"

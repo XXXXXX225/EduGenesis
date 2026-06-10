@@ -146,14 +146,15 @@ def get_resources(node_id: str, current_username: str = Depends(get_current_user
         db_log_agent_action(target_user, "画像智能体", f"分析学生画像数据：认知风格为 [{profile.cognitive_style}]，匹配错误范畴，正在进行个性化 Prompt 组装...", "consensus")
         db_log_agent_action(target_user, "路径智能体", f"开始为关卡 [{node_title}] 动态编排学术资源，调度资源项：{', '.join(node_resources)}。", "info")
         
-        api_key = os.getenv("LLM_API_KEY")
+        from app.llm_client import get_route_llm_params
+        _, api_key, _ = get_route_llm_params(target_user, 'resources')
         generated_data = {}
         fallback_assets = get_fallback_assets_for_topic(node_title, profile)
         
         if api_key:
             try:
                 # Call LLM generator
-                analysis = call_llm_resource_agent(node_title, node_resources, profile)
+                analysis = call_llm_resource_agent(node_title, node_resources, profile, username=target_user)
                 if analysis:
                     generated_data = analysis
                     db_log_agent_action(target_user, "路径智能体", f"大模型在线生成 [{node_title}] 资源项成功，共生成 {len(generated_data)} 个多模态资源包。", "info")
@@ -233,7 +234,8 @@ def generate_resources(request: ResourceGenerateRequest, current_username: str =
             break
             
     # Check if LLM API Key is configured
-    api_key = os.getenv("LLM_API_KEY")
+    from app.llm_client import get_route_llm_params
+    _, api_key, _ = get_route_llm_params(target_user, 'resources')
     generated_data = {}
     
     # Log starting
@@ -246,7 +248,7 @@ def generate_resources(request: ResourceGenerateRequest, current_username: str =
     
     if api_key:
         try:
-            analysis = call_llm_resource_agent(node_title, node_resources, profile)
+            analysis = call_llm_resource_agent(node_title, node_resources, profile, username=target_user)
             if analysis:
                 generated_data = analysis
                 db_log_agent_action(target_user, "路径智能体", f"大模型在线资源生成成功！已成功输出并格式化多模态资源项。", "info")

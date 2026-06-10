@@ -81,4 +81,16 @@ export async function apiGetRaw(path, params = {}) {
   });
 }
 
+export async function apiDelete(path) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+    headers: buildHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `API ${path} returned ${res.status}`);
+  }
+  return res.json();
+}
+
 export { API_BASE };

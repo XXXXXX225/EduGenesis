@@ -32,7 +32,8 @@ import {
   Check,
   Sun,
   Moon,
-  Terminal
+  Terminal,
+  Settings
 } from 'lucide-react';
 import InteractiveChatBubble from './components/shared/InteractiveChatBubble';
 import { apiGet, apiPost, apiSSEStream, API_BASE } from './utils/api';
@@ -49,6 +50,7 @@ import SandboxView from './components/dashboard/SandboxView';
 import ErrorsView from './components/dashboard/ErrorsView';
 import ConsoleView from './components/dashboard/ConsoleView';
 import AchievementsView from './components/dashboard/AchievementsView';
+import SettingsView from './components/dashboard/SettingsView';
 
 import PDFModal from './components/modals/PDFModal';
 import SlideModal from './components/modals/SlideModal';
@@ -2806,6 +2808,13 @@ export default function App() {
               <GraduationCap size={18} />
               <span>学术成就勋章</span>
             </div>
+            <div
+              className={`cyber-nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveTab('settings')}
+            >
+              <Settings size={18} />
+              <span>多模型服务配置</span>
+            </div>
           </nav>
 
           {/* User Cockpit Footer */}
@@ -2953,6 +2962,10 @@ export default function App() {
               setProfileAlert={setProfileAlert}
               goDashboardHome={goDashboardHome}
             />
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsView />
           )}
         </main>
       </div>

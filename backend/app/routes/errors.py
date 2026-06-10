@@ -63,15 +63,14 @@ def diagnose_error(request: ErrorDiagnoseRequest, current_username: str = Depend
         
     err_title, err_code, err_msg = row[0], row[1], row[2]
     profile = db_get_profile(target_user)
-    api_key = os.getenv("LLM_API_KEY")
+    from app.llm_client import get_route_llm_params
+    api_base, api_key, model = get_route_llm_params(target_user, 'diagnostics')
     
     explanation = ""
     solution = ""
     
     if api_key:
         try:
-            api_base = os.getenv("LLM_API_BASE", "https://spark-api-open.xf-yun.com/v1")
-            model = os.getenv("LLM_MODEL", "generalv3.5")
             url = f"{api_base.rstrip('/')}/chat/completions"
             headers = {
                 "Authorization": f"Bearer {api_key}",
@@ -152,14 +151,13 @@ def generate_remedy(request: ErrorRemedyRequest, current_username: str = Depends
         
     err_title, err_msg, err_code = row[0], row[1], row[2]
     profile = db_get_profile(target_user)
-    api_key = os.getenv("LLM_API_KEY")
+    from app.llm_client import get_route_llm_params
+    api_base, api_key, model = get_route_llm_params(target_user, 'diagnostics')
     
     quiz_data = None
     
     if api_key:
         try:
-            api_base = os.getenv("LLM_API_BASE", "https://spark-api-open.xf-yun.com/v1")
-            model = os.getenv("LLM_MODEL", "generalv3.5")
             url = f"{api_base.rstrip('/')}/chat/completions"
             headers = {
                 "Authorization": f"Bearer {api_key}",

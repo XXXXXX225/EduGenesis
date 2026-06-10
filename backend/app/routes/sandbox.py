@@ -167,7 +167,8 @@ def run_sandbox_code(request: SandboxRunRequest, current_username: str = Depends
 def diagnose_sandbox_code(request: SandboxDiagnoseRequest, current_username: str = Depends(get_current_username)):
     target_user = current_username
     profile = db_get_profile(target_user)
-    api_key = os.getenv("LLM_API_KEY")
+    from app.llm_client import get_route_llm_params
+    api_base, api_key, model = get_route_llm_params(target_user, 'diagnostics')
     
     is_safe, err_msg = is_code_safe(request.code)
     if not is_safe:
@@ -177,8 +178,6 @@ def diagnose_sandbox_code(request: SandboxDiagnoseRequest, current_username: str
         
     if api_key:
         try:
-            api_base = os.getenv("LLM_API_BASE", "https://spark-api-open.xf-yun.com/v1")
-            model = os.getenv("LLM_MODEL", "generalv3.5")
             url = f"{api_base.rstrip('/')}/chat/completions"
             headers = {
                 "Authorization": f"Bearer {api_key}",

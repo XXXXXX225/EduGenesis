@@ -612,6 +612,35 @@ def init_db():
     )
     """)
     
+    # User LLM Providers Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_llm_providers (
+        username TEXT,
+        provider_id TEXT,
+        provider_name TEXT NOT NULL,
+        api_base TEXT NOT NULL,
+        api_key TEXT NOT NULL,
+        is_enabled INTEGER NOT NULL,
+        models TEXT NOT NULL,
+        PRIMARY KEY (username, provider_id)
+    )
+    """)
+    
+    # User Model Routing Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_model_routing (
+        username TEXT PRIMARY KEY,
+        chat_provider_id TEXT,
+        chat_model TEXT,
+        planner_provider_id TEXT,
+        planner_model TEXT,
+        diagnostics_provider_id TEXT,
+        diagnostics_model TEXT,
+        resources_provider_id TEXT,
+        resources_model TEXT
+    )
+    """)
+    
     # Seed default user
     cursor.execute("SELECT username, password_hash FROM users WHERE username = 'default_user'")
     row = cursor.fetchone()
@@ -659,7 +688,199 @@ def init_db():
             new_hash = get_password_hash("default_password", "default_user")
             cursor.execute("UPDATE users SET password_hash = ? WHERE username = 'default_user'", (new_hash,))
 
+    # Seed default Xunfei provider for default_user if not exists
+    cursor.execute("SELECT COUNT(*) FROM user_llm_providers WHERE username = 'default_user' AND provider_id = 'xunfei'")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            """INSERT INTO user_llm_providers 
+               (username, provider_id, provider_name, api_base, api_key, is_enabled, models) 
+               VALUES (?, 'xunfei', '讯飞星火 Spark', 'https://spark-api-open.xf-yun.com/v1', 'env', 1, ?)""",
+            (
+                "default_user",
+                json.dumps([
+                    {"name": "generalv3.5", "enabled": True, "tags": ["默认", "推荐", "上下文 8K"]},
+                    {"name": "lite", "enabled": False, "tags": ["轻量", "上下文 4K"]},
+                    {"name": "pro-128k", "enabled": False, "tags": ["推理", "高上下文 128K"]}
+                ], ensure_ascii=False)
+            )
+        )
+        
+    # Seed default routing for default_user if not exists
+    cursor.execute("SELECT COUNT(*) FROM user_model_routing WHERE username = 'default_user'")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            """INSERT INTO user_model_routing 
+               (username, chat_provider_id, chat_model, 
+                planner_provider_id, planner_model, 
+                diagnostics_provider_id, diagnostics_model, 
+                resources_provider_id, resources_model) 
+               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5')""",
+            ("default_user",)
+        )
+
     conn.commit()
     conn.close()
     
     seed_errors_and_logs_for_user("default_user")
+
+def db_get_user_providers(username: str) -> list:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT provider_id, provider_name, api_base, api_key, is_enabled, models FROM user_llm_providers WHERE username = ?",
+        (username,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # Auto-seed default Xunfei Spark if empty
+    if not rows:
+        default_xunfei = {
+            "provider_id": "xunfei",
+            "provider_name": "讯飞星火 Spark",
+            "api_base": "https://spark-api-open.xf-yun.com/v1",
+            "api_key": "env",
+            "is_enabled": 1,
+            "models": json.dumps([
+                {"name": "generalv3.5", "enabled": True, "tags": ["默认", "推荐", "上下文 8K"]},
+                {"name": "lite", "enabled": False, "tags": ["轻量", "上下文 4K"]},
+                {"name": "pro-128k", "enabled": False, "tags": ["推理", "高上下文 128K"]}
+            ], ensure_ascii=False)
+        }
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO user_llm_providers 
+               (username, provider_id, provider_name, api_base, api_key, is_enabled, models) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                username,
+                default_xunfei["provider_id"],
+                default_xunfei["provider_name"],
+                default_xunfei["api_base"],
+                default_xunfei["api_key"],
+                default_xunfei["is_enabled"],
+                default_xunfei["models"]
+            )
+        )
+        conn.commit()
+        conn.close()
+        return [default_xunfei]
+        
+    res = []
+    for r in rows:
+        res.append({
+            "provider_id": r[0],
+            "provider_name": r[1],
+            "api_base": r[2],
+            "api_key": r[3],
+            "is_enabled": r[4],
+            "models": r[5]
+        })
+    return res
+
+def db_save_user_provider(username: str, provider_data: dict):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT OR REPLACE INTO user_llm_providers 
+           (username, provider_id, provider_name, api_base, api_key, is_enabled, models) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (
+            username,
+            provider_data["provider_id"],
+            provider_data["provider_name"],
+            provider_data["api_base"],
+            provider_data["api_key"],
+            int(provider_data["is_enabled"]),
+            provider_data["models"]
+        )
+    )
+    conn.commit()
+    conn.close()
+
+def db_delete_user_provider(username: str, provider_id: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM user_llm_providers WHERE username = ? AND provider_id = ?",
+        (username, provider_id)
+    )
+    conn.commit()
+    conn.close()
+
+def db_get_model_routing(username: str) -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT chat_provider_id, chat_model, 
+                  planner_provider_id, planner_model, 
+                  diagnostics_provider_id, diagnostics_model, 
+                  resources_provider_id, resources_model 
+           FROM user_model_routing WHERE username = ?""",
+        (username,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        default_routing = {
+            "chat_provider_id": "xunfei",
+            "chat_model": "generalv3.5",
+            "planner_provider_id": "xunfei",
+            "planner_model": "generalv3.5",
+            "diagnostics_provider_id": "xunfei",
+            "diagnostics_model": "generalv3.5",
+            "resources_provider_id": "xunfei",
+            "resources_model": "generalv3.5"
+        }
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO user_model_routing 
+               (username, chat_provider_id, chat_model, 
+                planner_provider_id, planner_model, 
+                diagnostics_provider_id, diagnostics_model, 
+                resources_provider_id, resources_model) 
+               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5')""",
+            (username,)
+        )
+        conn.commit()
+        conn.close()
+        return default_routing
+        
+    return {
+        "chat_provider_id": row[0],
+        "chat_model": row[1],
+        "planner_provider_id": row[2],
+        "planner_model": row[3],
+        "diagnostics_provider_id": row[4],
+        "diagnostics_model": row[5],
+        "resources_provider_id": row[6],
+        "resources_model": row[7]
+    }
+
+def db_save_model_routing(username: str, routing_data: dict):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT OR REPLACE INTO user_model_routing 
+           (username, chat_provider_id, chat_model, 
+            planner_provider_id, planner_model, 
+            diagnostics_provider_id, diagnostics_model, 
+            resources_provider_id, resources_model) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            username,
+            routing_data.get("chat_provider_id", "xunfei"),
+            routing_data.get("chat_model", "generalv3.5"),
+            routing_data.get("planner_provider_id", "xunfei"),
+            routing_data.get("planner_model", "generalv3.5"),
+            routing_data.get("diagnostics_provider_id", "xunfei"),
+            routing_data.get("diagnostics_model", "generalv3.5"),
+            routing_data.get("resources_provider_id", "xunfei"),
+            routing_data.get("resources_model", "generalv3.5")
+        )
+    )
+    conn.commit()
+    conn.close()

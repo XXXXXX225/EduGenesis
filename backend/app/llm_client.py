@@ -5,7 +5,11 @@ import requests
 from typing import List, Optional
 from pydantic import BaseModel
 from app.models import UserProfile
-from app.db import db_log_agent_action
+from app.db import (
+    db_log_agent_action,
+    db_get_model_routing,
+    db_get_user_providers
+)
 
 def extract_json_block(text: str) -> str:
     text_clean = text.strip()
@@ -19,10 +23,36 @@ def extract_json_block(text: str) -> str:
         return braces_match.group(1).strip()
     return text_clean
 
-def call_llm_structured_analysis(messages: List[BaseModel], current_profile: UserProfile):
-    api_key = os.getenv("LLM_API_KEY")
-    api_base = os.getenv("LLM_API_BASE", "https://api.openai.com/v1")
-    model = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+def get_route_llm_params(username: str, role_field: str):
+    """
+    role_field: 'chat', 'planner', 'diagnostics', 'resources'
+    Returns: (api_base, api_key, model_name)
+    """
+    try:
+        routing = db_get_model_routing(username)
+        provider_id = routing.get(f"{role_field}_provider_id", "xunfei")
+        model_name = routing.get(f"{role_field}_model", "generalv3.5")
+        
+        providers = db_get_user_providers(username)
+        provider = next((p for p in providers if p["provider_id"] == provider_id), None)
+        
+        if provider and provider.get("is_enabled"):
+            api_base = provider["api_base"]
+            api_key = provider["api_key"]
+            if api_key == "env":
+                api_key = os.getenv("LLM_API_KEY", "")
+            return api_base, api_key, model_name
+    except Exception as e:
+        print(f"Error fetching routed LLM params for {username} - {role_field}: {e}")
+        
+    # Fallback default: Xunfei Spark environment parameters
+    api_key = os.getenv("LLM_API_KEY", "")
+    api_base = os.getenv("LLM_API_BASE", "https://spark-api-open.xf-yun.com/v1")
+    model_name = os.getenv("LLM_MODEL", "generalv3.5")
+    return api_base, api_key, model_name
+
+def call_llm_structured_analysis(messages: List[BaseModel], current_profile: UserProfile, username: str = "default_user"):
+    api_base, api_key, model = get_route_llm_params(username, "chat")
     
     if not api_key:
         return None
@@ -62,8 +92,11 @@ Output STRICTLY a JSON object (no markdown formatting, no code block backticks, 
         "messages": api_messages,
         "temperature": 0.1
     }
-    # Some providers support response_format
-    if "gpt" in model or "deepseek" in model:
+    
+    # Enforce JSON object formatting where supported
+    model_lower = model.lower()
+    base_lower = api_base.lower()
+    if "gpt" in model_lower or "deepseek" in model_lower or "openrouter" in base_lower or "siliconflow" in base_lower:
         payload["response_format"] = {"type": "json_object"}
         
     try:
@@ -77,10 +110,8 @@ Output STRICTLY a JSON object (no markdown formatting, no code block backticks, 
         print(f"LLM Structured Analysis failed: {e}")
     return None
 
-def call_llm_stream_tutor(messages: List[BaseModel], current_profile: UserProfile):
-    api_key = os.getenv("LLM_API_KEY")
-    api_base = os.getenv("LLM_API_BASE", "https://api.openai.com/v1")
-    model = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+def call_llm_stream_tutor(messages: List[BaseModel], current_profile: UserProfile, username: str = "default_user"):
+    api_base, api_key, model = get_route_llm_params(username, "chat")
     
     if not api_key:
         return None
@@ -117,10 +148,8 @@ Current Student Profile (Tailor your explanation to their level and style):
         print(f"LLM Stream initiation failed: {e}")
     return None
 
-def call_llm_resource_agent(topic: str, resources: List[str], profile: UserProfile):
-    api_key = os.getenv("LLM_API_KEY")
-    api_base = os.getenv("LLM_API_BASE", "https://api.openai.com/v1")
-    model = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+def call_llm_resource_agent(topic: str, resources: List[str], profile: UserProfile, username: str = "default_user"):
+    api_base, api_key, model = get_route_llm_params(username, "resources")
     
     if not api_key:
         return {}
@@ -131,7 +160,6 @@ def call_llm_resource_agent(topic: str, resources: List[str], profile: UserProfi
         "Content-Type": "application/json"
     }
     
-    # We want a single structured response containing each requested resource type
     schema = {
         "type": "object",
         "properties": {},
@@ -213,11 +241,13 @@ def call_llm_resource_agent(topic: str, resources: List[str], profile: UserProfi
         "temperature": 0.3
     }
     
-    if "gpt" in model or "deepseek" in model:
+    model_lower = model.lower()
+    base_lower = api_base.lower()
+    if "gpt" in model_lower or "deepseek" in model_lower or "openrouter" in base_lower or "siliconflow" in base_lower:
         payload["response_format"] = {"type": "json_object"}
         
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=25)
+        response = requests.post(url, headers=headers, json=payload, timeout=35)
         if response.status_code == 200:
             res_data = response.json()
             content = res_data["choices"][0]["message"]["content"]
@@ -229,14 +259,12 @@ def call_llm_resource_agent(topic: str, resources: List[str], profile: UserProfi
     return {}
 
 def call_llm_path_planner(goals: List[str], style: str, username: str = "default_user") -> List[dict]:
-    api_key = os.getenv("LLM_API_KEY")
-    api_base = os.getenv("LLM_API_BASE", "https://api.openai.com/v1")
-    model = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+    api_base, api_key, model = get_route_llm_params(username, "planner")
     
     db_log_agent_action(username, "路径智能体", f"正在规划路径。大模型配置: Key={api_key[:10] if api_key else 'None'}..., Base={api_base}, Model={model}", "info")
     
     if not api_key:
-        db_log_agent_action(username, "路径智能体", "路径规划中止: 环境变量中未检测到 LLM_API_KEY。", "warning")
+        db_log_agent_action(username, "路径智能体", "路径规划中止: 未检测到有效的大模型服务 Key。", "warning")
         return []
         
     url = f"{api_base.rstrip('/')}/chat/completions"
@@ -311,7 +339,7 @@ def call_llm_path_planner(goals: List[str], style: str, username: str = "default
 1. 必须生成正好 8 个节点，ID 依次为 "node1", "node2", ..., "node8"。
 2. 节点的 resources 列表必须包含以下资源类型中的 2 到 3 个: "pdf", "slide", "quiz", "code", "mindmap"。
 3. 所有的标题（title）和描述（description）必须是简体中文。
-4. 节点内容必须紧密结合学生的学习目标（{goals_str}）和认知风格（{style}）。
+4. 节点内容必须紧密结合学生的学习目标（{goals_str}） and 认知风格（{style}）。
 """
 
     payload = {
@@ -323,7 +351,9 @@ def call_llm_path_planner(goals: List[str], style: str, username: str = "default
         "temperature": 0.4
     }
     
-    if "gpt" in model or "deepseek" in model:
+    model_lower = model.lower()
+    base_lower = api_base.lower()
+    if "gpt" in model_lower or "deepseek" in model_lower or "openrouter" in base_lower or "siliconflow" in base_lower:
         payload["response_format"] = {"type": "json_object"}
         
     try:
