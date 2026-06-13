@@ -19,22 +19,27 @@ import {
   FileText,
   Map,
   Terminal,
-  MessageSquare
+  MessageSquare,
+  FolderGit2
 } from 'lucide-react';
 import MiniSandboxPlayground from './MiniSandboxPlayground';
 import RadarCustomizer from './RadarCustomizer';
 
+import { useAppContext } from '../../context/AppContext';
+
 gsap.registerPlugin(ScrollTrigger);
 
-const LandingView = ({
-  isLoggedIn,
-  setCurrentView,
-  setAuthMode,
-  theme,
-  setTheme,
-  regCognitiveStyle,
-  setRegCognitiveStyle
-}) => {
+const LandingView = () => {
+  const {
+    isLoggedIn,
+    setCurrentView,
+    setAuthMode,
+    theme,
+    setTheme,
+    regCognitiveStyle,
+    setRegCognitiveStyle
+  } = useAppContext();
+
   const [demoStyle, setDemoStyle] = useState('practical'); // 'practical' | 'theoretical' | 'visual'
   const [demoProfile, setDemoProfile] = useState({
     knowledge_base: 30,

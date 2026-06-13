@@ -75,7 +75,7 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                             try:
                                 data_json = json.loads(data_str)
                                 delta = data_json["choices"][0]["delta"]
-                                if "content" in delta:
+                                if "content" in delta and delta["content"] is not None:
                                     yield f"data: {json.dumps({'type': 'content', 'content': delta['content']})}\n\n"
                             except Exception:
                                 pass

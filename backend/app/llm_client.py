@@ -148,7 +148,7 @@ Current Student Profile (Tailor your explanation to their level and style):
         print(f"LLM Stream initiation failed: {e}")
     return None
 
-def call_llm_resource_agent(topic: str, resources: List[str], profile: UserProfile, username: str = "default_user"):
+def call_llm_resource_agent(topic: str, resources: List[str], profile: UserProfile, username: str = "default_user", context: str = ""):
     api_base, api_key, model = get_route_llm_params(username, "resources")
     
     if not api_key:
@@ -228,9 +228,12 @@ def call_llm_resource_agent(topic: str, resources: List[str], profile: UserProfi
 学生画像特征:
 - 认知风格: {profile.cognitive_style}
 - 常见错误模式: {json.dumps(profile.error_patterns, ensure_ascii=False)}
-- 首选学习目标: {json.dumps(profile.learning_goals, ensure_ascii=False)}
+- 首选学习目标: {json.dumps(profile.learning_goals, ensure_ascii=False)}"""
 
-你必须仅返回一个符合指定 Schema 要求的 JSON 对象，不能包含任何前言、后记、Markdown 标记如 ```json 等多余文本。所有生成的文字必须使用简体中文。"""
+    if context:
+        system_prompt += f"\n请必须参考以下高校初始课程知识库中关于该章节的权威内容大纲来生成资源：\n{context}\n"
+
+    system_prompt += "\n你必须仅返回一个符合指定 Schema 要求的 JSON 对象，不能包含任何前言、后记、Markdown 标记如 ```json 等多余文本。所有生成的文字必须使用简体中文。"
 
     payload = {
         "model": model,
@@ -276,7 +279,7 @@ def call_llm_path_planner(goals: List[str], style: str, username: str = "default
     goals_str = ", ".join(goals)
     
     system_prompt = f"""你是一个多智能体教育网络中的路径规划智能体（Path Planning Agent）。
-你的任务是为学生生成正好 8 个定制化的学习路径关卡（nodes）。
+Your task is to generate exactly 8 customized learning nodes for the student.
 学生的学习目标: {goals_str}
 学生的认知风格: {style}
 
@@ -288,56 +291,56 @@ def call_llm_path_planner(goals: List[str], style: str, username: str = "default
       "id": "node1",
       "title": "节点1的简短中文标题",
       "description": "结合学生认知风格 and 学习目标定制的简短中文描述",
-      "resources": ["pdf", "code"]
+      "resources": ["pdf", "code", "video"]
     }},
     {{
       "id": "node2",
       "title": "节点2的简短中文标题",
       "description": "结合学生认知风格 and 学习目标定制的简短中文描述",
-      "resources": ["slide", "pdf", "quiz"]
+      "resources": ["slide", "pdf", "quiz", "video"]
     }},
     {{
       "id": "node3",
       "title": "节点3的简短中文标题",
       "description": "结合学生认知风格 and 学习目标定制的简短中文描述",
-      "resources": ["slide", "quiz", "code"]
+      "resources": ["slide", "quiz", "code", "video"]
     }},
     {{
       "id": "node4",
       "title": "节点4的简短中文标题",
       "description": "结合学生认知风格 and 学习目标定制的简短中文描述",
-      "resources": ["slide", "quiz"]
+      "resources": ["slide", "quiz", "video"]
     }},
     {{
       "id": "node5",
       "title": "节点5的简短中文标题",
       "description": "结合学生认知风格 and 学习目标定制的简短中文描述",
-      "resources": ["slide", "pdf", "quiz", "code"]
+      "resources": ["slide", "pdf", "quiz", "code", "video"]
     }},
     {{
       "id": "node6",
       "title": "节点6的简短中文标题",
       "description": "结合学生认知风格 and 学习目标定制的简短中文描述",
-      "resources": ["slide", "pdf", "mindmap", "code"]
+      "resources": ["slide", "pdf", "mindmap", "code", "video"]
     }},
     {{
       "id": "node7",
       "title": "节点7的简短中文标题",
       "description": "结合学生认知风格 and 学习目标定制的简短中文描述",
-      "resources": ["code", "quiz"]
+      "resources": ["code", "quiz", "video"]
     }},
     {{
       "id": "node8",
       "title": "节点8的简短中文标题",
       "description": "结合学生认知风格 and 学习目标定制的简短中文描述",
-      "resources": ["code", "quiz"]
+      "resources": ["code", "quiz", "video"]
     }}
   ]
 }}
 
 生成准则:
 1. 必须生成正好 8 个节点，ID 依次为 "node1", "node2", ..., "node8"。
-2. 节点的 resources 列表必须包含以下资源类型中的 2 到 3 个: "pdf", "slide", "quiz", "code", "mindmap"。
+2. 节点的 resources 列表必须包含以下资源类型中的 2 到 4 个: "pdf", "slide", "quiz", "code", "mindmap", "video"。且强烈建议在每个节点中都包含 "video" 资源以展示精品教学视频。
 3. 所有的标题（title）和描述（description）必须是简体中文。
 4. 节点内容必须紧密结合学生的学习目标（{goals_str}） and 认知风格（{style}）。
 """

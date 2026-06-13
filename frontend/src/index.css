@@ -1416,7 +1416,7 @@ body.dark-mode .timeline-badge-wrapper {
 
 .agent-body {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 1fr 4px var(--sidebar-width, 340px);
   height: calc(100vh - 72px);
   width: 100vw;
   overflow: hidden;
@@ -1440,54 +1440,72 @@ body.dark-mode .timeline-badge-wrapper {
 
 .agent-panel-middle {
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--bg-space);
 }
 
 .agent-panel-right {
-  display: none; /* Hidden for 2-column layout */
+  display: flex !important;
+  flex-direction: row-reverse; /* tab strip on the right, content on the left */
+  border-left: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(245, 243, 237, 0.4);
+  height: 100%;
+  overflow: hidden;
+  flex-shrink: 0;
+  width: var(--sidebar-width, 340px);
 }
 
 .dark-mode .agent-panel-right {
-  display: none;
+  background: rgba(10, 15, 30, 0.2);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.right-tab-bar {
+/* 竖向图标导航条 */
+.right-sidebar-tab-strip {
+  width: 50px;
+  height: 100%;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 0;
   background: var(--bg-card-glass);
-  border-bottom: 1px solid var(--border-neon);
-  padding: 8px 12px;
-  gap: 6px;
+  border-left: 1px solid var(--border-neon);
   flex-shrink: 0;
 }
 
-.right-tab-btn {
-  flex: 1;
-  padding: 8px 4px;
+.right-sidebar-tab-icon {
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
-  background: transparent;
-  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
   cursor: pointer;
-  text-align: center;
-  transition: all 0.2s;
+  transition: all 0.2s ease-in-out;
 }
 
-.right-tab-btn.active {
-  background: var(--bg-card-active);
-  border-color: var(--border-neon);
+.right-sidebar-tab-icon:hover {
+  color: var(--text-main);
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.right-sidebar-tab-icon.active {
   color: var(--primary-neon);
-  box-shadow: 0 0 8px rgba(15, 118, 110, 0.15);
+  background: var(--bg-card-active);
+  border: 1px solid var(--border-neon);
+  box-shadow: 0 0 10px rgba(15, 118, 110, 0.2);
 }
 
-.right-panel-viewport {
-  flex-grow: 1;
+/* 左侧选项卡内容视口 */
+.right-sidebar-content-viewport {
+  flex: 1;
+  height: 100%;
   overflow-y: auto;
-  padding: 24px;
+  padding: 20px;
 }
 
 /* 嵌套代码沙盒样式折叠单列适配 */
@@ -1503,10 +1521,7 @@ body.dark-mode .timeline-badge-wrapper {
 
 @media (max-width: 1200px) {
   .agent-body {
-    grid-template-columns: 280px 1fr;
-  }
-  .agent-panel-right {
-    display: none;
+    grid-template-columns: 1fr 4px var(--sidebar-width, 340px);
   }
 }
 
@@ -1522,3 +1537,39 @@ body.dark-mode .timeline-badge-wrapper {
     border-bottom: 1px solid rgba(0,0,0,0.06);
   }
 }
+
+/* --- 拖拽面板调节器 (Drag-to-Resize Handle) --- */
+.resize-handle {
+  width: 4px;
+  height: 100%;
+  background: var(--border-neon);
+  cursor: col-resize;
+  position: relative;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+  z-index: 50;
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+  background: var(--primary-neon);
+  box-shadow: 0 0 10px var(--primary-neon), 0 0 20px var(--primary-neon);
+}
+
+/* 隐式放大悬浮响应区，使用户更易点按拖拽 */
+.resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -8px;
+  right: -8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 51;
+}
+
+@media (max-width: 768px) {
+  .resize-handle {
+    display: none !important;
+  }
+}
+

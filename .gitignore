@@ -42,3 +42,8 @@ env/
 # OS temporary files
 .DS_Store
 Thumbs.db
+
+# Temporary agent workspaces and scratch folders
+scratch/
+.superpowers/
+

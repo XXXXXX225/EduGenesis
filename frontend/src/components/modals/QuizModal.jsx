@@ -104,14 +104,19 @@ export default function QuizModal({ isOpen, onClose, quizList, nodeTitle, onComp
 
                 let optionBg = 'rgba(0,0,0,0.02)';
                 let optionBorder = '1px solid rgba(0,0,0,0.05)';
+                let optionAnimation = 'none';
 
                 if (quizSubmitted) {
                   if (isCorrect) {
                     optionBg = 'rgba(22, 163, 74, 0.08)';
                     optionBorder = '1px solid rgba(22, 163, 74, 0.3)';
+                    if (isSelected) {
+                      optionAnimation = 'successPulse 0.45s ease-in-out';
+                    }
                   } else if (isSelected) {
                     optionBg = 'rgba(220, 38, 38, 0.08)';
                     optionBorder = '1px solid rgba(220, 38, 38, 0.3)';
+                    optionAnimation = 'errorShake 0.45s ease-in-out';
                   }
                 } else if (isSelected) {
                   optionBg = 'rgba(15, 118, 110, 0.05)';
@@ -135,7 +140,8 @@ export default function QuizModal({ isOpen, onClose, quizList, nodeTitle, onComp
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      transition: 'all 0.2s'
+                      transition: 'all 0.2s',
+                      animation: optionAnimation
                     }}
                   >
                     <span style={{ fontSize: '13.5px', color: 'var(--text-main)' }}>{option}</span>
@@ -145,6 +151,20 @@ export default function QuizModal({ isOpen, onClose, quizList, nodeTitle, onComp
                 );
               })}
             </div>
+
+            {/* Custom Animation Keyframes Injection */}
+            <style>{`
+              @keyframes errorShake {
+                0%, 100% { transform: translateX(0); }
+                20%, 60% { transform: translateX(-6px); }
+                40%, 80% { transform: translateX(6px); }
+              }
+              @keyframes successPulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.03); box-shadow: 0 0 12px rgba(22, 163, 74, 0.4); }
+                100% { transform: scale(1); }
+              }
+            `}</style>
 
             {/* Feedback Explanation */}
             {quizSubmitted && (

@@ -2,25 +2,28 @@ import React, { useState } from 'react';
 import { GraduationCap, ArrowRight } from 'lucide-react';
 import { apiPost } from '../../utils/api';
 import { saveSession } from '../../utils/session';
+import { useAppContext } from '../../context/AppContext';
 
-const AuthView = ({
-  setCurrentView,
-  authMode,
-  setAuthMode,
-  regUsername,
-  setRegUsername,
-  regPassword,
-  setRegPassword,
-  regCognitiveStyle,
-  setRegCognitiveStyle,
-  regLearningGoal,
-  setRegLearningGoal,
-  setIsLoggedIn,
-  setIsLoadingOrchestration,
-  setOrchestrationStep,
-  loadDashboardState,
-  setActiveTab
-}) => {
+const AuthView = () => {
+  const {
+    setCurrentView,
+    authMode,
+    setAuthMode,
+    regUsername,
+    setRegUsername,
+    regPassword,
+    setRegPassword,
+    regCognitiveStyle,
+    setRegCognitiveStyle,
+    regLearningGoal,
+    setRegLearningGoal,
+    setIsLoggedIn,
+    setIsLoadingOrchestration,
+    setOrchestrationStep,
+    loadDashboardState,
+    setActiveTab
+  } = useAppContext();
+
   // Login inputs
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');

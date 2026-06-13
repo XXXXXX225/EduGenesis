@@ -10,25 +10,25 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 # Default path nodes
 python_path_nodes = [
-    PathNode(id="node1", title="Python 环境部署", status="completed", description="安装 Python 与 VS Code 编译环境", resources=["pdf", "code"]),
-    PathNode(id="node2", title="变量与数据类型", status="active", description="探索整型、浮点型、字符串及动态类型绑定", resources=["slide", "pdf", "quiz"]),
-    PathNode(id="node3", title="控制流条件判断", status="locked", description="If-Else 条件分支控制逻辑", resources=["slide", "quiz", "code"]),
-    PathNode(id="node4", title="循环控制结构", status="locked", description="While 与 For 迭代及中断控制", resources=["slide", "quiz"]),
-    PathNode(id="node5", title="内置核心数据结构", status="locked", description="列表、元组、字典及集合的多场景增删改查", resources=["slide", "pdf", "quiz", "code"]),
-    PathNode(id="node6", title="函数与封装抽象", status="locked", description="自定义参数传递、返回值及标准库模块导入", resources=["slide", "pdf", "mindmap", "code"]),
-    PathNode(id="node7", title="文件读写与异常处理", status="locked", description="文件系统流读写操作与 Try-Except 异常捕获", resources=["code", "quiz"]),
-    PathNode(id="node8", title="综合项目实战应用", status="locked", description="多智能体协同编写带有健壮性校验的 CLI 工具", resources=["code", "quiz"])
+    PathNode(id="node1", title="Python 环境部署", status="completed", description="安装 Python 与 VS Code 编译环境", resources=["pdf", "code", "video"]),
+    PathNode(id="node2", title="变量与数据类型", status="active", description="探索整型、浮点型、字符串及动态类型绑定", resources=["slide", "pdf", "quiz", "video"]),
+    PathNode(id="node3", title="控制流条件判断", status="locked", description="If-Else 条件分支控制逻辑", resources=["slide", "quiz", "code", "video"]),
+    PathNode(id="node4", title="循环控制结构", status="locked", description="While 与 For 迭代及中断控制", resources=["slide", "quiz", "video"]),
+    PathNode(id="node5", title="内置核心数据结构", status="locked", description="列表、元组、字典及集合的多场景增删改查", resources=["slide", "pdf", "quiz", "code", "video"]),
+    PathNode(id="node6", title="函数与封装抽象", status="locked", description="自定义参数传递、返回值及标准库模块导入", resources=["slide", "pdf", "mindmap", "code", "video"]),
+    PathNode(id="node7", title="文件读写与异常处理", status="locked", description="文件系统流读写操作与 Try-Except 异常捕获", resources=["code", "quiz", "video"]),
+    PathNode(id="node8", title="综合项目实战应用", status="locked", description="多智能体协同编写带有健壮性校验的 CLI 工具", resources=["code", "quiz", "video"])
 ]
 
 ml_path_nodes = [
-    PathNode(id="node1", title="线性代数算力证明", status="completed", description="理解向量点积、矩阵乘法与特征值理论底座", resources=["pdf"]),
-    PathNode(id="node2", title="微积分与梯度下降", status="active", description="偏导数求解与权重参数一步梯度更新步长", resources=["slide", "quiz", "code"]),
-    PathNode(id="node3", title="经典线性回归算法", status="locked", description="最小二乘法与均方误差损失函数收敛验证", resources=["slide", "quiz", "code"]),
-    PathNode(id="node4", title="逻辑回归与分类法则", status="locked", description="Sigmoid 激活函数映射与交叉熵损失定义", resources=["slide", "quiz"]),
-    PathNode(id="node5", title="正则化防御过拟合", status="locked", description="添加 L1/L2 惩罚项以控制模型泛化能力", resources=["slide", "pdf", "quiz", "code"]),
-    PathNode(id="node6", title="前馈深度神经网络", status="locked", description="层、权重与偏置的矩阵运算表示", resources=["slide", "pdf", "mindmap", "code"]),
-    PathNode(id="node7", title="反向传播求导推演", status="locked", description="链式求导法则在计算图中的前向传播与反向求偏导", resources=["code", "quiz"]),
-    PathNode(id="node8", title="经典回归场景实战部署", status="locked", description="完成房价回归预测模型搭建、调试及一键部署", resources=["code", "quiz"])
+    PathNode(id="node1", title="线性代数算力证明", status="completed", description="理解向量点积、矩阵乘法与特征值理论底座", resources=["pdf", "video"]),
+    PathNode(id="node2", title="微积分与梯度下降", status="active", description="偏导数求解与权重参数一步梯度更新步长", resources=["slide", "quiz", "code", "video"]),
+    PathNode(id="node3", title="经典线性回归算法", status="locked", description="最小二乘法与均方误差损失函数收敛验证", resources=["slide", "quiz", "code", "video"]),
+    PathNode(id="node4", title="逻辑回归与分类法则", status="locked", description="Sigmoid 激活函数映射与交叉熵损失定义", resources=["slide", "quiz", "video"]),
+    PathNode(id="node5", title="正则化防御过拟合", status="locked", description="添加 L1/L2 惩罚项以控制模型泛化能力", resources=["slide", "pdf", "quiz", "code", "video"]),
+    PathNode(id="node6", title="前馈深度神经网络", status="locked", description="层、权重与偏置的矩阵运算表示", resources=["slide", "pdf", "mindmap", "code", "video"]),
+    PathNode(id="node7", title="反向传播求导推演", status="locked", description="链式求导法则在计算图中的前向传播与反向求偏导", resources=["code", "quiz", "video"]),
+    PathNode(id="node8", title="经典回归场景实战部署", status="locked", description="完成房价回归预测模型搭建、调试及一键部署", resources=["code", "quiz", "video"])
 ]
 
 # Password hashing helper function (PBKDF2-HMAC-SHA256 with user-specific salt)
@@ -40,7 +40,10 @@ def get_password_hash(password: str, username: str) -> str:
     return f"pbkdf2_sha256${iterations}${username}${h.hex()}"
 
 # Custom asset seeder for topics
-def get_fallback_assets_for_topic(topic: str, profile: UserProfile):
+def get_fallback_assets_for_topic(topic: str, profile: UserProfile, node_id: str = ""):
+    from app.knowledge_base import load_course_material
+    subject = profile.learning_goals[0] if (profile.learning_goals and len(profile.learning_goals) > 0) else "Python Basics"
+    material = load_course_material(subject, node_id) if node_id else ""
     topic_lower = topic.lower()
     
     # Default assets
@@ -340,12 +343,115 @@ if __name__ == "__main__":
     C --> C1["下载 VS Code"]
     C --> C2["安装 Python 扩展"]"""
 
+    if material:
+        pdf_content = material
+        lines = [line.strip() for line in material.split('\n') if line.strip()]
+        headings = [line.lstrip('#').strip() for line in lines if line.startswith('#')]
+        
+        custom_slides = []
+        for idx, heading in enumerate(headings[:8]):
+            content = f"本节精讲关于【{heading}】的自适应知识。请根据您的“{profile.cognitive_style}”风格，结合以下核心大纲开展细致开发与校验。"
+            for i, line in enumerate(lines):
+                if line.startswith('#') and heading in line:
+                    desc_parts = []
+                    for next_line in lines[i+1:]:
+                        if next_line.startswith('#'):
+                            break
+                        if len(desc_parts) < 2 and not next_line.startswith('```'):
+                            desc_parts.append(next_line)
+                    if desc_parts:
+                        content = " ".join(desc_parts)[:150]
+                    break
+            custom_slides.append({
+                "title": f"第{idx+1}页: {heading}",
+                "content": content
+            })
+            
+        if custom_slides:
+            slide_content = custom_slides
+            
+        if len(headings) >= 2:
+            mm_lines = [f"    A[\"{topic} 知识树\"]"]
+            for idx, h in enumerate(headings[:7]):
+                node_name = f"B{idx}"
+                mm_lines.append(f"    A --> {node_name}[\"{h}\"]")
+            mindmap_content = "graph TD\n" + "\n".join(mm_lines)
+
+    # Curated video fallbacks
+    video_fallback_content = []
+    style = profile.cognitive_style.lower()
+    
+    if "variable" in topic_lower or "data types" in topic_lower:
+        video_fallback_content = [
+            {
+                "bvid": "BV1axfSYLEVk",
+                "title": "Python 变量与基本数据类型精讲",
+                "pic": "https://i1.hdslb.com/bfs/archive/8b8fa993d64aa9e37835537921354daee6b43103.jpg",
+                "author": "Python官方教学",
+                "play": "18.4万",
+                "duration": "25:41",
+                "recommend_reason": f"该视频重点讲解了变量绑定的底层原理。针对您的【{profile.cognitive_style}】认知风格，视频中的大量内存模型图解有助于您直观地理解引用机制。"
+            },
+            {
+                "bvid": "BV1wZ4y1c7sY",
+                "title": "5分钟彻底搞懂 Python 中的变量与动态类型",
+                "pic": "https://i0.hdslb.com/bfs/archive/bfd5e1fe2aef1377eb86efc6095d2151c6df2153.jpg",
+                "author": "极客程序员",
+                "play": "5.6万",
+                "duration": "05:12",
+                "recommend_reason": f"这是一个极速入门视频。结合您的认知风格，它通过动画演示了动态类型的赋值过程，适合进行快速概念复习。"
+            }
+        ]
+    elif "environment" in topic_lower or "环境" in topic_lower:
+        video_fallback_content = [
+            {
+                "bvid": "BV1Ee9EBnEfo",
+                "title": "Python 环境配置与 VS Code 编辑器极速上手",
+                "pic": "https://i0.hdslb.com/bfs/archive/bfd5e1fe2aef1377eb86efc6095d2151c6df2153.jpg",
+                "author": "黑马程序员",
+                "play": "51.1万",
+                "duration": "18:45",
+                "recommend_reason": f"针对您的【{profile.cognitive_style}】风格，该视频手把手演示了 Python 安装和 PATH 环境变量配置，非常适合配合左侧的沙盒环境进行动手配置。"
+            },
+            {
+                "bvid": "BV1tP4y1H7kS",
+                "title": "Windows 系统下 Python 与 VS Code 详细配置教程",
+                "pic": "https://i2.hdslb.com/bfs/archive/a979056b1a32012cdd00d48fbc3732d253e30620.jpg",
+                "author": "编程小助手",
+                "play": "12.4万",
+                "duration": "14:22",
+                "recommend_reason": f"该视频以极其详细的步骤演示了 Windows 平台的 Python 环境安装，包含了常见报错处理，契合您的纠错画像。"
+            }
+        ]
+    else:
+        video_fallback_content = [
+            {
+                "bvid": "BV1rpWjevEip",
+                "title": f"B站最火的 Python 零基础精讲课程: {topic}",
+                "pic": "https://i2.hdslb.com/bfs/archive/a979056b1a32012cdd00d48fbc3732d253e30620.jpg",
+                "author": "Python官方课程",
+                "play": "1671.8万",
+                "duration": "39:58:14",
+                "recommend_reason": f"该视频是 B站 播放量最高的经典教程。结合您的【{profile.cognitive_style}】风格，视频大纲清晰，可以作为本章《{topic}》的全面配套参考视频。"
+            },
+            {
+                "bvid": "BV14HEE61EVP",
+                "title": f"Python 从入门到精通项目实战精讲: {topic}",
+                "pic": "https://i1.hdslb.com/bfs/archive/3b7c7906b6316dd7652599f27db999a6b0570492.jpg",
+                "author": "Python学习中心",
+                "play": "85.2万",
+                "duration": "12:30:15",
+                "recommend_reason": f"该教程以项目驱动方式讲解了《{topic}》，非常契合您的实操偏好。您可以通过动手编写其中的代码段来巩固所学概念。"
+            }
+        ]
+
     return {
         "pdf": pdf_content,
         "slide": slide_content,
         "quiz": quiz_content,
         "code": code_content,
-        "mindmap": mindmap_content
+        "mindmap": mindmap_content,
+        "video": video_fallback_content
     }
 
 # Database CRUD functions
@@ -673,7 +779,7 @@ def init_db():
                 learning_goals=["Python Basics"],
                 engagement=80
             )
-            default_assets = get_fallback_assets_for_topic(node.title, default_profile)
+            default_assets = get_fallback_assets_for_topic(node.title, default_profile, node.id)
             for res_type in node.resources:
                 content_val = default_assets.get(res_type, "")
                 if not isinstance(content_val, str):

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Cpu, User, Send, Sparkles, Video, FileText, HelpCircle, FileCode, Map } from 'lucide-react';
+import { useAppContext } from '../../context/AppContext';
 
-const InteractiveChatBubble = ({ msg, handleSlideSpeech, stopSlideSpeech }) => {
+const InteractiveChatBubble = ({ msg }) => {
+  const { speech: { handleSlideSpeech, stopSlideSpeech } } = useAppContext();
   const [selectedStep, setSelectedStep] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
@@ -252,26 +254,26 @@ const InteractiveChatBubble = ({ msg, handleSlideSpeech, stopSlideSpeech }) => {
   );
 };
 
-export default function ChatView({
-  profile,
-  profileAlert,
-  goDashboardHome,
-  chatHistory,
-  handleSlideSpeech,
-  stopSlideSpeech,
-  tutorStatus,
-  chatEndRef,
-  isStreaming,
-  submitChatMessage,
-  handleSendMessage,
-  chatInput,
-  setChatInput,
-  diagnosticLogs
-}) {
+export default function ChatView({ chatEndRef }) {
+  const {
+    profile,
+    profileAlert,
+    goDashboardHome,
+    diagnosticLogs,
+    chat: {
+      chatHistory,
+      chatInput,
+      setChatInput,
+      tutorStatus,
+      isStreaming,
+      submitChatMessage,
+      handleSendMessage
+    }
+  } = useAppContext();
   return (
-    <div style={{ display: 'flex', gap: '24px', height: 'calc(100vh - 120px)', position: 'relative', width: '100%' }}>
+    <div style={{ display: 'flex', height: '100%', position: 'relative', width: '100%' }}>
       {/* Left section: Chat area */}
-      <section className="cyber-card" style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, border: '1px solid var(--border-neon)', height: '100%', position: 'relative' }}>
+      <section className="cyber-card" style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, border: 'none', height: '100%', position: 'relative', background: 'transparent' }}>
 
         {/* Profile Alert Bubble */}
         {profileAlert && (
@@ -356,8 +358,6 @@ export default function ChatView({
                 ) : (
                   <InteractiveChatBubble
                     msg={msg}
-                    handleSlideSpeech={handleSlideSpeech}
-                    stopSlideSpeech={stopSlideSpeech}
                   />
                 )}
               </div>
@@ -435,21 +435,6 @@ export default function ChatView({
           </div>
         </form>
       </section>
-
-      {/* Right Panel: Diagnostic logs */}
-      <aside className="cyber-card" style={{ width: '270px', flexShrink: 0, padding: '24px', display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-card-glass)', backdropFilter: 'blur(10px)', overflowY: 'auto' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: '800', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)' }}>
-          <Cpu size={15} style={{ color: 'var(--primary)' }} /> 画像评估诊断日志
-        </h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexGrow: 1, overflowY: 'auto' }}>
-          {diagnosticLogs.map((log, idx) => (
-            <div key={idx} style={{ padding: '10px 12px', background: 'rgba(0,0,0,0.02)', borderLeft: '3px solid var(--secondary)', borderRadius: '0 8px 8px 0', fontSize: '11px', fontFamily: 'monospace' }}>
-              <div style={{ color: 'var(--text-muted)', fontSize: '9px', marginBottom: '4px' }}>[{log.time}]</div>
-              <div style={{ color: 'var(--text-main)', lineHeight: '1.4' }}>{log.log}</div>
-            </div>
-          ))}
-        </div>
-      </aside>
     </div>
   );
 }

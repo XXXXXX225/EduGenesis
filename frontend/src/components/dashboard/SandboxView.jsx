@@ -1,19 +1,21 @@
 import React from 'react';
-import { apiGet, apiPost } from '../../utils/api';
+import { useAppContext } from '../../context/AppContext';
 
-export default function SandboxView({
-  sandboxChallenge,
-  sandboxAIAdvice,
-  setSandboxAIAdvice,
-  sandboxCode,
-  setSandboxCode,
-  isSandboxRunning,
-  setIsSandboxRunning,
-  sandboxTerminal,
-  setSandboxTerminal,
-  setProfile,
-  goDashboardHome
-}) {
+export default function SandboxView() {
+  const {
+    setProfile,
+    goDashboardHome,
+    sandbox: {
+      sandboxChallenge,
+      sandboxAIAdvice,
+      sandboxCode,
+      setSandboxCode,
+      isSandboxRunning,
+      sandboxTerminal,
+      runSandboxTest,
+      diagnoseSandboxCode
+    }
+  } = useAppContext();
   return (
     <>
       <header>
@@ -73,18 +75,7 @@ export default function SandboxView({
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   type="button"
-                  onClick={async () => {
-                    setSandboxAIAdvice('🧠 [主管智能体] 正在扫描代码特征中...');
-                    try {
-                      const result = await apiPost('/sandbox/diagnose', {
-                        code: sandboxCode,
-                        node_id: sandboxChallenge?.node_id || 'node3',
-                      });
-                      setSandboxAIAdvice(result.advice);
-                    } catch (err) {
-                      setSandboxAIAdvice(`❌ 诊断异常：${err.message}`);
-                    }
-                  }}
+                  onClick={diagnoseSandboxCode}
                   style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', color: '#ffffff', padding: '6px 12px', cursor: 'pointer', fontSize: '11px' }}
                 >
                   🤖 AI 智能诊断
@@ -92,28 +83,7 @@ export default function SandboxView({
                 <button
                   type="button"
                   disabled={isSandboxRunning}
-                  onClick={async () => {
-                    setIsSandboxRunning(true);
-                    setSandboxTerminal(prev => [...prev, ">>> PyTest test_main.py -v", "运行中..."]);
-                    try {
-                      const result = await apiPost('/sandbox/run', {
-                        code: sandboxCode,
-                        node_id: sandboxChallenge?.node_id || 'node3',
-                      });
-                      setSandboxTerminal(prev => [
-                        ...prev,
-                        ...(result.console_output || '').split('\n').filter(Boolean)
-                      ]);
-                      if (result.status === 'success') {
-                        const updatedProfile = await apiGet('/profile');
-                        setProfile(updatedProfile);
-                      }
-                    } catch (err) {
-                      setSandboxTerminal(prev => [...prev, `❌ 运行失败：${err.message}`]);
-                    } finally {
-                      setIsSandboxRunning(false);
-                    }
-                  }}
+                  onClick={() => runSandboxTest(setProfile)}
                   className="cyber-btn"
                   style={{ padding: '6px 16px', fontSize: '11px', textTransform: 'none', background: 'linear-gradient(135deg, var(--primary-neon) 0%, var(--success) 100%)', boxShadow: 'none' }}
                 >

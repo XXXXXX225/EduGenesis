@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrendingUp, CheckCircle2, Sparkles, ChevronRight, BookOpen, Cpu, Code2 } from 'lucide-react';
 import { gsap } from 'gsap';
+import { useAppContext } from '../../context/AppContext';
 
 const RadarCustomizer = ({ profile }) => {
   const [coding, setCoding] = useState(40);
@@ -191,9 +192,45 @@ const RadarCustomizer = ({ profile }) => {
   );
 };
 
-export default function HomeView({ profile, pathNodes, setSelectedNode, setActiveTab, fetchNodeResources }) {
+export default function HomeView() {
+  const { profile, pathNodes, setSelectedNode, setActiveTab, fetchNodeResources } = useAppContext();
+  const [deltas, setDeltas] = useState({ study_time: 0, quiz_accuracy: 0, mastered_nodes: 0 });
+
+  useEffect(() => {
+    if (profile && profile.learning_stats) {
+      const stats = profile.learning_stats;
+      const key = `edugenesis_prev_stats_${profile.username || 'default'}`;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try {
+          const prev = JSON.parse(saved);
+          const dTime = (stats.study_time || 0) - (prev.study_time || 0);
+          const dAcc = (stats.quiz_accuracy || 0) - (prev.quiz_accuracy || 0);
+          const dNodes = (stats.mastered_nodes || 0) - (prev.mastered_nodes || 0);
+          
+          if (dTime !== 0 || dAcc !== 0 || dNodes !== 0) {
+            setDeltas({ study_time: dTime, quiz_accuracy: dAcc, mastered_nodes: dNodes });
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      localStorage.setItem(key, JSON.stringify(stats));
+    }
+  }, [profile]);
+
   return (
     <>
+      <style>{`
+        .pulse-glow-green {
+          box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+          animation: greenGlow 1.5s infinite alternate;
+        }
+        @keyframes greenGlow {
+          0% { opacity: 0.8; }
+          100% { opacity: 1; box-shadow: 0 0 10px rgba(16, 185, 129, 0.6); }
+        }
+      `}</style>
       {/* Landing Banner */}
       <header className="cyber-card" style={{ padding: '40px', background: 'linear-gradient(135deg, rgba(15, 118, 110, 0.06) 0%, rgba(29, 78, 216, 0.03) 100%)', borderLeft: '4px solid var(--primary)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '32px' }}>
@@ -224,21 +261,42 @@ export default function HomeView({ profile, pathNodes, setSelectedNode, setActiv
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', textAlign: 'center' }}>
               <div style={{ padding: '12px 8px', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--primary-neon)', display: 'block' }}>
-                  {profile.learning_stats?.study_time || 0}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--primary-neon)', display: 'block' }}>
+                    {profile.learning_stats?.study_time || 0}
+                  </span>
+                  {deltas.study_time > 0 && (
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '1px 4px', borderRadius: '4px' }} className="pulse-glow-green">
+                      +{deltas.study_time}
+                    </span>
+                  )}
+                </div>
                 <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>累计时长 (分)</span>
               </div>
               <div style={{ padding: '12px 8px', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--secondary)', display: 'block' }}>
-                  {profile.learning_stats?.quiz_accuracy || 0}%
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--secondary)', display: 'block' }}>
+                    {profile.learning_stats?.quiz_accuracy || 0}%
+                  </span>
+                  {deltas.quiz_accuracy !== 0 && (
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: deltas.quiz_accuracy > 0 ? '#10b981' : '#ef4444', background: deltas.quiz_accuracy > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', padding: '1px 4px', borderRadius: '4px' }}>
+                      {deltas.quiz_accuracy > 0 ? `+${deltas.quiz_accuracy}` : `${deltas.quiz_accuracy}`}
+                    </span>
+                  )}
+                </div>
                 <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>习题正确率</span>
               </div>
               <div style={{ padding: '12px 8px', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--accent)', display: 'block' }}>
-                  {profile.learning_stats?.mastered_nodes || 0} / 8
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--accent)', display: 'block' }}>
+                    {profile.learning_stats?.mastered_nodes || 0} / 8
+                  </span>
+                  {deltas.mastered_nodes > 0 && (
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '1px 4px', borderRadius: '4px' }} className="pulse-glow-green">
+                      +{deltas.mastered_nodes}
+                    </span>
+                  )}
+                </div>
                 <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>已掌握知识点</span>
               </div>
             </div>

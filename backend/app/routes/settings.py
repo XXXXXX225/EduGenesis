@@ -131,7 +131,7 @@ def test_provider_connection(provider_id: str, current_username: str = Depends(g
             "messages": [{"role": "user", "content": "hello"}],
             "max_tokens": 5
         }
-        res = requests.post(url, headers=headers, json=payload, timeout=6)
+        res = requests.post(url, headers=headers, json=payload, timeout=15)
         if res.status_code == 200:
             return {"success": True, "message": "连接测试成功！"}
         else:

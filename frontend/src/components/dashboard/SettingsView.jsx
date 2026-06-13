@@ -5,6 +5,109 @@ import {
 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../../utils/api';
 
+const CustomSelect = ({ value, options, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find(opt => `${opt.provider_id}|${opt.model_name}` === value);
+
+  return (
+    <div style={{ position: 'relative', width: '260px' }}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          width: '100%',
+          height: '36px',
+          padding: '0 16px',
+          fontSize: '12px',
+          borderRadius: '10px',
+          cursor: 'pointer',
+          background: 'var(--bg-card-solid)',
+          border: '1px solid var(--border-neon)',
+          color: 'var(--text-main)',
+          fontFamily: 'var(--font-body)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          outline: 'none',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+          transition: 'all 0.3s ease'
+        }}
+      >
+        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+          {selectedOption ? `${selectedOption.provider_name} — ${selectedOption.model_name}` : '请选择模型...'}
+        </span>
+        <ChevronDown size={14} style={{ opacity: 0.7, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
+      </button>
+
+      {isOpen && (
+        <>
+          <div 
+            onClick={() => setIsOpen(false)} 
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} 
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: '40px',
+              left: 0,
+              right: 0,
+              background: 'var(--bg-card-solid)',
+              border: '1px solid var(--border-neon)',
+              borderRadius: '10px',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+              zIndex: 1000,
+              maxHeight: '200px',
+              overflowY: 'auto',
+              padding: '6px'
+            }}
+          >
+            {options.map((opt, idx) => {
+              const optVal = `${opt.provider_id}|${opt.model_name}`;
+              const isSelected = optVal === value;
+              return (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    onChange({ target: { value: optVal } });
+                    setIsOpen(false);
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    background: isSelected ? 'var(--primary-neon)' : 'transparent',
+                    color: isSelected ? '#ffffff' : 'var(--text-main)',
+                    fontFamily: 'var(--font-body)',
+                    transition: 'all 0.15s ease',
+                    fontWeight: isSelected ? '700' : 'normal',
+                    marginBottom: '2px',
+                    textOverflow: 'ellipsis',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.background = 'rgba(15, 118, 110, 0.08)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.background = 'transparent';
+                    }
+                  }}
+                >
+                  {opt.provider_name} — {opt.model_name}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 export default function SettingsView() {
   const [activeSubTab, setActiveSubTab] = useState('providers'); // 'providers' | 'routing'
   const [providers, setProviders] = useState([]);
@@ -258,7 +361,7 @@ export default function SettingsView() {
           <button
             onClick={() => setActiveSubTab('providers')}
             className={`cyber-nav-tab ${activeSubTab === 'providers' ? 'active' : ''}`}
-            style={{ width: '100%', textAlign: 'left', background: activeSubTab === 'providers' ? 'var(--bg-card-active)' : 'transparent', cursor: 'pointer', outline: 'none' }}
+            style={{ width: '100%', textAlign: 'left', cursor: 'pointer', outline: 'none' }}
           >
             <Database size={16} />
             <span style={{ fontSize: '13px' }}>模型供应商</span>
@@ -267,7 +370,7 @@ export default function SettingsView() {
           <button
             onClick={() => setActiveSubTab('routing')}
             className={`cyber-nav-tab ${activeSubTab === 'routing' ? 'active' : ''}`}
-            style={{ width: '100%', textAlign: 'left', background: activeSubTab === 'routing' ? 'var(--bg-card-active)' : 'transparent', cursor: 'pointer', outline: 'none' }}
+            style={{ width: '100%', textAlign: 'left', cursor: 'pointer', outline: 'none' }}
           >
             <Cpu size={16} />
             <span style={{ fontSize: '13px' }}>默认模型绑定</span>
@@ -336,7 +439,7 @@ export default function SettingsView() {
                               <span className="neon-badge neon-badge-primary" style={{ fontSize: '9px', padding: '1px 5px' }}>系统内置</span>
                             )}
                           </span>
-                          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{p.api_base}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>{p.api_base}</span>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -369,11 +472,11 @@ export default function SettingsView() {
                             </div>
                           </label>
 
-                          <button 
+                           <button 
                             onClick={() => handleTestProvider(p.provider_id)}
                             disabled={testingId === p.provider_id}
                             className="cyber-btn" 
-                            style={{ padding: '6px 10px', fontSize: '10px', minHeight: '26px', background: 'rgba(15, 118, 110, 0.04)', borderColor: 'rgba(15, 118, 110, 0.12)' }}
+                            style={{ padding: '6px 10px', fontSize: '10px', minHeight: '26px', background: 'rgba(15, 118, 110, 0.08)', borderColor: 'rgba(15, 118, 110, 0.25)', color: 'var(--primary)' }}
                           >
                             {testingId === p.provider_id ? <RefreshCw size={10} className="spin-anim" /> : '测试连接'}
                           </button>
@@ -381,7 +484,7 @@ export default function SettingsView() {
                           <button 
                             onClick={() => handleOpenEditModal(p)}
                             className="cyber-btn"
-                            style={{ padding: '6px 8px', minHeight: '26px', background: 'rgba(255, 255, 255, 0.03)', borderColor: 'rgba(255, 255, 255, 0.05)' }}
+                            style={{ padding: '6px 8px', minHeight: '26px', background: 'rgba(29, 78, 216, 0.08)', borderColor: 'rgba(29, 78, 216, 0.2)', color: 'var(--secondary)' }}
                             title="修改供应商配置"
                           >
                             <Edit size={12} />
@@ -391,7 +494,7 @@ export default function SettingsView() {
                             <button 
                               onClick={() => handleDeleteProvider(p.provider_id)}
                               className="cyber-btn"
-                              style={{ padding: '6px 8px', minHeight: '26px', background: 'rgba(190, 18, 60, 0.05)', borderColor: 'rgba(190, 18, 60, 0.1)' }}
+                              style={{ padding: '6px 8px', minHeight: '26px', background: 'rgba(190, 18, 60, 0.08)', borderColor: 'rgba(190, 18, 60, 0.2)', color: 'var(--danger)' }}
                               title="删除供应商"
                             >
                               <Trash2 size={12} style={{ color: 'var(--danger)' }} />
@@ -442,7 +545,7 @@ export default function SettingsView() {
                                   }}
                                 >
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <span style={{ fontSize: '13px', fontWeight: '600', fontFamily: 'monospace' }}>{m.name}</span>
+                                    <span style={{ fontSize: '13px', fontWeight: '600', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>{m.name}</span>
                                     <div style={{ display: 'flex', gap: '4px' }}>
                                       {m.tags && m.tags.map((tag, tIdx) => (
                                         <span key={tIdx} className="neon-badge neon-badge-primary" style={{ fontSize: '9px', padding: '0px 5px', opacity: m.enabled ? 0.75 : 0.35 }}>
@@ -504,7 +607,7 @@ export default function SettingsView() {
               </div>
 
               {/* Routing Matrix Card */}
-              <div className="cyber-card" style={{ background: 'var(--bg-card-glass)', padding: '24px' }}>
+              <div className="cyber-card" style={{ background: 'var(--bg-card-glass)', padding: '32px 32px 110px 32px', overflow: 'visible' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                   {[
                     {
@@ -531,8 +634,9 @@ export default function SettingsView() {
                       field: 'resources',
                       activeVal: `${routing.resources_provider_id}|${routing.resources_model}`
                     }
-                  ].map(item => {
+                  ].map((item, idx, arr) => {
                     const enabledModels = getEnabledModelsList();
+                    const isLast = idx === arr.length - 1;
                     
                     return (
                       <div key={item.field} style={{ 
@@ -540,7 +644,7 @@ export default function SettingsView() {
                         justifyContent: 'space-between', 
                         alignItems: 'center', 
                         paddingBottom: '20px', 
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                        borderBottom: isLast ? 'none' : '1px solid rgba(255, 255, 255, 0.04)',
                         gap: '20px'
                       }}>
                         <div style={{ maxWidth: '560px' }}>
@@ -549,18 +653,11 @@ export default function SettingsView() {
                         </div>
 
                         <div>
-                          <select
+                          <CustomSelect
                             value={item.activeVal}
+                            options={enabledModels}
                             onChange={(e) => handleSaveRouting(item.field, e.target.value)}
-                            className="cyber-input"
-                            style={{ width: '260px', height: '36px', fontSize: '12px', borderRadius: '10px', cursor: 'pointer', background: 'var(--bg-card-solid)', border: '1px solid var(--border-neon)', color: 'var(--text-main)' }}
-                          >
-                            {enabledModels.map((m, mIdx) => (
-                              <option key={mIdx} value={`${m.provider_id}|${m.model_name}`}>
-                                {m.provider_name} — {m.model_name}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </div>
                       </div>
                     );
@@ -631,7 +728,7 @@ export default function SettingsView() {
                   value={formData.api_base}
                   onChange={(e) => setFormData(prev => ({ ...prev, api_base: e.target.value }))}
                   className="cyber-input"
-                  style={{ height: '38px', fontSize: '13px', fontFamily: 'monospace' }}
+                  style={{ height: '38px', fontSize: '13px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
                 />
               </div>
 
@@ -657,7 +754,7 @@ export default function SettingsView() {
                   value={formData.models_raw}
                   onChange={(e) => setFormData(prev => ({ ...prev, models_raw: e.target.value }))}
                   className="cyber-input"
-                  style={{ height: '38px', fontSize: '13px', fontFamily: 'monospace' }}
+                  style={{ height: '38px', fontSize: '13px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
                 />
                 <span style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '4px', display: 'block' }}>
                   填写该服务商下支持的模型名称，保存后可单独开关启用状态。

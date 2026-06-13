@@ -23,6 +23,7 @@ function parseStateFromPath(pathname, loggedIn) {
     else if (pathname === '/errors') tab = 'errors';
     else if (pathname === '/console') tab = 'agent-console';
     else if (pathname === '/achievements') tab = 'achievements';
+    else if (pathname === '/settings') tab = 'settings';
   }
 
   return { view, mode, tab, loggedIn };
@@ -40,6 +41,7 @@ function buildPathFromState(view, mode, tab) {
     if (tab === 'errors') return '/errors';
     if (tab === 'agent-console') return '/console';
     if (tab === 'achievements') return '/achievements';
+    if (tab === 'settings') return '/settings';
     return '/home';
   }
   return '/';

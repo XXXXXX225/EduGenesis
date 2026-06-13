@@ -25,10 +25,17 @@ const modalCloseButtonStyle = {
 export default function SlideModal({ isOpen, onClose, slides, nodeTitle }) {
   const [currentSlideIdx, setCurrentSlideIdx] = useState(0);
   const [isPlayingSlide, setIsPlayingSlide] = useState(false);
-  const [slideTypingText, setSlideTypingText] = useState('');
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+
   const slideAudioRef = useRef(null);
+  const simIntervalRef = useRef(null);
 
   const stopSlideSpeech = () => {
+    if (simIntervalRef.current) {
+      clearInterval(simIntervalRef.current);
+      simIntervalRef.current = null;
+    }
     if (slideAudioRef.current) {
       try {
         slideAudioRef.current.pause();
@@ -41,6 +48,30 @@ export default function SlideModal({ isOpen, onClose, slides, nodeTitle }) {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
+    setAudioCurrentTime(0);
+    setAudioDuration(0);
+  };
+
+  const startFallbackProgressSimulation = (text) => {
+    if (simIntervalRef.current) {
+      clearInterval(simIntervalRef.current);
+    }
+    const estimatedDuration = Math.max(3, text.length * 0.22);
+    setAudioDuration(estimatedDuration);
+    setAudioCurrentTime(0);
+    
+    const startTime = Date.now();
+    simIntervalRef.current = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      if (elapsed >= estimatedDuration) {
+        clearInterval(simIntervalRef.current);
+        simIntervalRef.current = null;
+        setAudioCurrentTime(estimatedDuration);
+        setIsPlayingSlide(false);
+      } else {
+        setAudioCurrentTime(elapsed);
+      }
+    }, 100);
   };
 
   const fallbackSpeechSynthesis = (text) => {
@@ -51,8 +82,14 @@ export default function SlideModal({ isOpen, onClose, slides, nodeTitle }) {
       utterance.rate = 1.0;
       utterance.onend = () => {
         setIsPlayingSlide(false);
+        if (simIntervalRef.current) {
+          clearInterval(simIntervalRef.current);
+          simIntervalRef.current = null;
+        }
+        setAudioCurrentTime(audioDuration);
       };
       window.speechSynthesis.speak(utterance);
+      startFallbackProgressSimulation(text);
     } else {
       setIsPlayingSlide(false);
     }
@@ -64,9 +101,18 @@ export default function SlideModal({ isOpen, onClose, slides, nodeTitle }) {
     const audio = new Audio(audioUrl);
     slideAudioRef.current = audio;
 
+    audio.onloadedmetadata = () => {
+      setAudioDuration(audio.duration);
+    };
+
+    audio.ontimeupdate = () => {
+      setAudioCurrentTime(audio.currentTime);
+    };
+
     audio.onended = () => {
       setIsPlayingSlide(false);
       slideAudioRef.current = null;
+      setAudioCurrentTime(0);
     };
 
     audio.onerror = (e) => {
@@ -83,19 +129,11 @@ export default function SlideModal({ isOpen, onClose, slides, nodeTitle }) {
   useEffect(() => {
     if (isOpen && slides) {
       const currentText = slides[currentSlideIdx]?.content || '';
-      setSlideTypingText('');
-
-      let i = 0;
-      const interval = setInterval(() => {
-        setSlideTypingText(prev => prev + currentText.charAt(i));
-        i++;
-        if (i >= currentText.length) {
-          clearInterval(interval);
-        }
-      }, 35);
-
+      
       if (isPlayingSlide) {
         handleSlideSpeech(slides[currentSlideIdx]?.title + ". " + currentText);
+      } else {
+        stopSlideSpeech();
       }
 
       gsap.fromTo(".slide-content-card",
@@ -104,11 +142,51 @@ export default function SlideModal({ isOpen, onClose, slides, nodeTitle }) {
       );
 
       return () => {
-        clearInterval(interval);
         stopSlideSpeech();
       };
     }
   }, [currentSlideIdx, isPlayingSlide, isOpen, slides]);
+
+  const formatTime = (seconds) => {
+    if (isNaN(seconds) || seconds === Infinity || seconds === null) return '00:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const renderHighlightedText = (text) => {
+    if (!isPlayingSlide || audioDuration === 0) {
+      return <span style={{ color: 'rgba(255,255,255,0.75)' }}>{text}</span>;
+    }
+    const pct = Math.min(1.0, audioCurrentTime / audioDuration);
+    const activeLength = Math.floor(pct * text.length);
+    const readText = text.substring(0, activeLength);
+    const unreadText = text.substring(activeLength);
+    return (
+      <>
+        <span style={{ color: 'var(--primary-neon)', textShadow: '0 0 10px rgba(15, 118, 110, 0.6)', fontWeight: '800' }}>
+          {readText}
+        </span>
+        <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
+          {unreadText}
+        </span>
+      </>
+    );
+  };
+
+  const handleTimelineClick = (e) => {
+    if (audioDuration === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const width = rect.width;
+    const clickPercent = clickX / width;
+    const newTime = clickPercent * audioDuration;
+
+    if (slideAudioRef.current) {
+      slideAudioRef.current.currentTime = newTime;
+    }
+    setAudioCurrentTime(newTime);
+  };
 
   if (!isOpen || !slides) return null;
   const currentSlide = slides[currentSlideIdx];
@@ -163,23 +241,53 @@ export default function SlideModal({ isOpen, onClose, slides, nodeTitle }) {
             {currentSlide?.title}
           </h4>
 
-          {/* Subtitles Typing Text */}
-          <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.7)', lineHeight: '1.8', maxWidth: '640px', textAlign: 'center', minHeight: '80px', zIndex: 1 }}>
-            {slideTypingText}
+          {/* Subtitles & Dynamic Karaoke Highlights */}
+          <p style={{ fontSize: '16.5px', lineHeight: '1.8', maxWidth: '640px', textAlign: 'center', minHeight: '80px', zIndex: 1 }}>
+            {renderHighlightedText(currentSlide?.content || '')}
           </p>
+
+          {/* Real-time Audio Playback Progress Bar */}
+          <div style={{ width: '100%', maxWidth: '640px', marginTop: '24px', zIndex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '6px', fontFamily: 'monospace' }}>
+              <span>{formatTime(audioCurrentTime)}</span>
+              <span>{formatTime(audioDuration)}</span>
+            </div>
+            <div
+              style={{
+                width: '100%',
+                height: '4px',
+                background: 'rgba(255,255,255,0.08)',
+                borderRadius: '2px',
+                cursor: audioDuration > 0 ? 'pointer' : 'default',
+                position: 'relative'
+              }}
+              onClick={handleTimelineClick}
+            >
+              <div
+                style={{
+                  width: `${audioDuration > 0 ? (audioCurrentTime / audioDuration) * 100 : 0}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, var(--primary-neon) 0%, var(--secondary) 100%)',
+                  boxShadow: '0 0 8px var(--primary-neon)',
+                  borderRadius: '2px',
+                  transition: isPlayingSlide && !simIntervalRef.current ? 'width 0.25s linear' : 'none'
+                }}
+              />
+            </div>
+          </div>
 
           {/* Audio Wave Visualizer */}
           {isPlayingSlide && (
-            <div style={{ display: 'flex', gap: '4px', position: 'absolute', bottom: '24px', zIndex: 1 }}>
-              {[1, 2, 3, 4, 5, 6, 7].map(idx => (
+            <div style={{ display: 'flex', gap: '4px', position: 'absolute', bottom: '16px', right: '24px', zIndex: 1 }}>
+              {[1, 2, 3, 4, 5].map(idx => (
                 <div
                   key={idx}
                   className="wave-bar"
                   style={{
-                    width: '3px',
-                    height: '16px',
+                    width: '2.5px',
+                    height: '12px',
                     background: 'var(--secondary)',
-                    borderRadius: '2px',
+                    borderRadius: '1px',
                     animation: `bounceWave 0.6s infinite alternate ease-in-out`,
                     animationDelay: `${idx * 0.1}s`
                   }}
