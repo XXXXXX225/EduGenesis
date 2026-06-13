@@ -492,12 +492,12 @@ function AppContent() {
           </div>
         </header>
 
-        {/* 📱 3-COLUMN BODY */}
+        {/* 📱 2-COLUMN BODY */}
         <div className="agent-body">
-          {/* Left panel: Profile, Stats, Path Roadmap */}
+          {/* Left Sidebar */}
           <aside className="agent-panel-left">
-            {/* Dynamic Profile Radar */}
-            <div className="cyber-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--bg-card-glass)' }}>
+            {/* Cognitive Radar Chart Card */}
+            <div className="cyber-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--bg-card-glass)', flexShrink: 0 }}>
               <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <h3 style={{ fontSize: '12.5px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
                   <Sparkles size={13} style={{ color: 'var(--accent-cyan)' }} /> 认知雷达画像
@@ -518,7 +518,7 @@ function AppContent() {
             </div>
 
             {/* Quick stats board */}
-            <div className="cyber-card" style={{ padding: '16px', background: 'var(--bg-card-glass)' }}>
+            <div className="cyber-card" style={{ padding: '16px', background: 'var(--bg-card-glass)', flexShrink: 0 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', textAlign: 'center' }}>
                 <div style={{ padding: '8px 4px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.04)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
@@ -531,7 +531,6 @@ function AppContent() {
                   </div>
                   <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>累计时长</span>
                 </div>
-
                 <div style={{ padding: '8px 4px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.04)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
                     <span style={{ fontSize: '16px', fontWeight: '900', color: 'var(--secondary)' }}>
@@ -545,7 +544,6 @@ function AppContent() {
                   </div>
                   <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>做题正确率</span>
                 </div>
-
                 <div style={{ padding: '8px 4px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.04)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
                     <span style={{ fontSize: '16px', fontWeight: '900', color: 'var(--accent)' }}>
@@ -560,66 +558,59 @@ function AppContent() {
               </div>
             </div>
 
-            {/* Roadmap component */}
-            <div style={{ flexGrow: 1 }}>
-              <PathView />
-            </div>
+            {/* Navigation Menu */}
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexGrow: 1 }}>
+              <div className={`cyber-nav-tab ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+                <BookOpen size={16} />
+                <span>仪表盘首页</span>
+              </div>
+              <div className={`cyber-nav-tab ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
+                <MessageSquare size={16} />
+                <span>智能画像导师</span>
+              </div>
+              <div className={`cyber-nav-tab ${activeTab === 'path' ? 'active' : ''}`} onClick={() => setActiveTab('path')}>
+                <TrendingUp size={16} />
+                <span>定制路径规划</span>
+              </div>
+              <div className={`cyber-nav-tab ${activeTab === 'resources' ? 'active' : ''}`} onClick={() => setActiveTab('resources')}>
+                <FolderGit2 size={16} />
+                <span>生成资源库</span>
+              </div>
+              <div className={`cyber-nav-tab ${activeTab === 'sandbox' ? 'active' : ''}`} onClick={() => setActiveTab('sandbox')}>
+                <Code2 size={16} />
+                <span>AI 编程沙盒</span>
+              </div>
+              <div className={`cyber-nav-tab ${activeTab === 'errors' ? 'active' : ''}`} onClick={() => setActiveTab('errors')}>
+                <HelpCircle size={16} />
+                <span>智能错题加固</span>
+              </div>
+              <div className={`cyber-nav-tab ${activeTab === 'agent-console' ? 'active' : ''}`} onClick={() => setActiveTab('agent-console')}>
+                <Cpu size={16} />
+                <span>智能体控制台</span>
+              </div>
+              <div className={`cyber-nav-tab ${activeTab === 'achievements' ? 'active' : ''}`} onClick={() => setActiveTab('achievements')}>
+                <GraduationCap size={16} />
+                <span>学术成就勋章</span>
+              </div>
+              <div className={`cyber-nav-tab ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+                <Settings size={16} />
+                <span>模型服务配置</span>
+              </div>
+            </nav>
           </aside>
 
-          {/* Middle panel: Core chat */}
-          <main className="agent-panel-middle" ref={mainContentRef}>
-            <ChatView chatEndRef={chatEndRef} />
+          {/* Right Main Column */}
+          <main className="agent-panel-middle" ref={mainContentRef} style={{ padding: '30px', flexGrow: 1, overflowY: 'auto' }}>
+            {activeTab === 'home' && <HomeView />}
+            {activeTab === 'chat' && <ChatView chatEndRef={chatEndRef} />}
+            {activeTab === 'path' && <PathView />}
+            {activeTab === 'resources' && <ResourcesView />}
+            {activeTab === 'sandbox' && <SandboxView />}
+            {activeTab === 'errors' && <ErrorsView />}
+            {activeTab === 'agent-console' && <ConsoleView />}
+            {activeTab === 'achievements' && <AchievementsView />}
+            {activeTab === 'settings' && <SettingsView />}
           </main>
-
-          {/* Right panel: Tab views */}
-          <aside className="agent-panel-right">
-            {/* Tab selection */}
-            <div className="right-tab-bar">
-              {/* Map current activeTab, default to 'resources' if tab is not in right panel list */}
-              {(() => {
-                const rightTabList = ['resources', 'sandbox', 'errors', 'agent-console', 'achievements'];
-                const displayTab = rightTabList.includes(activeTab) ? activeTab : 'resources';
-                
-                return (
-                  <>
-                    <button className={`right-tab-btn ${displayTab === 'resources' ? 'active' : ''}`} onClick={() => setActiveTab('resources')}>
-                      📚 资源包
-                    </button>
-                    <button className={`right-tab-btn ${displayTab === 'sandbox' ? 'active' : ''}`} onClick={() => setActiveTab('sandbox')}>
-                      💻 沙盒
-                    </button>
-                    <button className={`right-tab-btn ${displayTab === 'errors' ? 'active' : ''}`} onClick={() => setActiveTab('errors')}>
-                      ⚠️ 错题本
-                    </button>
-                    <button className={`right-tab-btn ${displayTab === 'agent-console' ? 'active' : ''}`} onClick={() => setActiveTab('agent-console')}>
-                      ⚙️ 日志
-                    </button>
-                    <button className={`right-tab-btn ${displayTab === 'achievements' ? 'active' : ''}`} onClick={() => setActiveTab('achievements')}>
-                      🏆 勋章
-                    </button>
-                  </>
-                );
-              })()}
-            </div>
-
-            {/* Inspector Viewport */}
-            <div className="right-panel-viewport">
-              {(() => {
-                const rightTabList = ['resources', 'sandbox', 'errors', 'agent-console', 'achievements'];
-                const displayTab = rightTabList.includes(activeTab) ? activeTab : 'resources';
-
-                return (
-                  <>
-                    {displayTab === 'resources' && <ResourcesView />}
-                    {displayTab === 'sandbox' && <SandboxView />}
-                    {displayTab === 'errors' && <ErrorsView />}
-                    {displayTab === 'agent-console' && <ConsoleView />}
-                    {displayTab === 'achievements' && <AchievementsView />}
-                  </>
-                );
-              })()}
-            </div>
-          </aside>
         </div>
       </div>
 
