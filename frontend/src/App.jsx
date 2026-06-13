@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import {
@@ -96,6 +96,29 @@ function AppContent() {
   } = useAppContext();
 
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const [deltas, setDeltas] = useState({ study_time: 0, quiz_accuracy: 0, mastered_nodes: 0 });
+
+  useEffect(() => {
+    if (profile && profile.learning_stats) {
+      const stats = profile.learning_stats;
+      const key = `edugenesis_prev_stats_${profile.username || 'default'}`;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try {
+          const prev = JSON.parse(saved);
+          const dTime = (stats.study_time || 0) - (prev.study_time || 0);
+          const dAcc = (stats.quiz_accuracy || 0) - (prev.quiz_accuracy || 0);
+          const dNodes = (stats.mastered_nodes || 0) - (prev.mastered_nodes || 0);
+          if (dTime !== 0 || dAcc !== 0 || dNodes !== 0) {
+            setDeltas({ study_time: dTime, quiz_accuracy: dAcc, mastered_nodes: dNodes });
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      localStorage.setItem(key, JSON.stringify(stats));
+    }
+  }, [profile]);
 
   // Refs for GSAP scoping & animation
   const mainContentRef = useRef(null);
@@ -368,37 +391,36 @@ function AppContent() {
 
   return (
     <>
-      <div className="app-container">
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', position: 'relative' }}>
         <div className="glow-orb-1" style={{ position: 'absolute', width: '250px', height: '250px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(15, 118, 110, 0.06) 0%, transparent 70%)', top: '10%', right: '15%', pointerEvents: 'none', zIndex: 0 }}></div>
         <div className="glow-orb-2" style={{ position: 'absolute', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(29, 78, 216, 0.04) 0%, transparent 70%)', bottom: '15%', left: '40%', pointerEvents: 'none', zIndex: 0 }}></div>
 
-        {/* 🚀 LEFT SIDEBAR */}
-        <aside className="sidebar">
-          <div className="sidebar-anim-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', flexShrink: 0 }}>
-            <a
-              href="#"
-              style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', pointerEvents: 'auto', textDecoration: 'none', color: 'inherit' }}
-              onClick={(e) => {
-                e.preventDefault();
-                goPortalHome();
-              }}
-            >
-              <div style={{ padding: '10px', background: 'linear-gradient(135deg, rgba(15, 118, 110, 0.15) 0%, rgba(29, 78, 216, 0.1) 100%)', borderRadius: '14px', border: '1px solid rgba(15, 118, 110, 0.25)', display: 'flex' }}>
-                <GraduationCap size={24} style={{ color: 'var(--primary-neon)' }} />
-              </div>
-              <div>
-                <h1 style={{ fontSize: '20px', fontWeight: '900', letterSpacing: '-0.04em' }}>
-                  Edu<span style={{ color: 'var(--secondary)' }}>Genesis</span>
-                </h1>
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: '700', display: 'block', marginTop: '-2px' }}>多智能体协同系统</span>
-              </div>
-            </a>
+        {/* 🚀 TOP HEADER */}
+        <header className="agent-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ padding: '10px', background: 'linear-gradient(135deg, rgba(15, 118, 110, 0.15) 0%, rgba(29, 78, 216, 0.1) 100%)', borderRadius: '14px', border: '1px solid rgba(15, 118, 110, 0.25)', display: 'flex' }}>
+              <GraduationCap size={24} style={{ color: 'var(--primary-neon)' }} />
+            </div>
+            <div>
+              <h1 style={{ fontSize: '20px', fontWeight: '900', letterSpacing: '-0.04em', margin: 0 }}>
+                Edu<span style={{ color: 'var(--secondary)' }}>Genesis</span>
+              </h1>
+              <span style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: '700', display: 'block', marginTop: '-2px' }}>多智能体自适应学习空间</span>
+            </div>
+          </div>
 
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {/* Active Model Indicator */}
+            <span className="neon-badge neon-badge-primary" style={{ padding: '4px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Cpu size={12} /> {profile.cognitive_style || '自适应学习模式'}
+            </span>
+
+            {/* Night mode toggle */}
             <button
               onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
               style={{
-                padding: '10px',
-                borderRadius: '12px',
+                padding: '8px',
+                borderRadius: '10px',
                 background: 'var(--bg-card-active)',
                 border: '1px solid var(--border-neon)',
                 color: 'var(--text-main)',
@@ -410,109 +432,41 @@ function AppContent() {
               }}
               title="切换夜间模式"
             >
-              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+              {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
             </button>
-          </div>
 
-          {/* Dynamic Profile Panel */}
-          <div className="cyber-card sidebar-anim-item" style={{ padding: '20px', marginBottom: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--bg-card-glass)', borderColor: 'rgba(15, 118, 110, 0.12)', flexShrink: 0 }}>
-            <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Sparkles size={14} style={{ color: 'var(--accent-cyan)' }} /> 智能多维画像
-              </h3>
-              <span className="neon-badge neon-badge-primary" style={{ padding: '2px 6px', fontSize: '9px' }}>实时更新</span>
-            </div>
-            {renderRadarChart(displayProfile)}
-            <div style={{ width: '100%', borderTop: '1px solid rgba(255, 255, 255, 0.05)', marginTop: '8px', paddingTop: '12px', fontSize: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>首选风格:</span>
-                <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>{profile.cognitive_style}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>学习目标:</span>
-                <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>{profile.learning_goals.join(', ')}</span>
-              </div>
-            </div>
-          </div>
+            {/* Settings cog */}
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              style={{
+                padding: '8px',
+                borderRadius: '10px',
+                background: 'var(--bg-card-active)',
+                border: '1px solid var(--border-neon)',
+                color: 'var(--text-main)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.3s'
+              }}
+              title="模型服务配置"
+            >
+              <Settings size={14} />
+            </button>
 
-          {/* Navigation Menu */}
-          <nav className="sidebar-anim-item" style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexGrow: '1', flexShrink: 0 }}>
-            <div
-              className={`cyber-nav-tab ${activeTab === 'home' ? 'active' : ''}`}
-              onClick={() => setActiveTab('home')}
-            >
-              <BookOpen size={18} />
-              <span>仪表盘首页</span>
+            {/* User Avatar Cockpit */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '12px', borderLeft: '1px solid rgba(0,0,0,0.08)' }}>
+              <div style={{ padding: '6px', borderRadius: '10px', background: 'rgba(15, 118, 110, 0.06)', border: '1px solid rgba(15, 118, 110, 0.12)', display: 'flex' }}>
+                <User size={14} style={{ color: 'var(--primary)' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-main)' }}>{regUsername || '体验官'}</span>
+                <span style={{ fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '-1px' }}>已认证学术空间</span>
+              </div>
             </div>
-            <div
-              className={`cyber-nav-tab ${activeTab === 'chat' ? 'active' : ''}`}
-              onClick={() => setActiveTab('chat')}
-            >
-              <MessageSquare size={18} />
-              <span>智能画像导师</span>
-            </div>
-            <div
-              className={`cyber-nav-tab ${activeTab === 'path' ? 'active' : ''}`}
-              onClick={() => setActiveTab('path')}
-            >
-              <TrendingUp size={18} />
-              <span>定制路径规划</span>
-            </div>
-            <div
-              className={`cyber-nav-tab ${activeTab === 'resources' ? 'active' : ''}`}
-              onClick={() => setActiveTab('resources')}
-            >
-              <FolderGit2 size={18} />
-              <span>生成资源库</span>
-            </div>
-            <div
-              className={`cyber-nav-tab ${activeTab === 'sandbox' ? 'active' : ''}`}
-              onClick={() => setActiveTab('sandbox')}
-            >
-              <Code2 size={18} />
-              <span>AI 编程沙盒</span>
-            </div>
-            <div
-              className={`cyber-nav-tab ${activeTab === 'errors' ? 'active' : ''}`}
-              onClick={() => setActiveTab('errors')}
-            >
-              <HelpCircle size={18} />
-              <span>智能错题加固</span>
-            </div>
-            <div
-              className={`cyber-nav-tab ${activeTab === 'agent-console' ? 'active' : ''}`}
-              onClick={() => setActiveTab('agent-console')}
-            >
-              <Cpu size={18} />
-              <span>智能体控制台</span>
-            </div>
-            <div
-              className={`cyber-nav-tab ${activeTab === 'achievements' ? 'active' : ''}`}
-              onClick={() => setActiveTab('achievements')}
-            >
-              <GraduationCap size={18} />
-              <span>学术成就勋章</span>
-            </div>
-            <div
-              className={`cyber-nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
-            >
-              <Settings size={18} />
-              <span>模型服务配置</span>
-            </div>
-          </nav>
 
-          {/* User Cockpit Footer */}
-          <div className="sidebar-anim-item" style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid rgba(0, 0, 0, 0.06)', display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(15, 118, 110, 0.06)', border: '1px solid rgba(15, 118, 110, 0.12)', display: 'flex' }}>
-                <User size={18} style={{ color: 'var(--primary)' }} />
-              </div>
-              <div>
-                <h4 style={{ fontSize: '13px', fontWeight: '700' }}>{regUsername || '大一体验官'}</h4>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>已认证学术空间</span>
-              </div>
-            </div>
+            {/* Logout button */}
             <button
               onClick={() => {
                 clearSession();
@@ -523,35 +477,150 @@ function AppContent() {
               }}
               className="cyber-btn"
               style={{
-                width: '100%',
                 background: 'rgba(190, 18, 60, 0.04)',
                 borderColor: 'rgba(190, 18, 60, 0.12)',
                 color: 'var(--danger)',
                 boxShadow: 'none',
-                padding: '8px 16px',
+                padding: '6px 12px',
                 fontSize: '11px',
-                justifyContent: 'center',
                 textTransform: 'none',
                 letterSpacing: 'normal'
               }}
             >
-              <LogOut size={12} /> 退出学术空间
+              退出
             </button>
           </div>
-        </aside>
+        </header>
 
-        {/* 🖥️ MAIN PANELS */}
-        <main className="main-content" ref={mainContentRef}>
-          {activeTab === 'home' && <HomeView />}
-          {activeTab === 'chat' && <ChatView chatEndRef={chatEndRef} />}
-          {activeTab === 'path' && <PathView />}
-          {activeTab === 'resources' && <ResourcesView />}
-          {activeTab === 'sandbox' && <SandboxView />}
-          {activeTab === 'errors' && <ErrorsView />}
-          {activeTab === 'agent-console' && <ConsoleView />}
-          {activeTab === 'achievements' && <AchievementsView />}
-          {activeTab === 'settings' && <SettingsView />}
-        </main>
+        {/* 📱 3-COLUMN BODY */}
+        <div className="agent-body">
+          {/* Left panel: Profile, Stats, Path Roadmap */}
+          <aside className="agent-panel-left">
+            {/* Dynamic Profile Radar */}
+            <div className="cyber-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--bg-card-glass)' }}>
+              <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h3 style={{ fontSize: '12.5px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
+                  <Sparkles size={13} style={{ color: 'var(--accent-cyan)' }} /> 认知雷达画像
+                </h3>
+                <span className="neon-badge neon-badge-primary" style={{ padding: '2px 6px', fontSize: '9px' }}>实时更新</span>
+              </div>
+              {renderRadarChart(displayProfile)}
+              <div style={{ width: '100%', borderTop: '1px solid rgba(255, 255, 255, 0.05)', marginTop: '8px', paddingTop: '10px', fontSize: '11.5px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>首选风格:</span>
+                  <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>{profile.cognitive_style}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>学习目标:</span>
+                  <span style={{ color: 'var(--text-main)', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '160px' }} title={profile.learning_goals.join(', ')}>{profile.learning_goals.join(', ')}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick stats board */}
+            <div className="cyber-card" style={{ padding: '16px', background: 'var(--bg-card-glass)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', textAlign: 'center' }}>
+                <div style={{ padding: '8px 4px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ fontSize: '16px', fontWeight: '900', color: 'var(--primary-neon)' }}>
+                      {profile.learning_stats?.study_time || 0}
+                    </span>
+                    {deltas.study_time > 0 && (
+                      <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#10b981' }}>+{deltas.study_time}</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>累计时长</span>
+                </div>
+
+                <div style={{ padding: '8px 4px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ fontSize: '16px', fontWeight: '900', color: 'var(--secondary)' }}>
+                      {profile.learning_stats?.quiz_accuracy || 0}%
+                    </span>
+                    {deltas.quiz_accuracy !== 0 && (
+                      <span style={{ fontSize: '9px', fontWeight: 'bold', color: deltas.quiz_accuracy > 0 ? '#10b981' : '#ef4444' }}>
+                        {deltas.quiz_accuracy > 0 ? `+${deltas.quiz_accuracy}` : `${deltas.quiz_accuracy}`}
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>做题正确率</span>
+                </div>
+
+                <div style={{ padding: '8px 4px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ fontSize: '16px', fontWeight: '900', color: 'var(--accent)' }}>
+                      {profile.learning_stats?.mastered_nodes || 0}/8
+                    </span>
+                    {deltas.mastered_nodes > 0 && (
+                      <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#10b981' }}>+{deltas.mastered_nodes}</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>掌握关卡</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Roadmap component */}
+            <div style={{ flexGrow: 1 }}>
+              <PathView />
+            </div>
+          </aside>
+
+          {/* Middle panel: Core chat */}
+          <main className="agent-panel-middle" ref={mainContentRef}>
+            <ChatView chatEndRef={chatEndRef} />
+          </main>
+
+          {/* Right panel: Tab views */}
+          <aside className="agent-panel-right">
+            {/* Tab selection */}
+            <div className="right-tab-bar">
+              {/* Map current activeTab, default to 'resources' if tab is not in right panel list */}
+              {(() => {
+                const rightTabList = ['resources', 'sandbox', 'errors', 'agent-console', 'achievements'];
+                const displayTab = rightTabList.includes(activeTab) ? activeTab : 'resources';
+                
+                return (
+                  <>
+                    <button className={`right-tab-btn ${displayTab === 'resources' ? 'active' : ''}`} onClick={() => setActiveTab('resources')}>
+                      📚 资源包
+                    </button>
+                    <button className={`right-tab-btn ${displayTab === 'sandbox' ? 'active' : ''}`} onClick={() => setActiveTab('sandbox')}>
+                      💻 沙盒
+                    </button>
+                    <button className={`right-tab-btn ${displayTab === 'errors' ? 'active' : ''}`} onClick={() => setActiveTab('errors')}>
+                      ⚠️ 错题本
+                    </button>
+                    <button className={`right-tab-btn ${displayTab === 'agent-console' ? 'active' : ''}`} onClick={() => setActiveTab('agent-console')}>
+                      ⚙️ 日志
+                    </button>
+                    <button className={`right-tab-btn ${displayTab === 'achievements' ? 'active' : ''}`} onClick={() => setActiveTab('achievements')}>
+                      🏆 勋章
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Inspector Viewport */}
+            <div className="right-panel-viewport">
+              {(() => {
+                const rightTabList = ['resources', 'sandbox', 'errors', 'agent-console', 'achievements'];
+                const displayTab = rightTabList.includes(activeTab) ? activeTab : 'resources';
+
+                return (
+                  <>
+                    {displayTab === 'resources' && <ResourcesView />}
+                    {displayTab === 'sandbox' && <SandboxView />}
+                    {displayTab === 'errors' && <ErrorsView />}
+                    {displayTab === 'agent-console' && <ConsoleView />}
+                    {displayTab === 'achievements' && <AchievementsView />}
+                  </>
+                );
+              })()}
+            </div>
+          </aside>
+        </div>
       </div>
 
       {/* 🎬 Interactive Modals */}
