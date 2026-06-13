@@ -39,13 +39,19 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
         for idx, node in enumerate(ai_nodes):
             # Maintain correct lock/unlock status for the nodes
             status = "completed" if node["id"] == "node1" else ("active" if node["id"] == "node2" else "locked")
+            
+            # Ensure "video" is always included in the node's resources
+            node_resources = list(node.get("resources", []))
+            if "video" not in node_resources:
+                node_resources.append("video")
+                
             new_nodes.append(
                 PathNode(
                     id=node["id"],
                     title=node["title"],
                     status=status,
                     description=node["description"],
-                    resources=node["resources"]
+                    resources=node_resources
                 )
             )
         db_log_agent_action(target_user, "路径智能体", f"定制路径规划完成！已通过大模型在线实时生成 8 个定制自适应关卡。", "info")
@@ -64,25 +70,63 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
             else:
                 desc += " (已为您强化深度概念精讲、文献引用与防御性编码理论)"
                 
+            node_resources = list(node.resources)
+            if "video" not in node_resources:
+                node_resources.append("video")
+                
             new_nodes.append(
                 PathNode(
                     id=node.id,
                     title=node.title,
                     status="completed" if node.id == "node1" else ("active" if node.id == "node2" else "locked"),
                     description=desc,
-                    resources=node.resources
+                    resources=node_resources
                 )
             )
         db_log_agent_action(target_user, "路径智能体", f"大模型接口离线，已启用自适应静态路径模板为您匹配 8 个关卡。", "warning")
             
     db_save_path_nodes(target_user, new_nodes)
     
-    # Pre-generate assets for node1 and node2 based on current profile
+    # 1. Clear old user resources cache to prevent title/data mismatch
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM user_resources WHERE username = ?", (target_user,))
+    conn.commit()
+    conn.close()
+    
+    # 2. Pre-generate assets for node1 and node2 based on current profile
+    # Fetch fallback assets first (which is instant)
+    fallback_n1 = get_fallback_assets_for_topic(new_nodes[0].title, profile, new_nodes[0].id)
+    fallback_n2 = get_fallback_assets_for_topic(new_nodes[1].title, profile, new_nodes[1].id)
+    
+    # 3. Crawl live Bilibili videos dynamically in Python space (outside SQLite lock)
+    if "video" in new_nodes[0].resources:
+        try:
+            from app.video_agent import get_video_recommendations_for_node
+            videos_with_reasons = get_video_recommendations_for_node(
+                new_nodes[0].title, new_nodes[0].description, profile, target_user
+            )
+            if videos_with_reasons:
+                fallback_n1["video"] = videos_with_reasons
+        except Exception as e:
+            print(f"Failed to pre-crawl Bilibili videos for node1: {e}")
+            
+    if "video" in new_nodes[1].resources:
+        try:
+            from app.video_agent import get_video_recommendations_for_node
+            videos_with_reasons = get_video_recommendations_for_node(
+                new_nodes[1].title, new_nodes[1].description, profile, target_user
+            )
+            if videos_with_reasons:
+                fallback_n2["video"] = videos_with_reasons
+        except Exception as e:
+            print(f"Failed to pre-crawl Bilibili videos for node2: {e}")
+            
+    # 4. Write back all resources to SQLite
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # node1
-    fallback_n1 = get_fallback_assets_for_topic(new_nodes[0].title, profile)
     for res_type in new_nodes[0].resources:
         content_val = fallback_n1.get(res_type, "")
         if not isinstance(content_val, str):
@@ -93,7 +137,6 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
         )
         
     # node2
-    fallback_n2 = get_fallback_assets_for_topic(new_nodes[1].title, profile)
     for res_type in new_nodes[1].resources:
         content_val = fallback_n2.get(res_type, "")
         if not isinstance(content_val, str):
@@ -140,9 +183,22 @@ def complete_node(request: CompleteNodeRequest, current_username: str = Depends(
     db_log_agent_action(target_user, "路径智能体", f"关卡节点 [{request.node_id}] 通关标记更新，解锁下一阶段关卡。", "info")
     
     if next_node_to_unlock:
+        fallback_assets = get_fallback_assets_for_topic(next_node_to_unlock.title, profile, next_node_to_unlock.id)
+        
+        # Crawl Bilibili videos dynamically in Python space
+        if "video" in next_node_to_unlock.resources:
+            try:
+                from app.video_agent import get_video_recommendations_for_node
+                videos_with_reasons = get_video_recommendations_for_node(
+                    next_node_to_unlock.title, next_node_to_unlock.description, profile, target_user
+                )
+                if videos_with_reasons:
+                    fallback_assets["video"] = videos_with_reasons
+            except Exception as e:
+                print(f"Failed to crawl live Bilibili videos for unlocked node: {e}")
+                
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        fallback_assets = get_fallback_assets_for_topic(next_node_to_unlock.title, profile)
         for res_type in next_node_to_unlock.resources:
             cursor.execute(
                 "SELECT count(*) FROM user_resources WHERE username = ? AND node_id = ? AND resource_type = ?",
