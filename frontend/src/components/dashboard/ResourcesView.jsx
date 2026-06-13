@@ -183,6 +183,40 @@ export default function ResourcesView() {
             </article>
           )}
 
+          {/* Card 6: Bilibili Video */}
+          {selectedNodeResources.video && (
+            <article
+              className="cyber-card hover-neon-border"
+              style={{
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                cursor: 'pointer',
+                background: 'var(--bg-card-glass)',
+                border: '1px solid rgba(251, 114, 153, 0.15)'
+              }}
+              onClick={() => setActiveModal('video')}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ padding: '6px', background: 'rgba(251, 114, 153, 0.06)', borderRadius: '8px', border: '1px solid rgba(251, 114, 153, 0.15)', display: 'flex' }}>
+                  <Video size={18} style={{ color: '#fb7299' }} />
+                </div>
+                <span className="neon-badge" style={{ background: 'rgba(251, 114, 153, 0.15)', color: '#fb7299', border: '1px solid rgba(251, 114, 153, 0.3)', textShadow: 'none', fontSize: '9px', padding: '2px 6px' }}>精品视频就绪</span>
+              </div>
+              <div>
+                <h3 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '4px', color: 'var(--text-main)' }}>《精品学习视频》</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '11.5px', lineHeight: '1.4', margin: 0 }}>
+                  视频推荐智能体检索 Bilibili 精选相关教学，并结合画像个性化评估推荐理由。支持内嵌免跳出播放。
+                </p>
+              </div>
+              <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(0, 0, 0, 0.06)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '10.5px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>视频数量: {selectedNodeResources.video.length} 个推荐名课</span>
+                <span style={{ color: '#fb7299', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>开启播放 <ArrowRight size={12} /></span>
+              </div>
+            </article>
+          )}
+
         </div>
       )}
     </>
