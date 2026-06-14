@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Cpu, User, Send, Sparkles, Video, FileText, HelpCircle, FileCode, Map } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 
-const InteractiveChatBubble = ({ msg }) => {
+const InteractiveChatBubble = ({ msg, isStreaming }) => {
   const { speech: { handleSlideSpeech, stopSlideSpeech } } = useAppContext();
   const [selectedStep, setSelectedStep] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -32,9 +32,37 @@ const InteractiveChatBubble = ({ msg }) => {
     .replace(videoRegex, "")
     .trim();
 
-  const textElement = cleanText ? (
-    <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{cleanText}</div>
+  // Streaming cursor blink effect
+  const streamingCursor = isStreaming ? (
+    <span
+      style={{
+        display: 'inline-block',
+        width: '8px',
+        height: '16px',
+        background: 'var(--primary-neon)',
+        marginLeft: '2px',
+        verticalAlign: 'text-bottom',
+        animation: 'blinkCursor 0.8s step-end infinite',
+        borderRadius: '1px',
+        boxShadow: '0 0 6px var(--primary-neon)',
+      }}
+    >
+      &nbsp;
+    </span>
   ) : null;
+
+  const textElement = cleanText ? (
+    <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+      {cleanText}
+      {streamingCursor}
+    </div>
+  ) : (
+    streamingCursor ? (
+      <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+        {streamingCursor}
+      </div>
+    ) : null
+  );
 
   // 1. Render Diagram Card if matched
   let diagramCard = null;
@@ -270,10 +298,26 @@ export default function ChatView({ chatEndRef }) {
       handleSendMessage
     }
   } = useAppContext();
+
+  const lastAssistantIdx = (() => {
+    for (let i = chatHistory.length - 1; i >= 0; i--) {
+      if (chatHistory[i].role !== 'user') return i;
+    }
+    return -1;
+  })();
+
   return (
     <div style={{ display: 'flex', height: '100%', position: 'relative', width: '100%' }}>
       {/* Left section: Chat area */}
       <section className="cyber-card" style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, border: 'none', height: '100%', position: 'relative', background: 'transparent' }}>
+
+        {/* Blink cursor keyframes */}
+        <style>{`
+          @keyframes blinkCursor {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+          }
+        `}</style>
 
         {/* Profile Alert Bubble */}
         {profileAlert && (
@@ -324,50 +368,54 @@ export default function ChatView({ chatEndRef }) {
 
         {/* Dialog Area */}
         <div style={{ flexGrow: '1', padding: '28px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {chatHistory.map((msg, index) => (
-            <div
-              key={index}
-              style={{
-                display: 'flex',
-                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                alignItems: 'flex-start',
-                gap: '14px'
-              }}
-            >
-              {msg.role !== 'user' && (
-                <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(15, 118, 110, 0.06)', border: '1px solid rgba(15, 118, 110, 0.2)', flexShrink: 0 }}>
-                  <Cpu size={16} style={{ color: 'var(--primary-neon)' }} />
-                </div>
-              )}
+          {chatHistory.map((msg, index) => {
+            const isLastAssistant = index === lastAssistantIdx && msg.role !== 'user';
+            return (
               <div
-                className="cyber-card chat-bubble-anim"
+                key={index}
                 style={{
-                  padding: '14px 20px',
-                  maxWidth: '75%',
-                  borderRadius: msg.role === 'user' ? '20px 4px 20px 20px' : '4px 20px 20px 20px',
-                  background: msg.role === 'user' ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'var(--bg-card)',
-                  borderColor: msg.role === 'user' ? 'var(--primary-neon)' : 'var(--border-neon)',
-                  color: msg.role === 'user' ? '#ffffff' : 'var(--text-main)',
-                  fontSize: '14px',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: '1.6'
+                  display: 'flex',
+                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                  alignItems: 'flex-start',
+                  gap: '14px'
                 }}
               >
-                {msg.role === 'user' ? (
-                  msg.content
-                ) : (
-                  <InteractiveChatBubble
-                    msg={msg}
-                  />
+                {msg.role !== 'user' && (
+                  <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(15, 118, 110, 0.06)', border: '1px solid rgba(15, 118, 110, 0.2)', flexShrink: 0 }}>
+                    <Cpu size={16} style={{ color: 'var(--primary-neon)' }} />
+                  </div>
+                )}
+                <div
+                  className="cyber-card chat-bubble-anim"
+                  style={{
+                    padding: '14px 20px',
+                    maxWidth: '75%',
+                    borderRadius: msg.role === 'user' ? '20px 4px 20px 20px' : '4px 20px 20px 20px',
+                    background: msg.role === 'user' ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'var(--bg-card)',
+                    borderColor: msg.role === 'user' ? 'var(--primary-neon)' : 'var(--border-neon)',
+                    color: msg.role === 'user' ? '#ffffff' : 'var(--text-main)',
+                    fontSize: '14px',
+                    whiteSpace: 'pre-wrap',
+                    lineHeight: '1.6'
+                  }}
+                >
+                  {msg.role === 'user' ? (
+                    msg.content
+                  ) : (
+                    <InteractiveChatBubble
+                      msg={msg}
+                      isStreaming={isStreaming && isLastAssistant}
+                    />
+                  )}
+                </div>
+                {msg.role === 'user' && (
+                  <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(0, 0, 0, 0.03)', border: '1px solid rgba(0, 0, 0, 0.06)', flexShrink: 0 }}>
+                    <User size={16} style={{ color: 'var(--text-muted)' }} />
+                  </div>
                 )}
               </div>
-              {msg.role === 'user' && (
-                <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(0, 0, 0, 0.03)', border: '1px solid rgba(0, 0, 0, 0.06)', flexShrink: 0 }}>
-                  <User size={16} style={{ color: 'var(--text-muted)' }} />
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
 
           {/* Agent Orchestration thinking status */}
           {tutorStatus && (
