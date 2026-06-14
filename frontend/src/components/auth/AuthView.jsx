@@ -276,7 +276,7 @@ const AuthView = () => {
 
         {/* Login Form */}
         {authMode === 'login' && (
-          <form onSubmit={handleLoginSubmit}>
+          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="form-group">
               <label className="form-label">学术通行证 (用户名/邮箱)</label>
               <input
@@ -320,7 +320,7 @@ const AuthView = () => {
 
         {/* Signup Form */}
         {authMode === 'signup' && (
-          <form onSubmit={handleAuthSubmit}>
+          <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="form-group">
               <label className="form-label">学术账户名称</label>
               <input
