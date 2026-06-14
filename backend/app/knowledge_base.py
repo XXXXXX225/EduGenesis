@@ -17,6 +17,11 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 def clean_subject_name(subject: str) -> str:
     """Standardize the subject string to map to directory names."""
     sub_lower = subject.lower()
+    # Chinese keyword mappings for ML
+    ml_cn_keywords = ["机器学习", "线性代数", "梯度", "神经网络", "深度学习", "回归", "分类", "正则化", "反向传播"]
+    for kw in ml_cn_keywords:
+        if kw in subject:
+            return "machine_learning"
     if "machine" in sub_lower or "ml" in sub_lower or "learning" in sub_lower:
         return "machine_learning"
     return "python_basics"

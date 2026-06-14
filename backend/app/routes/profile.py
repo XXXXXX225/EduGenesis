@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from app.auth_utils import get_current_username
 from app.models import UserProfile
-from app.db import db_get_profile, db_save_profile, db_sync_path_nodes_by_goals
+from app.db import db_get_profile, db_save_profile, db_save_profile_snapshot, db_get_profile_delta, db_sync_path_nodes_by_goals
 
 router = APIRouter()
 
