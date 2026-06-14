@@ -1,0 +1,49 @@
+# IDE / Editor folders
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Node / Frontend build files
+node_modules/
+dist/
+dist-ssr/
+*.local
+.eslintcache
+
+# Python / Backend temporary files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+ENV/
+env/
+
+# Local databases & logs
+*.db
+*.log
+
+# Local environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Trae IDE skill/cache
+.trae/
+.codegraph/
+
+# OS temporary files
+.DS_Store
+Thumbs.db
+
+# Temporary agent workspaces and scratch folders
+scratch/
+.superpowers/
+
