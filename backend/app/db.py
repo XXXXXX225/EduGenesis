@@ -497,6 +497,25 @@ def db_get_profile(username: str) -> UserProfile:
     )
 
 def db_save_profile(username: str, profile: UserProfile):
+    # Fetch old profile to calculate deltas
+    old_profile = None
+    try:
+        old_profile = db_get_profile(username)
+    except Exception:
+        pass
+        
+    if old_profile:
+        kb_delta = profile.knowledge_base - old_profile.knowledge_base
+        lp_delta = profile.learning_pace - old_profile.learning_pace
+        eg_delta = profile.engagement - old_profile.engagement
+        
+        # Merge deltas into learning_stats
+        stats = dict(profile.learning_stats)
+        stats["knowledge_base_delta"] = kb_delta
+        stats["learning_pace_delta"] = lp_delta
+        stats["engagement_delta"] = eg_delta
+        profile.learning_stats = stats
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(

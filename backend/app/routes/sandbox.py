@@ -95,12 +95,91 @@ def run_sandbox_code(request: SandboxRunRequest, current_username: str = Depends
             pass
             
         if proc.returncode == 0:
+            # 1. Check if they passed on the first try (no previous error logged for this node)
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT count(*) FROM user_errors WHERE username = ? AND error_id = ?", (target_user, f"err_{node_id}"))
+            failed_attempts = cursor.fetchone()[0]
+            conn.close()
+            
+            first_time_pass = (failed_attempts == 0)
+            
             stats = profile.learning_stats
             stats["study_time"] = stats.get("study_time", 0) + 10
             profile.learning_stats = stats
+            
+            if first_time_pass:
+                # 知识基础指数暴涨 (+15)
+                old_kb = profile.knowledge_base
+                profile.knowledge_base = min(100, profile.knowledge_base + 15)
+                db_log_agent_action(target_user, "画像智能体", f"代码挑战一次性通关！学情分析显示其基础极其扎实，知识基础暴涨：{old_kb}% -> {profile.knowledge_base}%。", "consensus")
+                
+            db_save_profile(target_user, profile)
+            db_log_agent_action(target_user, "主管智能体", f"代码提交成功：关卡 [{challenge['title']}] 单元测试通过！", "info")
+            
+            # 2. 快速剪枝机制：跳过下一个不含代码的简单概念关卡
+            from app.db import db_get_path_nodes, db_save_path_nodes, get_fallback_assets_for_topic
+            nodes = db_get_path_nodes(target_user)
+            current_idx = -1
+            for idx, node in enumerate(nodes):
+                if node.id == node_id:
+                    current_idx = idx
+                    break
+                    
+            if current_idx != -1:
+                # Mark current as completed
+                nodes[current_idx].status = "completed"
+                
+                # Check next node
+                if current_idx + 1 < len(nodes):
+                    next_node = nodes[current_idx + 1]
+                    if "code" not in next_node.resources:
+                        # Skip next node since it's just concept/slides/pdf
+                        next_node.status = "completed"
+                        db_log_agent_action(target_user, "路径智能体", f"检测到学生代码挑战一次通关，启动快速剪枝！自动越过基础概念关卡 [{next_node.title}] 并将其标为已通关。", "consensus")
+                        
+                        # Unlock the one after next
+                        if current_idx + 2 < len(nodes):
+                            nodes[current_idx + 2].status = "active"
+                            db_log_agent_action(target_user, "路径智能体", f"直接推送解锁更高难度实操关卡 [{nodes[current_idx + 2].title}]，资源匹配完成。", "info")
+                    else:
+                        # Next node has coding, unlock normally
+                        next_node.status = "active"
+                db_save_path_nodes(target_user, nodes)
+                
+                # Pre-seed resources for the newly active node (either idx+1 or idx+2)
+                active_node = None
+                for n in nodes:
+                    if n.status == "active":
+                        active_node = n
+                        break
+                if active_node:
+                    fallback_assets = get_fallback_assets_for_topic(active_node.title, profile, active_node.id)
+                    conn = sqlite3.connect(DB_PATH)
+                    cursor = conn.cursor()
+                    for res_type in active_node.resources:
+                        cursor.execute(
+                            "SELECT count(*) FROM user_resources WHERE username = ? AND node_id = ? AND resource_type = ?",
+                            (target_user, active_node.id, res_type)
+                        )
+                        exists = cursor.fetchone()[0]
+                        if exists == 0:
+                            content_val = fallback_assets.get(res_type, "")
+                            if not isinstance(content_val, str):
+                                content_val = json.dumps(content_val, ensure_ascii=False)
+                            cursor.execute(
+                                "INSERT OR REPLACE INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
+                                (target_user, active_node.id, res_type, content_val)
+                            )
+                    conn.commit()
+                    conn.close()
+            
+            # Sync mastered count
+            nodes = db_get_path_nodes(target_user)
+            completed_count = sum(1 for n in nodes if n.status == "completed")
+            profile.learning_stats["mastered_nodes"] = min(8, completed_count)
             db_save_profile(target_user, profile)
             
-            db_log_agent_action(target_user, "主管智能体", f"代码提交成功：关卡 [{challenge['title']}] 单元测试通过！", "info")
             return {
                 "status": "success",
                 "error": "",

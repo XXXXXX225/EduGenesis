@@ -625,6 +625,54 @@ function AppContent() {
                           {renderRadarChart(displayProfile)}
                           <div style={{ width: '100%', borderTop: '1px solid rgba(255, 255, 255, 0.05)', marginTop: '8px', paddingTop: '10px', fontSize: '11.5px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>知识掌握度:</span>
+                              <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
+                                {profile.knowledge_base}%
+                                {profile.learning_stats?.knowledge_base_delta > 0 && (
+                                  <span style={{ color: '#10b981', marginLeft: '4px', fontWeight: 'bold' }} className="pulse-glow-green">
+                                    (↑ {profile.learning_stats.knowledge_base_delta}%)
+                                  </span>
+                                )}
+                                {profile.learning_stats?.knowledge_base_delta < 0 && (
+                                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>
+                                    (↓ {Math.abs(profile.learning_stats.knowledge_base_delta)}%)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>自适应节奏:</span>
+                              <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
+                                {profile.learning_pace}%
+                                {profile.learning_stats?.learning_pace_delta > 0 && (
+                                  <span style={{ color: '#10b981', marginLeft: '4px', fontWeight: 'bold' }} className="pulse-glow-green">
+                                    (↑ {profile.learning_stats.learning_pace_delta}%)
+                                  </span>
+                                )}
+                                {profile.learning_stats?.learning_pace_delta < 0 && (
+                                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>
+                                    (↓ {Math.abs(profile.learning_stats.learning_pace_delta)}%)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>自适应活跃度:</span>
+                              <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
+                                {profile.engagement}%
+                                {profile.learning_stats?.engagement_delta > 0 && (
+                                  <span style={{ color: '#10b981', marginLeft: '4px', fontWeight: 'bold' }} className="pulse-glow-green">
+                                    (↑ {profile.learning_stats.engagement_delta}%)
+                                  </span>
+                                )}
+                                {profile.learning_stats?.engagement_delta < 0 && (
+                                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>
+                                    (↓ {Math.abs(profile.learning_stats.engagement_delta)}%)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                               <span style={{ color: 'var(--text-muted)' }}>首选风格:</span>
                               <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>{profile.cognitive_style}</span>
                             </div>

@@ -155,33 +155,96 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
 def complete_node(request: CompleteNodeRequest, current_username: str = Depends(get_current_username)):
     target_user = current_username
     nodes = db_get_path_nodes(target_user)
+    profile = db_get_profile(target_user)
     
     node_found = False
-    next_node_to_unlock = None
+    current_idx = -1
     
     for idx, node in enumerate(nodes):
         if node.id == request.node_id:
             node.status = "completed"
             node_found = True
-            if idx + 1 < len(nodes):
-                next_node_to_unlock = nodes[idx + 1]
+            current_idx = idx
             break
             
     if not node_found:
         raise HTTPException(status_code=404, detail="Node not found in user path.")
         
-    if next_node_to_unlock and next_node_to_unlock.status == "locked":
-        next_node_to_unlock.status = "active"
+    next_node_to_unlock = None
+    is_failed_quiz = False
+    
+    # Check if quiz was failed (< 60% accuracy)
+    if request.score is not None and request.total is not None and request.total > 0:
+        accuracy = (request.score / request.total) * 100
+        if accuracy < 60:
+            is_failed_quiz = True
+            
+    if is_failed_quiz:
+        # Dynamic Reinforcement Branch Insertion
+        current_node = nodes[current_idx]
+        extra_node_id = f"{request.node_id}_extra"
         
+        # Check if the extra node is already present in the list to avoid duplicate insertions
+        exists = any(n.id == extra_node_id for n in nodes)
+        if not exists:
+            extra_node = PathNode(
+                id=extra_node_id,
+                title=f"【加固】{current_node.title}强化",
+                status="active",
+                description=f"自适应评测提示：由于您在“{current_node.title}”自适应测试中表现出薄弱点，画像智能体已为您插入该加固关卡。系统已为您自动调配 courses 高校知识库专属课本及针对性 PyTest 单元测试练习。",
+                resources=["pdf", "code", "video"]
+            )
+            # Insert right after the current completed node
+            nodes.insert(current_idx + 1, extra_node)
+            next_node_to_unlock = extra_node
+            
+            # Lock all nodes after the extra node to force completion of the reinforcement node first
+            for next_idx in range(current_idx + 2, len(nodes)):
+                nodes[next_idx].status = "locked"
+        else:
+            # If it already exists, just make sure it's active
+            for n in nodes:
+                if n.id == extra_node_id:
+                    n.status = "active"
+                    next_node_to_unlock = n
+                    break
+                    
+        # Update user profile to reflect mistakes and lower knowledge score
+        profile.engagement = min(100, profile.engagement + 5)
+        wrong_count = request.total - request.score
+        profile.knowledge_base = max(10, profile.knowledge_base - wrong_count * 4)
+        err_pattern = f"{current_node.title}概念与语法偏差"
+        if err_pattern not in profile.error_patterns:
+            profile.error_patterns.append(err_pattern)
+        db_save_profile(target_user, profile)
+        
+        db_log_agent_action(target_user, "画像智能体", f"自适应评估未通过：已对该章节易错模式进行记录，在画像中标记易错领域 [{err_pattern}]。", "warning")
+        db_log_agent_action(target_user, "路径智能体", f"启动动态加固机制！在后续路径中成功插入并激活加固关卡 [{next_node_to_unlock.title}]，已成功适配资源包。", "consensus")
+    else:
+        # Standard Unlock Flow (Quiz Passed, or direct complete)
+        if current_idx + 1 < len(nodes):
+            next_node_to_unlock = nodes[current_idx + 1]
+            
+        if next_node_to_unlock and next_node_to_unlock.status == "locked":
+            next_node_to_unlock.status = "active"
+            
+        # Update profile knowledge score if they passed a quiz
+        if request.score is not None:
+            profile.knowledge_base = min(100, profile.knowledge_base + 6)
+            db_save_profile(target_user, profile)
+            db_log_agent_action(target_user, "画像智能体", "自适应评估合格：知识库掌握度提升，未发现显著认知偏离。", "consensus")
+            
+        db_log_agent_action(target_user, "路径智能体", f"关卡节点 [{request.node_id}] 通关标记更新，解锁下一阶段关卡。", "info")
+        
+    # Save the updated path nodes list
     db_save_path_nodes(target_user, nodes)
     
-    profile = db_get_profile(target_user)
+    # Update mastered count in profile
     completed_count = sum(1 for n in nodes if n.status == "completed")
-    profile.learning_stats["mastered_nodes"] = completed_count
+    profile.learning_stats["mastered_nodes"] = min(8, completed_count)
     db_save_profile(target_user, profile)
     
-    db_log_agent_action(target_user, "路径智能体", f"关卡节点 [{request.node_id}] 通关标记更新，解锁下一阶段关卡。", "info")
-    
+    # Pre-seed resources for the newly unlocked active node (standard or extra)
     if next_node_to_unlock:
         fallback_assets = get_fallback_assets_for_topic(next_node_to_unlock.title, profile, next_node_to_unlock.id)
         

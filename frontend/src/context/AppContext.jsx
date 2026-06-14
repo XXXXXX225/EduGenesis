@@ -123,7 +123,13 @@ export function AppProvider({ children }) {
     setProfileAlert,
     setDiagnosticLogs
   });
-  const sandboxHook = useSandbox();
+  const sandboxHook = useSandbox({
+    setProfile,
+    setPathNodes,
+    setSelectedNode,
+    setProfileAlert,
+    setDiagnosticLogs
+  });
 
   // 📔 Smart Error Notebook states
   const [errorQuestions, setErrorQuestions] = useState([

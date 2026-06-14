@@ -141,58 +141,18 @@ def get_resources(node_id: str, current_username: str = Depends(get_current_user
                 node_resources = node.resources
                 break
                 
+        from app.agents.coordinator import AgentCoordinator
+        coordinator = AgentCoordinator(
+            username=target_user,
+            node_id=node_id,
+            node_title=node_title,
+            node_description=node_description,
+            node_resources=node_resources,
+            trigger_type="auto"
+        )
+        generated_data = coordinator.run_consensus_pipeline()
         profile = db_get_profile(target_user)
-        
-        # Log consensus decision starting
-        db_log_agent_action(target_user, "主管智能体", f"检测到关卡 [{node_title}] 的多模态资源为空，调度协同代理启动在线资源生成流程。", "info")
-        db_log_agent_action(target_user, "画像智能体", f"分析学生画像数据：认知风格为 [{profile.cognitive_style}]，匹配错误范畴，正在进行个性化 Prompt 组装...", "consensus")
-        db_log_agent_action(target_user, "路径智能体", f"开始为关卡 [{node_title}] 动态编排学术资源，调度资源项：{', '.join(node_resources)}。", "info")
-        
-        from app.llm_client import get_route_llm_params
-        from app.knowledge_base import load_course_material
-        subject = profile.learning_goals[0] if (profile.learning_goals and len(profile.learning_goals) > 0) else "Python Basics"
-        context = load_course_material(subject, node_id)
-        
-        _, api_key, _ = get_route_llm_params(target_user, 'resources')
-        generated_data = {}
         fallback_assets = get_fallback_assets_for_topic(node_title, profile, node_id)
-        
-        api_resources = [r for r in node_resources if r != "video"]
-        if api_key and api_resources:
-            try:
-                # Call LLM generator with RAG context
-                analysis = call_llm_resource_agent(node_title, api_resources, profile, username=target_user, context=context)
-                if analysis:
-                    generated_data = analysis
-                    db_log_agent_action(target_user, "路径智能体", f"大模型在线生成 [{node_title}] 资源项成功，共生成 {len(generated_data)} 个多模态资源包。", "info")
-                    db_log_agent_action(target_user, "安全校验智能体", f"对 [{node_title}] 生成的课本及试题进行安全过滤审计与学术合规校验。检查项：中文正确性、代码安全性。审计状态：100% 合规，准予入库。", "consensus")
-                else:
-                    db_log_agent_action(target_user, "路径智能体", f"大模型生成 [{node_title}] 失败或格式错误，系统无缝切换到本地自适应兜底资源库以保证极速展现。", "warning")
-                    generated_data = fallback_assets
-            except Exception as e:
-                print(f"Failed to auto-generate resources via LLM: {e}")
-                db_log_agent_action(target_user, "路径智能体", f"大模型资源生成异常: {str(e)}，系统已降级切换到本地高保真自适应资源库进行学术填充。", "warning")
-                generated_data = fallback_assets
-        elif not api_key:
-            db_log_agent_action(target_user, "路径智能体", f"大模型接口离线，系统已降级切换到本地自适应多模态资源库为您调配 [{node_title}] 关卡内容。", "warning")
-            generated_data = fallback_assets
-
-        # Add Bilibili video fetching and reason generation separately
-        if "video" in node_resources:
-            db_log_agent_action(target_user, "视频推荐智能体", f"正在网络检索并匹配与 [{node_title}] 相关的精品学习视频...", "info")
-            try:
-                from app.video_agent import get_video_recommendations_for_node
-                videos_with_reasons = get_video_recommendations_for_node(node_title, node_description, profile, target_user)
-                if videos_with_reasons:
-                    generated_data["video"] = videos_with_reasons
-                    db_log_agent_action(target_user, "安全校验智能体", "检查检索内容安全合规：无敏感内容，允许分发。", "consensus")
-                else:
-                    db_log_agent_action(target_user, "视频推荐智能体", "Bilibili 网络检索超时或防爬拦截，已无缝切换到本地静态名课库展现。", "warning")
-                    generated_data["video"] = fallback_assets.get("video", [])
-            except Exception as ev:
-                print(f"Failed to fetch video recommendations: {ev}")
-                db_log_agent_action(target_user, "视频推荐智能体", f"视频智能体异常: {str(ev)}，启用高保真静态缓存。", "warning")
-                generated_data["video"] = fallback_assets.get("video", [])
             
         # Save generated items to SQLite
         conn = sqlite3.connect(DB_PATH)
@@ -259,58 +219,17 @@ def generate_resources(request: ResourceGenerateRequest, current_username: str =
             node_resources = node.resources
             break
             
-    # Check if LLM API Key is configured
-    from app.llm_client import get_route_llm_params
-    from app.knowledge_base import load_course_material
-    subject = profile.learning_goals[0] if (profile.learning_goals and len(profile.learning_goals) > 0) else "Python Basics"
-    context = load_course_material(subject, node_id)
-    
-    _, api_key, _ = get_route_llm_params(target_user, 'resources')
-    generated_data = {}
-    
-    # Log starting
-    db_log_agent_action(target_user, "主管智能体", f"接收到手动触发关卡 [{node_title}] 资源重构指令。调度智能体群开始在线重新规划与资源匹配。", "info")
-    db_log_agent_action(target_user, "画像智能体", f"画像特征对齐（认知风格: {profile.cognitive_style}，目标: {profile.learning_goals}），开始重构大模型个性化 Prompts 模板。", "consensus")
-    db_log_agent_action(target_user, "路径智能体", f"正在调用星火大模型，重新生成关卡 [{node_title}] 的多模态资源包（{', '.join(node_resources)}）...", "info")
-    
-    # Get high-fidelity simulated assets for fallback
+    from app.agents.coordinator import AgentCoordinator
+    coordinator = AgentCoordinator(
+        username=target_user,
+        node_id=node_id,
+        node_title=node_title,
+        node_description=node_description,
+        node_resources=node_resources,
+        trigger_type="manual"
+    )
+    generated_data = coordinator.run_consensus_pipeline()
     fallback_assets = get_fallback_assets_for_topic(node_title, profile, node_id)
-    
-    api_resources = [r for r in node_resources if r != "video"]
-    if api_key and api_resources:
-        try:
-            analysis = call_llm_resource_agent(node_title, api_resources, profile, username=target_user, context=context)
-            if analysis:
-                generated_data = analysis
-                db_log_agent_action(target_user, "路径智能体", f"大模型在线资源生成成功！已成功输出并格式化多模态资源项。", "info")
-                db_log_agent_action(target_user, "安全校验智能体", f"防幻觉拦截审计与学术防注入合规审查完成。中文编码与数据完整性：100% 合规。准予入库。", "consensus")
-            else:
-                db_log_agent_action(target_user, "路径智能体", f"大模型返回资源格式异常，系统以降级切换至本地高保真自适应资源数据库以保障完美演示。", "warning")
-                generated_data = fallback_assets
-        except Exception as e:
-            print(f"Failed to generate resources via LLM: {e}")
-            db_log_agent_action(target_user, "路径智能体", f"大模型调用发生异常: {str(e)}，系统以降级切换至本地高保真自适应数据表补充。", "warning")
-            generated_data = fallback_assets
-    elif not api_key:
-        db_log_agent_action(target_user, "路径智能体", f"大模型 API Key 缺失，系统以降级切换至本地高保真自适应资源库为您配置 [{node_title}] 关卡学习资源。", "warning")
-        generated_data = fallback_assets
-
-    # Fetch and generate video recommendations on manual trigger
-    if "video" in node_resources:
-        db_log_agent_action(target_user, "视频推荐智能体", f"接收到重新生成指令，正在网络检索与 [{node_title}] 相关的精品学习视频...", "info")
-        try:
-            from app.video_agent import get_video_recommendations_for_node
-            videos_with_reasons = get_video_recommendations_for_node(node_title, node_description, profile, target_user)
-            if videos_with_reasons:
-                generated_data["video"] = videos_with_reasons
-                db_log_agent_action(target_user, "安全校验智能体", "内容合规审计完成：允许入库。", "consensus")
-            else:
-                db_log_agent_action(target_user, "视频推荐智能体", "Bilibili 网络检索超时，启用本地高品质自适应视频库兜底。", "warning")
-                generated_data["video"] = fallback_assets.get("video", [])
-        except Exception as ev:
-            print(f"Failed to fetch video recommendations: {ev}")
-            db_log_agent_action(target_user, "视频推荐智能体", f"视频智能体异常: {str(ev)}，启用本地兜底。", "warning")
-            generated_data["video"] = fallback_assets.get("video", [])
         
     # Save generated items to SQLite
     conn = sqlite3.connect(DB_PATH)
