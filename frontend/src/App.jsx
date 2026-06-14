@@ -73,6 +73,7 @@ function AppContent() {
     setRegLearningGoal,
     isLoadingOrchestration,
     setIsLoadingOrchestration,
+    isLoadingDashboard,
     orchestrationStep,
     setOrchestrationStep,
     activeTab,

@@ -1,4 +1,4 @@
-﻿// Unified API fetch layer for EduGenesis
+// Unified API fetch layer for EduGenesis
 import { getAccessToken, clearSession } from './session';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
@@ -43,7 +43,7 @@ export async function apiGet(path, params = {}) {
     throw err;
   });
   if (!res.ok) {
-    if (res.status === 401) { handleAuthExpired(); throw new Error('登录已过期，请重新登录'); }
+    if (res.status === 401 && !path.startsWith('/auth/')) { handleAuthExpired(); throw new Error('登录已过期，请重新登录'); }
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || `API ${path} returned ${res.status}`);
   }
@@ -59,7 +59,7 @@ export async function apiPost(path, body = {}) {
   });
   const res = await withTimeout(doFetch());
   if (!res.ok) {
-    if (res.status === 401) { handleAuthExpired(); throw new Error('登录已过期，请重新登录'); }
+    if (res.status === 401 && !path.startsWith('/auth/')) { handleAuthExpired(); throw new Error('登录已过期，请重新登录'); }
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || `API ${path} returned ${res.status}`);
   }
