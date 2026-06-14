@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { GraduationCap, ArrowRight } from 'lucide-react';
 import { apiPost } from '../../utils/api';
 import { saveSession } from '../../utils/session';
@@ -236,7 +236,7 @@ const AuthView = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            登录
+            验证登录
           </button>
           <button
             onClick={() => { setAuthMode('signup'); setFieldErrors({}); setAuthError(''); }}
@@ -254,7 +254,7 @@ const AuthView = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            注册
+            初始化账户
           </button>
         </div>
 
@@ -278,36 +278,42 @@ const AuthView = () => {
         {authMode === 'login' && (
           <form onSubmit={handleLoginSubmit}>
             <div className="form-group">
-              <label className="form-label">学术账户</label>
+              <label className="form-label">学术通行证 (用户名/邮箱)</label>
               <input
                 type="text"
                 required
                 value={loginUsername}
                 onChange={(e) => { setLoginUsername(e.target.value); clearFieldError('loginUsername'); }}
-                placeholder="输入您的学术账户名称..."
+                placeholder="输入您的账号..."
                 className="cyber-input"
                 style={{ padding: '12px 18px' }}
               />
               {renderFieldErrors('loginUsername')}
             </div>
-            <div className="form-group">
-              <label className="form-label">密码</label>
+            <div className="form-group" style={{ marginBottom: '24px' }}>
+              <label className="form-label">通行密码</label>
               <input
                 type="password"
                 required
                 value={loginPassword}
                 onChange={(e) => { setLoginPassword(e.target.value); clearFieldError('loginPassword'); }}
-                placeholder="输入您的密码..."
+                placeholder="输入账户密码..."
                 className="cyber-input"
                 style={{ padding: '12px 18px' }}
               />
               {renderFieldErrors('loginPassword')}
             </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', fontSize: '12px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <input type="checkbox" style={{ accentColor: 'var(--primary)' }} /> 记住本设备凭证
+              </label>
+              <span style={{ color: 'var(--secondary)', cursor: 'pointer', fontWeight: '600' }}>忘记密钥?</span>
+            </div>
             <button type="submit" className="cyber-btn" style={{ justifyContent: 'center', padding: '14px', textTransform: 'none', letterSpacing: '0.05em' }}>
-              进入学术系统 <ArrowRight size={16} />
+              验证凭证进入空间 <ArrowRight size={16} />
             </button>
             <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', marginTop: '20px' }}>
-              没有账号? <span onClick={() => setAuthMode('signup')} style={{ color: 'var(--secondary)', cursor: 'pointer', fontWeight: '700' }}>立即注册</span>
+              还没有学术账户? <span onClick={() => setAuthMode('signup')} style={{ color: 'var(--secondary)', cursor: 'pointer', fontWeight: '700' }}>立即创建</span>
             </p>
           </form>
         )}
@@ -418,7 +424,7 @@ const AuthView = () => {
               初始化学术环境并登录 <ArrowRight size={16} />
             </button>
             <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', marginTop: '20px' }}>
-              已有学术账号? <span onClick={() => setAuthMode('login')} style={{ color: 'var(--secondary)', cursor: 'pointer', fontWeight: '700' }}>立即登录</span>
+              已有学术账户? <span onClick={() => setAuthMode('login')} style={{ color: 'var(--secondary)', cursor: 'pointer', fontWeight: '700' }}>立即登录</span>
             </p>
           </form>
         )}
