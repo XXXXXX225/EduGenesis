@@ -18,6 +18,8 @@ import {
   Settings
 } from 'lucide-react';
 import { clearSession } from './utils/session';
+import MobileTabBar from './components/shared/MobileTabBar';
+import { ContentSkeleton } from './components/shared/Skeleton';
 import LandingView from './components/landing/LandingView';
 import AuthView from './components/auth/AuthView';
 
@@ -606,12 +608,14 @@ function AppContent() {
 
             {/* 2. Content viewport (left edge, 290px wide) */}
             <div className="right-sidebar-content-viewport" ref={sidebarViewportRef}>
-              {(() => {
+              {isLoadingDashboard ? (
+                <ContentSkeleton lines={4} />
+              ) : (() => {
                 const rightTabList = ['home', 'path', 'resources', 'errors', 'agent-console', 'achievements'];
                 const sidebarTab = rightTabList.includes(activeTab) ? activeTab : 'resources';
 
                 return (
-                  <>
+                  <div key={sidebarTab} className="tab-fade-in">
                     {sidebarTab === 'home' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                         {/* Cognitive Radar Chart Card */}
@@ -730,7 +734,7 @@ function AppContent() {
                     {sidebarTab === 'errors' && <ErrorsView />}
                     {sidebarTab === 'agent-console' && <ConsoleView />}
                     {sidebarTab === 'achievements' && <AchievementsView />}
-                  </>
+                  </div>
                 );
               })()}
             </div>
@@ -738,6 +742,7 @@ function AppContent() {
         </div>
       </div>
 
+      <MobileTabBar activeTab={activeTab} onTabChange={setActiveTab} onSettingsOpen={() => setIsSettingsOpen(true)} />
       {/* 🎬 Interactive Modals */}
       <PDFModal
         isOpen={activeModal === 'pdf'}

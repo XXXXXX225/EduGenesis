@@ -42,6 +42,7 @@ export function AppProvider({ children }) {
 
   // Loading orchestration states
   const [isLoadingOrchestration, setIsLoadingOrchestration] = useState(false);
+  const [isLoadingDashboard, setIsLoadingDashboard] = useState(false);
   const [orchestrationStep, setOrchestrationStep] = useState(0);
 
   const [activeTab, setActiveTab] = useState(() => {
@@ -176,6 +177,14 @@ export function AppProvider({ children }) {
       await fetchNodeResources(activeNode.id, activeNode);
     }
   };
+
+  // Load dashboard data on mount when already authenticated (page refresh)
+  useEffect(() => {
+    if (isLoggedIn) {
+      setIsLoadingDashboard(true);
+      loadDashboardState().finally(() => setIsLoadingDashboard(false));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goPortalHome = () => {
     if (currentView === 'landing') {
@@ -394,6 +403,8 @@ export function AppProvider({ children }) {
         setRegLearningGoal,
         isLoadingOrchestration,
         setIsLoadingOrchestration,
+        isLoadingDashboard,
+        setIsLoadingDashboard,
         orchestrationStep,
         setOrchestrationStep,
         activeTab,

@@ -11,6 +11,9 @@ from app.models import ErrorDiagnoseRequest, ErrorRemedyRequest
 from app.db import (
     DB_PATH,
     db_get_profile,
+    db_get_path_nodes,
+    db_get_error_tags,
+    db_insert_reinforcement_node,
     db_log_agent_action,
     seed_errors_and_logs_for_user
 )

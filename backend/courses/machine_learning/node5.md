@@ -1,19 +1,25 @@
-# 过拟合治理：L1 与 L2 正则化机制
+# Regularization: Preventing Overfitting
 
-过拟合（Overfitting）指模型在训练集上表现优异，但在未见过的测试集（验证集）上误差巨大的现象。引入正则化是限制过拟合最常用的数学工具。
+Regularization controls model complexity to improve generalization.
 
-## 1. 损失函数中的惩罚项
-正则化的核心思想是：在优化损失函数时，**惩罚过于庞大或杂乱的权重值**。
-* **原损失函数**为 $L_0(\mathbf{\theta})$
-* **带正则项的损失函数**为 $L(\mathbf{\theta}) = L_0(\mathbf{\theta}) + \lambda \Omega(\mathbf{\theta})$
-其中 $\lambda$（Lambda）为控制惩罚强度的超参数。
+## Overfitting vs Underfitting
+- Overfitting: low train error, high test error
+- Underfitting: high error on both
+- Bias-variance tradeoff
 
-## 2. L1 正则化 (Lasso)
-使用权重绝对值的一阶范数作为惩罚：
-$$\Omega(\mathbf{w}) = \sum_{j} |w_j|$$
-* **效果**：它会使一部分无关紧要的特征权重彻底被削减为 **0**，产生**稀疏权重矩阵**，具备天然的特征筛选作用。
+## L1 Regularization (Lasso)
+- Adds |w| penalty: L = MSE + lambda*sum(|w_i|)
+- Produces sparse solutions (feature selection)
 
-## 3. L2 正则化 (Ridge / 权重衰减)
-使用权重平方的二阶范数平方和作为惩罚：
-$$\Omega(\mathbf{w}) = \frac{1}{2} \sum_{j} w_j^2$$
-* **效果**：它会使所有的权重都**变小但不会完全清零**，使曲线更加平滑，抑制极端大数值的震荡异常。
+## L2 Regularization (Ridge)
+- Adds w^2 penalty: L = MSE + lambda*sum(w_i^2)
+- Shrinks weights toward zero evenly
+
+## Elastic Net
+- Combines L1 + L2: L = MSE + lambda1*|w| + lambda2*w^2
+
+## Cross-Validation
+- k-fold: split data into k parts, train on k-1, test on 1
+- Grid search for hyperparameter tuning
+
+**Key Takeaway**: Always use cross-validation to tune regularization strength.

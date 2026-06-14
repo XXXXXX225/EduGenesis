@@ -13,7 +13,11 @@ from app.db import (
     db_save_path_nodes,
     db_save_profile,
     db_log_agent_action,
-    get_fallback_assets_for_topic
+    get_fallback_assets_for_topic,
+    db_get_error_tags,
+    db_insert_reinforcement_node,
+    db_delete_reinforcement_node,
+    db_cleanup_reinforcement_nodes
 )
 from app.limiter import rate_limit_resource
 from app.llm_client import call_llm_path_planner
@@ -235,6 +239,15 @@ def complete_node(request: CompleteNodeRequest, current_username: str = Depends(
             db_log_agent_action(target_user, "画像智能体", "自适应评估合格：知识库掌握度提升，未发现显著认知偏离。", "consensus")
             
         db_log_agent_action(target_user, "路径智能体", f"关卡节点 [{request.node_id}] 通关标记更新，解锁下一阶段关卡。", "info")
+        
+    # Dynamic path reinforcement: check error tags and insert reinforcement node
+    error_tags = db_get_error_tags(target_user)
+    if error_tags:
+        nodes = db_insert_reinforcement_node(target_user, request.node_id, error_tags)
+    
+    # If completed node is a reinforcement node, clean it up
+    if request.node_id.startswith("reinforce_"):
+        nodes = db_delete_reinforcement_node(target_user, request.node_id)
         
     # Save the updated path nodes list
     db_save_path_nodes(target_user, nodes)

@@ -1,19 +1,41 @@
-# Python 函数、模块与高级封装抽象
+# Functions and Modular Programming
 
-函数是组织良好、可重用且功能单一的代码块。模块化则是大型软件系统的核心设计模式。
+Functions encapsulate reusable logic for clean, maintainable code.
 
-## 1. 函数定义与参数传递
-* **定义**：使用 `def` 关键字定义函数。
-* **位置参数与关键字参数**：支持普通位置参数、带默认值的参数、以及通过 `*args` 接收超量位置参数、`**kwargs` 接收额外关键字参数。
-* **返回值**：Python 可以通过逗号分隔隐式返回一个元组，实现“多值返回”。
+## Function Basics
+def greet(name, greeting='Hello'):
+    '''Return a greeting string.'''
+    return f'{greeting}, {name}!'
 
-## 2. 作用域域与命名空间（LEGB 规则）
-Python 按以下顺序检索变量名称：
-1. **L (Local)**：局部作用域，即函数内。
-2. **E (Enclosing)**：闭包外层函数作用域。
-3. **G (Global)**：全局作用域，即当前模块文件级。
-4. **B (Built-in)**：内建作用域，如 `print`, `len`。
-* **注意**：要在函数内修改全局变量，需声明 `global`；修改闭包外变量，需声明 `nonlocal`。
+## Parameter Types
+- Positional: def f(a, b)
+- Default: def f(a, b=10)
+- Keyword: f(b=20, a=10)
+- *args: variable positional
+- **kwargs: variable keyword
 
-## 3. 模块与包的集成
-通过 `import module_name` 或 `from module_name import function_name` 导入外部代码。在编写沙盒过滤代码时，我们需要通过 AST 分析来限制不受信任的代码直接导入危险的系统模块（如 `os`, `sys`, `shutil`）。
+## Scope (LEGB)
+- Local -> Enclosing -> Global -> Built-in
+- global and nonlocal keywords
+- Closures: inner function captures outer variables
+
+## Lambda
+square = lambda x: x ** 2
+sorted(items, key=lambda x: x['score'])
+
+## Decorators
+def timer(func):
+    def wrapper(*args, **kwargs):
+        t0 = time.time()
+        result = func(*args, **kwargs)
+        print(f'{func.__name__} took {time.time()-t0:.2f}s')
+        return result
+    return wrapper
+
+## Modules
+- import math
+- from math import sqrt
+- Avoid: from module import *
+- import numpy as np
+
+**Key Takeaway**: Small, single-responsibility functions with docstrings.
