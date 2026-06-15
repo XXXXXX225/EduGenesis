@@ -22,6 +22,8 @@ class UserMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[UserMessage] = Field(..., description="Conversation history")
     current_profile: Optional[UserProfile] = Field(default=None, description="Current student profile status")
+    session_id: Optional[str] = Field(default=None, description="Optional chat session ID to save messages")
+    tutor_personality: Optional[str] = Field(default=None, description="Optional tutor personality style")
 
 class PathNode(BaseModel):
     id: str

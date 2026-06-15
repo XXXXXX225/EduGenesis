@@ -5,16 +5,56 @@ from fastapi import APIRouter, Depends
 from app.auth_utils import get_current_username
 from fastapi.responses import StreamingResponse
 from app.models import ChatRequest
+import uuid
+import datetime
 from app.db import (
     db_get_profile,
     db_save_profile,
     db_get_path_nodes,
-    db_sync_path_nodes_by_goals
+    db_sync_path_nodes_by_goals,
+    db_create_chat_session,
+    db_get_chat_sessions,
+    db_update_chat_session_title,
+    db_delete_chat_session,
+    db_clear_chat_sessions,
+    db_save_chat_message,
+    db_get_chat_messages
 )
 from app.limiter import rate_limit_chat
 from app.llm_client import call_llm_structured_analysis, call_llm_stream_tutor, get_route_llm_params
 
 router = APIRouter()
+
+@router.get("/chat/sessions")
+async def get_sessions(current_username: str = Depends(get_current_username)):
+    return db_get_chat_sessions(current_username)
+
+@router.post("/chat/sessions")
+async def create_session(request: dict, current_username: str = Depends(get_current_username)):
+    session_id = request.get("session_id") or str(uuid.uuid4())
+    title = request.get("title") or "新对话"
+    db_create_chat_session(current_username, session_id, title)
+    return {"session_id": session_id, "title": title}
+
+@router.put("/chat/sessions/{session_id}")
+async def update_session(session_id: str, request: dict, current_username: str = Depends(get_current_username)):
+    title = request.get("title", "未命名会话")
+    db_update_chat_session_title(session_id, title)
+    return {"status": "success"}
+
+@router.delete("/chat/sessions/{session_id}")
+async def delete_session(session_id: str, current_username: str = Depends(get_current_username)):
+    db_delete_chat_session(session_id)
+    return {"status": "success"}
+
+@router.delete("/chat/sessions")
+async def clear_sessions(current_username: str = Depends(get_current_username)):
+    db_clear_chat_sessions(current_username)
+    return {"status": "success"}
+
+@router.get("/chat/sessions/{session_id}/messages")
+async def get_session_messages(session_id: str, current_username: str = Depends(get_current_username)):
+    return db_get_chat_messages(session_id)
 
 @router.post("/chat", dependencies=[Depends(rate_limit_chat)])
 async def chat_interaction(request: ChatRequest, current_username: str = Depends(get_current_username)):
@@ -23,6 +63,26 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
     _, api_key, _ = get_route_llm_params(target_user, 'chat')
     
     async def event_generator():
+        assistant_chunks = []
+        
+        # Save user message to the DB
+        now_ts = datetime.datetime.now().isoformat()
+        if request.session_id and request.messages:
+            user_msg = request.messages[-1]
+            db_save_chat_message(
+                session_id=request.session_id,
+                message_id=f"user-{now_ts}-{str(uuid.uuid4())[:8]}",
+                role="user",
+                content=user_msg.content
+            )
+            
+            # Automatically rename the session title if it's currently "新对话" and this is the first user message
+            sessions = db_get_chat_sessions(target_user)
+            current_sess = next((s for s in sessions if s["session_id"] == request.session_id), None)
+            if current_sess and current_sess["title"] == "新对话":
+                new_title = user_msg.content[:15] + ("..." if len(user_msg.content) > 15 else "")
+                db_update_chat_session_title(request.session_id, new_title)
+
         # Fetch relevant Bilibili videos from video agent
         from app.video_agent import get_video_recommendations_for_node
         rec_videos = []
@@ -82,7 +142,14 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             
             yield f"data: {json.dumps({'type': 'status', 'status': '💬 [导师智能体] 正在根据新画像为您生成个性化讲义...'})}\n\n"
             
-            stream_response = await asyncio.to_thread(call_llm_stream_tutor, request.messages, current_profile, target_user, rec_videos)
+            stream_response = await asyncio.to_thread(
+                call_llm_stream_tutor,
+                request.messages,
+                current_profile,
+                target_user,
+                rec_videos,
+                request.tutor_personality
+            )
             
             if stream_response and stream_response.status_code == 200:
                 yield f"data: {json.dumps({'type': 'status', 'status': ''})}\n\n"
@@ -98,30 +165,46 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                                 data_json = json.loads(data_str)
                                 delta = data_json["choices"][0]["delta"]
                                 if "content" in delta and delta["content"] is not None:
+                                    assistant_chunks.append(delta["content"])
                                     yield f"data: {json.dumps({'type': 'content', 'content': delta['content']})}\n\n"
                             except Exception:
                                 pass
                 
-                # Push database updates to client
-                if profile_updated:
-                    yield f"data: {json.dumps({'type': 'profile_update', 'profile': current_profile.model_dump()})}\n\n"
-                    await asyncio.sleep(0.2)
-                if path_updated:
-                    nodes_list = [n.model_dump() for n in db_get_path_nodes(target_user)]
-                    yield f"data: {json.dumps({'type': 'path_update', 'nodes': nodes_list})}\n\n"
-                    await asyncio.sleep(0.2)
+                # If LLM stream produced no content (e.g. API authentication error), fallback to simulator
+                if not assistant_chunks:
+                    async for chunk in run_fallback_simulator(request.messages, current_profile, assistant_chunks):
+                        yield chunk
+                else:
+                    # Push database updates to client
+                    if profile_updated:
+                        yield f"data: {json.dumps({'type': 'profile_update', 'profile': current_profile.model_dump()})}\n\n"
+                        await asyncio.sleep(0.2)
+                    if path_updated:
+                        nodes_list = [n.model_dump() for n in db_get_path_nodes(target_user)]
+                        yield f"data: {json.dumps({'type': 'path_update', 'nodes': nodes_list})}\n\n"
+                        await asyncio.sleep(0.2)
             else:
                 # LLM API call failed, fallback to simulator
-                async for chunk in run_fallback_simulator(request.messages, current_profile):
+                async for chunk in run_fallback_simulator(request.messages, current_profile, assistant_chunks):
                     yield chunk
         else:
             # No LLM API key provided, default to simulator fallback
-            async for chunk in run_fallback_simulator(request.messages, current_profile):
+            async for chunk in run_fallback_simulator(request.messages, current_profile, assistant_chunks):
                 yield chunk
+            
+        if request.session_id and assistant_chunks:
+            full_reply = "".join(assistant_chunks)
+            now_ts = datetime.datetime.now().isoformat()
+            db_save_chat_message(
+                session_id=request.session_id,
+                message_id=f"assistant-{now_ts}-{str(uuid.uuid4())[:8]}",
+                role="assistant",
+                content=full_reply
+            )
             
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-    async def run_fallback_simulator(messages, profile):
+    async def run_fallback_simulator(messages, profile, assistant_chunks=None):
         yield f"data: {json.dumps({'type': 'status', 'status': '⚠️ 未检测到 API Key，已自动启用本地仿真模型。'})}\n\n"
         await asyncio.sleep(0.6)
         yield f"data: {json.dumps({'type': 'status', 'status': ''})}\n\n"
@@ -234,6 +317,8 @@ def test_check_even():
         chunk_size = 5
         for i in range(0, len(tutor_response), chunk_size):
             chunk = tutor_response[i:i+chunk_size]
+            if assistant_chunks is not None:
+                assistant_chunks.append(chunk)
             yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
             await asyncio.sleep(0.04)
             
