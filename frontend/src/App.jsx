@@ -96,7 +96,7 @@ const PromptInput = ({ defaultValue, onSubmit, onCancel }) => {
         <button
           onClick={onCancel}
           className="cyber-btn"
-          style={{ padding: '8px 16px', fontSize: '13px', background: 'rgba(0,0,0,0.02)', borderColor: 'rgba(0,0,0,0.1)' }}
+          style={{ padding: '8px 16px', fontSize: '13px', background: 'rgba(0,0,0,0.02)', borderColor: 'rgba(0,0,0,0.1)', color: 'var(--text-muted)' }}
         >
           取消
         </button>
@@ -1119,7 +1119,7 @@ function AppContent() {
                       setCustomDialog(null);
                     }}
                     className="cyber-btn"
-                    style={{ padding: '8px 16px', fontSize: '12px', background: 'rgba(0,0,0,0.02)', borderColor: 'rgba(0,0,0,0.1)' }}
+                    style={{ padding: '8px 16px', fontSize: '12px', background: 'rgba(0,0,0,0.02)', borderColor: 'rgba(0,0,0,0.1)', color: 'var(--text-muted)' }}
                   >
                     取消
                   </button>
