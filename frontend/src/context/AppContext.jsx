@@ -131,7 +131,17 @@ export function AppProvider({ children }) {
   const [copyCodeText, setCopyCodeText] = useState('复制源码');
 
   // Integrated hooks for modularized state and handlers
-  const chatHook = useChat({ profile, setProfile, setProfileAlert, setPathNodes, setDiagnosticLogs });
+  const chatHook = useChat({
+    profile,
+    setProfile,
+    setProfileAlert,
+    setPathNodes,
+    setDiagnosticLogs,
+    currentSessionId,
+    tutorPersonality,
+    chatSessions,
+    setChatSessions
+  });
   const speechHook = useSpeech();
   const quizHook = useQuiz({
     profile,

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { apiSSEStream } from '../utils/api';
 
-export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, setDiagnosticLogs }) {
+export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, setDiagnosticLogs, currentSessionId, tutorPersonality, chatSessions, setChatSessions }) {
   const [chatHistory, setChatHistory] = useState([
     { role: 'assistant', content: '您好！我是您的个性化学习助教。我会根据我们的对话动态构建您的学习画像，并定制专属的学习路径。你可以告诉我你的编程水平，或者发送“我想学机器学习”来调整内容。' }
   ]);
@@ -98,7 +98,9 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
     try {
       await apiSSEStream('/chat', {
         messages: [...chatHistory, userMessage],
-        current_profile: profile
+        current_profile: profile,
+        session_id: currentSessionId,
+        tutor_personality: tutorPersonality
       }, (data) => {
         if (data.type === 'status') {
           setTutorStatus(data.status);
@@ -124,6 +126,15 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
           setPathNodes(data.nodes);
         } else if (data.type === 'done') {
           isStreamActiveRef.current = false;
+          if (currentSessionId && chatSessions && setChatSessions) {
+            const currentSess = chatSessions.find(s => s.session_id === currentSessionId);
+            if (currentSess && currentSess.title === '新对话') {
+              // Retrieve the user message we just sent (which is the second-to-last item since assistant empty bubble is appended)
+              const userMsg = messageText || chatHistory[chatHistory.length - 2]?.content || '对话';
+              const newTitle = userMsg.slice(0, 15) + (userMsg.length > 15 ? '...' : '');
+              setChatSessions(prev => prev.map(s => s.session_id === currentSessionId ? { ...s, title: newTitle } : s));
+            }
+          }
         }
       });
     } catch (error) {
