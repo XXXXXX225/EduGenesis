@@ -23,7 +23,8 @@ import {
   FolderDown,
   FolderUp,
   ChevronDown,
-  Settings2
+  Settings2,
+  Pencil
 } from 'lucide-react';
 import { clearSession } from './utils/session';
 import MobileTabBar from './components/shared/MobileTabBar';
@@ -736,8 +737,8 @@ function AppContent() {
                           loadSessionMessages(sess.session_id);
                         }}
                       >
-                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '160px' }}>
-                          💬 {sess.title}
+                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '160px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <MessageSquare size={13} style={{ opacity: 0.7, flexShrink: 0 }} /> {sess.title}
                         </span>
                         <div className="history-item-actions">
                           <button
@@ -746,10 +747,10 @@ function AppContent() {
                               const newTitle = await showCustomPrompt("输入新标题:", sess.title);
                               if (newTitle) renameSession(sess.session_id, newTitle);
                             }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '10px' }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}
                             title="重命名"
                           >
-                            ✏️
+                            <Pencil size={11} />
                           </button>
                           <button
                             onClick={async (e) => {
@@ -757,10 +758,10 @@ function AppContent() {
                               const confirmed = await showCustomConfirm("确定要删除此对话吗？");
                               if (confirmed) deleteSession(sess.session_id);
                             }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '10px' }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}
                             title="删除"
                           >
-                            🗑️
+                            <Trash2 size={11} />
                           </button>
                         </div>
                       </div>
@@ -788,9 +789,9 @@ function AppContent() {
                         cursor: 'pointer'
                       }}
                     >
-                      <option value="academic">🎓 严肃学术风</option>
-                      <option value="encouraging">🌟 温暖鼓励风</option>
-                      <option value="coder">🤖 极客代码风</option>
+                      <option value="academic">严肃学术风</option>
+                      <option value="encouraging">温暖鼓励风</option>
+                      <option value="coder">极客代码风</option>
                     </select>
                   </div>
 
@@ -810,7 +811,7 @@ function AppContent() {
                       }}
                       style={{ padding: '6px', fontSize: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.02)', border: '1px solid var(--border-neon)', color: 'var(--text-muted)', cursor: 'pointer' }}
                     >
-                      🐍 Python基础
+                      Python 基础
                     </button>
                     <button
                       onClick={() => {
@@ -825,7 +826,7 @@ function AppContent() {
                       }}
                       style={{ padding: '6px', fontSize: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.02)', border: '1px solid var(--border-neon)', color: 'var(--text-muted)', cursor: 'pointer' }}
                     >
-                      📈 机器学习
+                      机器学习
                     </button>
                   </div>
                   
@@ -842,9 +843,9 @@ function AppContent() {
                         a.click();
                       }}
                       className="cyber-btn"
-                      style={{ flex: 1, padding: '6px', fontSize: '11px', textTransform: 'none' }}
+                      style={{ flex: 1, padding: '6px', fontSize: '11px', textTransform: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                     >
-                      📤 导出
+                      <FolderDown size={12} /> 导出
                     </button>
                     <button
                       onClick={async () => {
@@ -852,9 +853,9 @@ function AppContent() {
                         if (confirmed) clearAllSessions();
                       }}
                       className="cyber-btn"
-                      style={{ flex: 1, padding: '6px', fontSize: '11px', textTransform: 'none', background: 'rgba(190, 18, 60, 0.04)', borderColor: 'rgba(190, 18, 60, 0.12)', color: 'var(--danger)' }}
+                      style={{ flex: 1, padding: '6px', fontSize: '11px', textTransform: 'none', background: 'rgba(190, 18, 60, 0.04)', borderColor: 'rgba(190, 18, 60, 0.12)', color: 'var(--danger)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                     >
-                      🗑️ 清空
+                      <Trash2 size={12} /> 清空
                     </button>
                   </div>
                 </div>
