@@ -228,7 +228,12 @@ function AppContent() {
     const saved = localStorage.getItem('edugenesis_sidebar_width');
     return saved ? parseInt(saved, 10) : 340;
   });
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('edugenesis_left_sidebar_width');
+    return saved ? parseInt(saved, 10) : 260;
+  });
   const [isResizing, setIsResizing] = useState(false);
+  const [isResizingLeft, setIsResizingLeft] = useState(false);
 
   const startResize = (e) => {
     e.preventDefault();
@@ -237,14 +242,28 @@ function AppContent() {
     document.body.style.cursor = 'col-resize';
   };
 
+  const startResizeLeft = (e) => {
+    e.preventDefault();
+    setIsResizingLeft(true);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+  };
+
   useEffect(() => {
     const handleMouseMove = (e) => {
-      if (!isResizing) return;
-      let newWidth = window.innerWidth - e.clientX;
-      if (newWidth < 280) newWidth = 280;
-      if (newWidth > 600) newWidth = 600;
-      setSidebarWidth(newWidth);
-      localStorage.setItem('edugenesis_sidebar_width', newWidth.toString());
+      if (isResizing) {
+        let newWidth = window.innerWidth - e.clientX;
+        if (newWidth < 280) newWidth = 280;
+        if (newWidth > 600) newWidth = 600;
+        setSidebarWidth(newWidth);
+        localStorage.setItem('edugenesis_sidebar_width', newWidth.toString());
+      } else if (isResizingLeft) {
+        let newWidth = e.clientX;
+        if (newWidth < 200) newWidth = 200;
+        if (newWidth > 450) newWidth = 450;
+        setLeftSidebarWidth(newWidth);
+        localStorage.setItem('edugenesis_left_sidebar_width', newWidth.toString());
+      }
     };
 
     const handleMouseUp = () => {
@@ -253,9 +272,14 @@ function AppContent() {
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
       }
+      if (isResizingLeft) {
+        setIsResizingLeft(false);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      }
     };
 
-    if (isResizing) {
+    if (isResizing || isResizingLeft) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
@@ -264,7 +288,7 @@ function AppContent() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing]);
+  }, [isResizing, isResizingLeft]);
 
   // Refs for GSAP scoping & animation
   const mainContentRef = useRef(null);
@@ -659,10 +683,11 @@ function AppContent() {
 
         {/* 📱 2-COLUMN BODY */}
         <div 
-          className={`agent-body ${isResizing ? 'resizing' : ''}`}
+          className={`agent-body ${isResizing || isResizingLeft ? 'resizing' : ''}`}
           style={{ 
             '--sidebar-width': `${sidebarWidth}px`,
-            '--left-sidebar-width': isLeftSidebarOpen ? '260px' : '0px'
+            '--left-sidebar-width': isLeftSidebarOpen ? `${leftSidebarWidth}px` : '0px',
+            '--left-handle-width': isLeftSidebarOpen ? '4px' : '0px'
           }}
         >
           {/* Collapsible Left Sidebar */}
@@ -836,6 +861,14 @@ function AppContent() {
               </div>
             )}
           </aside>
+
+          {/* Left Drag Resizer Divider */}
+          {isLeftSidebarOpen && (
+            <div
+              className={`resize-handle ${isResizingLeft ? 'active' : ''}`}
+              onMouseDown={startResizeLeft}
+            />
+          )}
 
           {/* Left Column: Core chat (occupies 1fr) */}
           <main className="agent-panel-middle" ref={mainContentRef}>
