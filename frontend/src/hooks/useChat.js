@@ -22,6 +22,61 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
     };
   }, []);
 
+  const startTyping = () => {
+    if (typingTimerRef.current) return; // already typing
+
+    const tick = () => {
+      if (typingQueueRef.current.length === 0) {
+        if (!isStreamActiveRef.current) {
+          typingTimerRef.current = null;
+          setIsStreaming(false);
+          setTutorStatus('');
+          return;
+        }
+        // Stream still active but queue temporarily empty: wait and check again
+        typingTimerRef.current = setTimeout(tick, 50);
+        return;
+      }
+
+      // Dynamic typewriter speed based on queue size
+      const queueLength = typingQueueRef.current.length;
+      let charsToPop = 1;
+      let nextDelay = 25; // default delay in ms
+
+      if (queueLength > 150) {
+        charsToPop = Math.min(queueLength, 6);
+        nextDelay = 5;
+      } else if (queueLength > 80) {
+        charsToPop = Math.min(queueLength, 4);
+        nextDelay = 10;
+      } else if (queueLength > 30) {
+        charsToPop = Math.min(queueLength, 2);
+        nextDelay = 15;
+      }
+
+      let poppedText = '';
+      for (let i = 0; i < charsToPop; i++) {
+        if (typingQueueRef.current.length > 0) {
+          poppedText += typingQueueRef.current.shift();
+        }
+      }
+
+      currentTypedTextRef.current += poppedText;
+
+      setChatHistory(prev => {
+        const updated = [...prev];
+        if (updated.length > 0) {
+          updated[updated.length - 1].content = currentTypedTextRef.current;
+        }
+        return updated;
+      });
+
+      typingTimerRef.current = setTimeout(tick, nextDelay);
+    };
+
+    typingTimerRef.current = setTimeout(tick, 20);
+  };
+
   const submitChatMessage = async (messageText) => {
     if (isStreaming || !messageText.trim()) return;
 
