@@ -85,7 +85,14 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
     setIsStreaming(true);
     setTutorStatus('🧠 [主管智能体] 正在唤醒协同网络...');
 
-    let assistantMessageText = '';
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+    typingQueueRef.current = [];
+    currentTypedTextRef.current = '';
+    isStreamActiveRef.current = true;
+
     setChatHistory(prev => [...prev, { role: 'assistant', content: '' }]);
 
     try {
@@ -98,12 +105,9 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
         } else if (data.type === 'content') {
           setTutorStatus('');
           if (data.content !== null && data.content !== undefined) {
-            assistantMessageText += data.content;
-            setChatHistory(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1].content = assistantMessageText;
-              return updated;
-            });
+            const chars = Array.from(data.content);
+            typingQueueRef.current.push(...chars);
+            startTyping();
           }
         } else if (data.type === 'profile_update') {
           setProfile(data.profile);
@@ -119,18 +123,23 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
         } else if (data.type === 'path_update') {
           setPathNodes(data.nodes);
         } else if (data.type === 'done') {
-          setIsStreaming(false);
-          setTutorStatus('');
+          isStreamActiveRef.current = false;
         }
       });
     } catch (error) {
       console.error("Connection error:", error);
+      isStreamActiveRef.current = false;
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
       setChatHistory(prev => {
         const updated = [...prev];
-        updated[updated.length - 1].content = '⚠️ 本地后端服务未运行。请打开终端进入 backend/ 目录并运行 `python main.py`，再试一次。';
+        if (updated.length > 0) {
+          updated[updated.length - 1].content = '⚠️ 本地后端服务未运行。请打开终端进入 backend/ 目录并运行 `python main.py`，再试一次。';
+        }
         return updated;
       });
-    } finally {
       setIsStreaming(false);
       setTutorStatus('');
     }
