@@ -128,7 +128,15 @@ You are talking to the student. Your tone should be encouraging, professional, a
 Support formatting in markdown (bold, lists, headers) but keep responses concise and focused (max 150 words).
 
 Current Student Profile (Tailor your explanation to their level and style):
-{current_profile_json}"""
+{current_profile_json}
+
+You can embed interactive educational resource cards in your response when appropriate using the following specific tag formats (embed them directly in your response at the appropriate place, keeping the JSON structure valid):
+1. Quiz: [QUIZ: {{"question": "...", "options": ["A", "B", ...], "answer": 0, "explanation": "..."}}]
+2. Video Recommendation: [VIDEO_RECOMMEND: {{"bvid": "...", "title": "...", "pic": "...", "play": "...", "duration": "...", "reason": "..."}}]
+3. Mindmap: [MINDMAP: <mermaid flowchart code starting with graph TD or graph LR>]
+4. Code Block: [CODE: python | <python source code>]
+5. Slides Carousel: [SLIDES: Title 1 | Content 1 --- Title 2 | Content 2]
+6. PDF Textbook: [PDF: Title | <detailed markdown textbook explanation>]"""
 
     api_messages = [{"role": "system", "content": system_prompt}]
     for msg in messages:

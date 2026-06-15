@@ -137,7 +137,56 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             db_save_profile(target_user, profile)
 
         tutor_response = ""
-        if "machine learning" in user_input_clean or "机器学习" in user_input_clean:
+        if "video" in user_input_clean or "视频" in user_input_clean:
+            tutor_response = """结合你的学习目标与风格，为您精选了以下实战导向的入门视频，均侧重基础夯实，帮您避开常见语法和缩进坑：
+
+[VIDEO_RECOMMEND: {"bvid": "BV1rpWjevEip", "title": "B站最火的 Python 零基础精讲课程", "pic": "https://i2.hdslb.com/bfs/archive/a979056b1a32012cdd00d48fbc3732d253e30620.jpg", "play": "1671.8万", "duration": "39:58:14", "reason": "B站播放量最高的经典零基础教程，适合新手入门"}]
+
+如果您看完视频，可以发送“我要做测试”来检验一下自己的基础知识！"""
+        elif "test" in user_input_clean or "测试" in user_input_clean or "quiz" in user_input_clean or "题" in user_input_clean:
+            tutor_response = """根据您的学习画像，我为您量身定制了这道随堂测验，来检验一下您的理解程度：
+
+[QUIZ: {"question": "Python中关于变量声明的描述，以下哪项是正确的？", "options": ["必须使用var或let关键字声明", "变量在第一次赋值时自动创建，不需要声明类型", "必须显式指定变量的类型（如 int x）", "变量名可以以数字开头"], "answer": 1, "explanation": "Python是动态类型语言，变量不需要显式声明类型，在第一次赋值时即被创建。"}]
+
+答完题后，点击选项就可以看到我的深度学术解析！"""
+        elif "mindmap" in user_input_clean or "思维导图" in user_input_clean or "脑图" in user_input_clean:
+            tutor_response = """为您梳理了当前关卡的核心概念脉络拓扑，请点击右上角放大查看完整大图：
+
+[MINDMAP: graph TD
+    A[Python变量] --> B[基础数据类型]
+    B --> C[整型 int]
+    B --> D[浮点型 float]
+    B --> E[字符串 str]
+    A --> F[动态类型绑定]
+]
+
+这张概念图能帮助您更直观地把握知识拓扑结构。"""
+        elif "code" in user_input_clean or "代码" in user_input_clean or "sandbox" in user_input_clean:
+            tutor_response = """这是一段带有 PyTest 单元测试校验的代码实例，您可以在卡片上点击“一键运行”在本地沙盒校验，也可以点击“导入沙盒练习”导入到编程面板：
+
+[CODE: python | def check_even(num):
+    # 验证是否为偶数
+    return num % 2 == 0
+
+def test_check_even():
+    assert check_even(2) is True
+    assert check_even(3) is False
+]
+
+试试看运行它，测试框架会自动输出校验结果！"""
+        elif "slide" in user_input_clean or "幻灯片" in user_input_clean or "课件" in user_input_clean:
+            tutor_response = """为您加载了本关卡的音画同步幻灯片，点击下方“播读此页”可以体验智能语音导学：
+
+[SLIDES: 欢迎学习自适应模块 | 我们将通过多模态语音播放与动画特效，带您深入浅出地掌握本章核心逻辑。 --- 核心避坑指南与错误模式 | 根据系统对您常见错误的画像诊断，本章节已强化防幻觉和防御性断言测试校验。]
+
+课件会自动随着声音的播放进行翻页。"""
+        elif "pdf" in user_input_clean or "课本" in user_input_clean or "教材" in user_input_clean or "讲义" in user_input_clean:
+            tutor_response = """为您生成了本章节的个性化自适应教材，点击下方即可进入深色精美阅读视窗阅读：
+
+[PDF: Python变量与动态类型系统 | # Python变量与动态类型系统\\n\\n在Python中，变量不需要显式声明类型。变量类型是动态绑定的。\\n\\n## 1. 动态类型绑定\\n当您写下 `x = 10` 时，Python创建了整型对象 `10`，并将 `x` 指向它。随后执行 `x = 'hello'` 时，`x` 改为指向字符串对象，这体现了动态绑定的灵活性。]
+
+教材采用高质量学术排版，适合离线阅读。"""
+        elif "machine learning" in user_input_clean or "机器学习" in user_input_clean:
             tutor_response = "您好！我已经收到了您的学习期望。系统已经检测到您对**机器学习**感兴趣。我已为您加载了《机器学习核心理论与应用实操》的个性化学习路径，包括从线性代数到神经网络的实践案例。我们可以先从第一关“线性代数基础”开始！"
         elif "beginner" in user_input_clean or "初学者" in user_input_clean or "不懂" in user_input_clean:
             tutor_response = "没关系！我们都会从零开始。我已经把您的学习节奏调到了**慢速温和**模式，并降低了初始难度门槛（知识库水平已调整为 15%）。学习路径里的内容现在将包含更多的代码注释和可视化卡片。让我们先试试“Python变量”第一课吧！"
