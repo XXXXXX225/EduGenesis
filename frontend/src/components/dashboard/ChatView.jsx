@@ -2,6 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Cpu, User, Send, Sparkles, Video, FileText, HelpCircle, FileCode, Map } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 
+import QuizCard from '../chat/QuizCard';
+import VideoRecommendCard from '../chat/VideoRecommendCard';
+import MermaidRenderer from '../chat/MermaidRenderer';
+import CodeSandboxCard from '../chat/CodeSandboxCard';
+import SlidesCarouselCard from '../chat/SlidesCarouselCard';
+import PDFDownloadCard from '../chat/PDFDownloadCard';
+
 const InteractiveChatBubble = ({ msg, isStreaming }) => {
   const { speech: { handleSlideSpeech, stopSlideSpeech } } = useAppContext();
   const [selectedStep, setSelectedStep] = useState(0);
@@ -9,7 +16,7 @@ const InteractiveChatBubble = ({ msg, isStreaming }) => {
   const [videoProgress, setVideoProgress] = useState(0);
   const progressIntervalRef = useRef(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     return () => {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
@@ -20,265 +27,184 @@ const InteractiveChatBubble = ({ msg, isStreaming }) => {
   const content = msg.content;
   if (!content) return null;
 
-  // Regexes
-  const diagramRegex = /\[DIAGRAM:\s*([^\]|]+)\s*\|\s*([^\]]+)\]/g;
-  const videoRegex = /\[VIDEO:\s*([^\]|]+)\s*\|\s*([^\]]+)\]/g;
+  // Expand regex to capture all resource tags
+  const tagsRegex = /(\[QUIZ:\s*\{.*?\}\s*\]|\[VIDEO_RECOMMEND:\s*\{.*?\}\s*\]|\[MINDMAP:\s*[\s\S]*?\s*\]|\[CODE:\s*\w+\s*\|[\s\S]*?\s*\]|\[SLIDES:[\s\S]*?\]|\[PDF:\s*.*?\]|\[DIAGRAM:\s*[^\]|]+\s*\|\s*[^\]]+\]|\[VIDEO:\s*[^\]|]+\s*\|\s*[^\]]+\])/g;
 
-  const diagramMatch = [...content.matchAll(diagramRegex)][0];
-  const videoMatch = [...content.matchAll(videoRegex)][0];
-
-  let cleanText = content
-    .replace(diagramRegex, "")
-    .replace(videoRegex, "")
-    .trim();
-
-  // Streaming cursor blink effect
-  const streamingCursor = isStreaming ? (
-    <span
-      style={{
-        display: 'inline-block',
-        width: '8px',
-        height: '16px',
-        background: 'var(--primary-neon)',
-        marginLeft: '2px',
-        verticalAlign: 'text-bottom',
-        animation: 'blinkCursor 0.8s step-end infinite',
-        borderRadius: '1px',
-        boxShadow: '0 0 6px var(--primary-neon)',
-      }}
-    >
-      &nbsp;
-    </span>
-  ) : null;
-
-  const textElement = cleanText ? (
-    <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-      {cleanText}
-      {streamingCursor}
-    </div>
-  ) : (
-    streamingCursor ? (
-      <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-        {streamingCursor}
-      </div>
-    ) : null
-  );
-
-  // 1. Render Diagram Card if matched
-  let diagramCard = null;
-  if (diagramMatch) {
-    const stepsStr = diagramMatch[1].trim();
-    const detailsStr = diagramMatch[2].trim();
-
-    const steps = stepsStr.split("->").map(s => s.trim());
-    const detailsMap = {};
-
-    steps.forEach(step => {
-      const escapeStep = step.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const regex = new RegExp(`${escapeStep}\\s*:\\s*([^\\n.]+)(?:\\.|\\n|$)`, 'i');
-      const match = detailsStr.match(regex);
-      if (match) {
-        detailsMap[step] = match[1].trim();
-      } else {
-        detailsMap[step] = "点击查看此步骤的学术详情。";
-      }
-    });
-
-    diagramCard = (
-      <div style={{
-        marginTop: '16px',
-        background: 'rgba(255, 255, 255, 0.03)',
-        borderRadius: '16px',
-        border: '1.5px solid var(--border-neon)',
-        padding: '20px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', borderBottom: '1px solid var(--border-neon)', paddingBottom: '10px' }}>
-          <Sparkles size={16} style={{ color: 'var(--primary-neon)' }} />
-          <strong style={{ fontSize: '13.5px', color: 'var(--text-main)' }}>画像智能体学术概念脉络图</strong>
-        </div>
-
-        {/* Timeline Path steps */}
-        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '14px' }}>
-          {steps.map((step, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => setSelectedStep(idx)}
-              style={{
-                flexShrink: 0,
-                padding: '6px 14px',
-                borderRadius: '20px',
-                background: selectedStep === idx ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'rgba(0,0,0,0.03)',
-                border: selectedStep === idx ? '1px solid var(--primary-neon)' : '1px solid var(--border-neon)',
-                color: selectedStep === idx ? '#ffffff' : 'var(--text-muted)',
-                fontSize: '11px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-              className="hover-neon-border"
-            >
-              {step}
-            </button>
-          ))}
-        </div>
-
-        {/* Selected step details content */}
-        <div style={{ background: 'rgba(0, 0, 0, 0.05)', borderRadius: '12px', padding: '14px 18px', borderLeft: '3px solid var(--secondary)', minHeight: '60px' }}>
-          <div style={{ fontSize: '10px', color: 'var(--secondary)', fontWeight: '800', marginBottom: '4px', textTransform: 'uppercase' }}>
-            步骤详情 ({steps[selectedStep]})
-          </div>
-          <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--text-main)', lineHeight: '1.6' }}>
-            {detailsMap[steps[selectedStep]]}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // 2. Render Video/Voice Synthesizer Card if matched
-  let videoCard = null;
-  if (videoMatch) {
-    const speakText = videoMatch[1].trim();
-    const subTitle = videoMatch[2].trim();
-
-    const toggleVideoPlay = () => {
-      if (isVideoPlaying) {
-        // Stop audio
-        if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
-        }
-        stopSlideSpeech();
-        setIsVideoPlaying(false);
-      } else {
-        // Start audio speech synthesis
-        setIsVideoPlaying(true);
-        setVideoProgress(0);
-        handleSlideSpeech(speakText);
-
-        const duration = 7500; // Mock time
-        const intervalTime = 100;
-        const totalSteps = duration / intervalTime;
-        let curStep = 0;
-
-        progressIntervalRef.current = setInterval(() => {
-          curStep++;
-          const percentage = Math.min(100, (curStep / totalSteps) * 100);
-          setVideoProgress(percentage);
-          if (percentage >= 100) {
-            clearInterval(progressIntervalRef.current);
-            progressIntervalRef.current = null;
-            setIsVideoPlaying(false);
-          }
-        }, intervalTime);
-      }
-    };
-
-    videoCard = (
-      <div style={{
-        marginTop: '16px',
-        background: '#0a0a0c',
-        borderRadius: '16px',
-        border: '1.5px solid var(--border-neon)',
-        overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.15)'
-      }}>
-        {/* Mock video display window */}
-        <div style={{ position: 'relative', height: '140px', background: 'linear-gradient(45deg, #111 0%, #1e1e24 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-          {/* Animated soundwaves or progress bars inside visualizer */}
-          {isVideoPlaying && (
-            <div style={{ position: 'absolute', display: 'flex', gap: '4px', bottom: '16px', left: '16px' }}>
-              {[0.4, 0.8, 0.5, 0.9, 0.3, 0.7].map((height, i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: '3px',
-                    height: '24px',
-                    background: 'var(--primary-neon)',
-                    borderRadius: '3px',
-                    transform: `scaleY(${height})`,
-                    transformOrigin: 'bottom',
-                    animation: `pulseWave ${0.6 + i * 0.15}s ease-in-out infinite alternate`
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Subtitle overlays */}
-          <div style={{
-            position: 'absolute',
-            bottom: '12px',
-            width: '80%',
-            textAlign: 'center',
-            background: 'rgba(0,0,0,0.65)',
-            backdropFilter: 'blur(4px)',
-            borderRadius: '6px',
-            padding: '6px 12px',
-            fontSize: '11px',
-            color: '#ffffff',
-            border: '1px solid rgba(255,255,255,0.08)'
-          }}>
-            {isVideoPlaying ? `🔊 ${speakText.substring(0, 36)}...` : `🔇 点击播放微课：${subTitle}`}
-          </div>
-
-          {/* Large play button */}
-          <button
-            type="button"
-            onClick={toggleVideoPlay}
-            style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)',
-              border: '1.5px solid var(--primary-neon)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#ffffff',
-              zIndex: 2,
-              boxShadow: '0 4px 15px rgba(15, 118, 110, 0.4)'
-            }}
-            className="hover-neon-border"
-          >
-            {isVideoPlaying ? (
-              <div style={{ display: 'flex', gap: '3px' }}>
-                <div style={{ width: '3px', height: '12px', background: '#fff' }}></div>
-                <div style={{ width: '3px', height: '12px', background: '#fff' }}></div>
-              </div>
-            ) : (
-              <div style={{ width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '10px solid #fff', marginLeft: '3px' }}></div>
-            )}
-          </button>
-        </div>
-
-        {/* Play control strip */}
-        <div style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', gap: '14px', background: 'rgba(255,255,255,0.02)' }}>
-          <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>00:0{isVideoPlaying ? '1' : '0'} / 00:07</span>
-          <div style={{ flexGrow: 1, height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
-            <div style={{ width: `${videoProgress}%`, height: '100%', background: 'var(--primary-neon)', transition: 'width 0.1s linear' }} />
-          </div>
-        </div>
-
-        <style>{`
-          @keyframes pulseWave {
-            0% { transform: scaleY(0.3); }
-            100% { transform: scaleY(1.1); }
-          }
-        `}</style>
-      </div>
-    );
-  }
+  const parts = content.split(tagsRegex);
 
   return (
-    <>
-      {textElement}
-      {diagramCard}
-      {videoCard}
-    </>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {parts.map((part, index) => {
+        if (!part) return null;
+
+        // Check for completed tags
+        if (part.startsWith('[QUIZ:') && part.endsWith(']')) {
+          try {
+            const jsonStr = part.substring(6, part.length - 1).trim();
+            const quizData = JSON.parse(jsonStr);
+            return <QuizCard key={index} quizData={quizData} />;
+          } catch (e) {
+            return null; // Ignore invalid / parsing JSON during stream
+          }
+        }
+
+        if (part.startsWith('[VIDEO_RECOMMEND:') && part.endsWith(']')) {
+          try {
+            const jsonStr = part.substring(17, part.length - 1).trim();
+            const videoData = JSON.parse(jsonStr);
+            return <VideoRecommendCard key={index} videoData={videoData} />;
+          } catch (e) {
+            return null;
+          }
+        }
+
+        if (part.startsWith('[MINDMAP:') && part.endsWith(']')) {
+          const code = part.substring(9, part.length - 1).trim();
+          return <MermaidRenderer key={index} code={code} />;
+        }
+
+        if (part.startsWith('[CODE:') && part.endsWith(']')) {
+          const inner = part.substring(6, part.length - 1).trim();
+          const pipeIdx = inner.indexOf('|');
+          if (pipeIdx !== -1) {
+            const lang = inner.substring(0, pipeIdx).trim();
+            const codeContent = inner.substring(pipeIdx + 1).trim();
+            return <CodeSandboxCard key={index} code={codeContent} lang={lang} />;
+          }
+        }
+
+        if (part.startsWith('[SLIDES:') && part.endsWith(']')) {
+          const inner = part.substring(8, part.length - 1).trim();
+          const slideItems = inner.split('---').map(slideStr => {
+            const parts = slideStr.split('|');
+            return {
+              title: parts[0]?.trim() || '演示幻灯片',
+              content: parts[1]?.trim() || ''
+            };
+          });
+          return <SlidesCarouselCard key={index} slides={slideItems} />;
+        }
+
+        if (part.startsWith('[PDF:') && part.endsWith(']')) {
+          const inner = part.substring(5, part.length - 1).trim();
+          const pipeIdx = inner.indexOf('|');
+          const title = pipeIdx !== -1 ? inner.substring(0, pipeIdx).trim() : '自适应讲义课本';
+          const md = pipeIdx !== -1 ? inner.substring(pipeIdx + 1).trim() : inner;
+          return <PDFDownloadCard key={index} title={title} markdown={md} />;
+        }
+
+        // Legacy diagrams and audio card matches
+        if (part.startsWith('[DIAGRAM:') && part.endsWith(']')) {
+          const diagramRegex = /\[DIAGRAM:\s*([^\]|]+)\s*\|\s*([^\]]+)\]/;
+          const match = part.match(diagramRegex);
+          if (match) {
+            const steps = match[1].split('->').map(s => s.trim());
+            const detailsStr = match[2].trim();
+            const detailsMap = {};
+            steps.forEach(step => {
+              const escapeStep = step.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+              const regex = new RegExp(`${escapeStep}\\s*:\\s*([^\\n.]+)(?:\\.|\\n|$)`, 'i');
+              const detailMatch = detailsStr.match(regex);
+              detailsMap[step] = detailMatch ? detailMatch[1].trim() : "点击查看此步骤的学术详情。";
+            });
+            return (
+              <div key={index} style={{ marginTop: '8px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', border: '1.5px solid var(--border-neon)', padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', borderBottom: '1px solid var(--border-neon)', paddingBottom: '10px' }}>
+                  <strong style={{ fontSize: '13px', color: 'var(--text-main)' }}>画像智能体学术概念脉络图</strong>
+                </div>
+                <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '12px' }}>
+                  {steps.map((step, idx) => (
+                    <button key={idx} type="button" onClick={() => setSelectedStep(idx)} style={{ padding: '6px 14px', borderRadius: '20px', background: selectedStep === idx ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'rgba(0,0,0,0.03)', border: selectedStep === idx ? '1px solid var(--primary-neon)' : '1px solid var(--border-neon)', color: selectedStep === idx ? '#fff' : 'var(--text-muted)', fontSize: '11px', cursor: 'pointer' }}>
+                      {step}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ background: 'rgba(0, 0, 0, 0.05)', borderRadius: '12px', padding: '14px 18px', borderLeft: '3px solid var(--secondary)' }}>
+                  <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--text-main)' }}>{detailsMap[steps[selectedStep]] || detailsMap[steps[0]]}</p>
+                </div>
+              </div>
+            );
+          }
+        }
+
+        if (part.startsWith('[VIDEO:') && part.endsWith(']')) {
+          const videoRegex = /\[VIDEO:\s*([^\]|]+)\s*\|\s*([^\]]+)\]/;
+          const match = part.match(videoRegex);
+          if (match) {
+            const speakText = match[1].trim();
+            const subTitle = match[2].trim();
+            const toggleVideoPlay = () => {
+              if (isVideoPlaying) {
+                if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
+                stopSlideSpeech();
+                setIsVideoPlaying(false);
+              } else {
+                setIsVideoPlaying(true);
+                setVideoProgress(0);
+                handleSlideSpeech(speakText);
+                const duration = 7500;
+                const intervalTime = 100;
+                const totalSteps = duration / intervalTime;
+                let curStep = 0;
+                progressIntervalRef.current = setInterval(() => {
+                  curStep++;
+                  const percentage = Math.min(100, (curStep / totalSteps) * 100);
+                  setVideoProgress(percentage);
+                  if (percentage >= 100) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; setIsVideoPlaying(false); }
+                }, intervalTime);
+              }
+            };
+            return (
+              <div key={index} style={{ marginTop: '8px', background: '#0a0a0c', borderRadius: '16px', border: '1.5px solid var(--border-neon)', overflow: 'hidden' }}>
+                <div style={{ position: 'relative', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(45deg, #111, #1e1e24)' }}>
+                  <button type="button" onClick={toggleVideoPlay} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', border: '1px solid var(--primary-neon)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {isVideoPlaying ? '⏸' : '▶'}
+                  </button>
+                  <div style={{ position: 'absolute', bottom: '8px', background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', color: '#fff' }}>
+                    {isVideoPlaying ? `🔊 播音中...` : `🔊 播放微课: ${subTitle}`}
+                  </div>
+                </div>
+                <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ flexGrow: 1, height: '3px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div style={{ width: `${videoProgress}%`, height: '100%', background: 'var(--primary-neon)' }} />
+                  </div>
+                </div>
+              </div>
+            );
+          }
+        }
+
+        // If the text slice contains an incomplete tag, display it as plain text
+        if (part.startsWith('[') && !part.endsWith(']')) {
+          return null; // Skip rendering partial tag code while streaming
+        }
+
+        // Otherwise render as regular text chunk
+        return (
+          <div key={index} style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+            {part}
+          </div>
+        );
+      })}
+
+      {isStreaming && (
+        <span
+          style={{
+            display: 'inline-block',
+            width: '8px',
+            height: '16px',
+            background: 'var(--primary-neon)',
+            marginLeft: '2px',
+            verticalAlign: 'text-bottom',
+            animation: 'blinkCursor 0.8s step-end infinite',
+            borderRadius: '1px',
+            boxShadow: '0 0 6px var(--primary-neon)',
+          }}
+        >
+          &nbsp;
+        </span>
+      )}
+    </div>
   );
 };
 
