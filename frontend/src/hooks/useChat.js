@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { apiSSEStream } from '../utils/api';
 
 export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, setDiagnosticLogs }) {
@@ -8,6 +8,19 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
   const [chatInput, setChatInput] = useState('');
   const [tutorStatus, setTutorStatus] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+
+  const typingTimerRef = useRef(null);
+  const typingQueueRef = useRef([]);
+  const currentTypedTextRef = useRef('');
+  const isStreamActiveRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+      }
+    };
+  }, []);
 
   const submitChatMessage = async (messageText) => {
     if (isStreaming || !messageText.trim()) return;
