@@ -766,6 +766,30 @@ def init_db():
     )
     """)
     
+    # Chat Sessions Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS chat_sessions (
+        session_id TEXT PRIMARY KEY,
+        username TEXT,
+        title TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (username) REFERENCES users(username)
+    )
+    """)
+    
+    # Chat Messages Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS chat_messages (
+        message_id TEXT PRIMARY KEY,
+        session_id TEXT,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id)
+    )
+    """)
+    
     # Seed default user
     cursor.execute("SELECT username, password_hash FROM users WHERE username = 'default_user'")
     row = cursor.fetchone()
@@ -1391,6 +1415,30 @@ def init_db():
     )
     """)
     
+    # Chat Sessions Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS chat_sessions (
+        session_id TEXT PRIMARY KEY,
+        username TEXT,
+        title TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (username) REFERENCES users(username)
+    )
+    """)
+    
+    # Chat Messages Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS chat_messages (
+        message_id TEXT PRIMARY KEY,
+        session_id TEXT,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id)
+    )
+    """)
+    
     # Seed default user
     cursor.execute("SELECT username, password_hash FROM users WHERE username = 'default_user'")
     row = cursor.fetchone()
@@ -1634,3 +1682,100 @@ def db_save_model_routing(username: str, routing_data: dict):
     )
     conn.commit()
     conn.close()
+
+
+def db_create_chat_session(username: str, session_id: str, title: str) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    now_str = datetime.datetime.now().isoformat()
+    cursor.execute(
+        "INSERT INTO chat_sessions (session_id, username, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        (session_id, username, title, now_str, now_str)
+    )
+    conn.commit()
+    conn.close()
+
+def db_get_chat_sessions(username: str) -> list:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT session_id, username, title, created_at, updated_at FROM chat_sessions WHERE username = ? ORDER BY updated_at DESC",
+        (username,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "session_id": r[0],
+            "username": r[1],
+            "title": r[2],
+            "created_at": r[3],
+            "updated_at": r[4]
+        }
+        for r in rows
+    ]
+
+def db_update_chat_session_title(session_id: str, title: str) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    now_str = datetime.datetime.now().isoformat()
+    cursor.execute(
+        "UPDATE chat_sessions SET title = ?, updated_at = ? WHERE session_id = ?",
+        (title, now_str, session_id)
+    )
+    conn.commit()
+    conn.close()
+
+def db_delete_chat_session(session_id: str) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM chat_sessions WHERE session_id = ?", (session_id,))
+    cursor.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
+    conn.commit()
+    conn.close()
+
+def db_clear_chat_sessions(username: str) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT session_id FROM chat_sessions WHERE username = ?", (username,))
+    session_ids = [r[0] for r in cursor.fetchall()]
+    for session_id in session_ids:
+        cursor.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
+    cursor.execute("DELETE FROM chat_sessions WHERE username = ?", (username,))
+    conn.commit()
+    conn.close()
+
+def db_save_chat_message(session_id: str, message_id: str, role: str, content: str) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    now_str = datetime.datetime.now().isoformat()
+    cursor.execute(
+        "INSERT INTO chat_messages (message_id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
+        (message_id, session_id, role, content, now_str)
+    )
+    cursor.execute(
+        "UPDATE chat_sessions SET updated_at = ? WHERE session_id = ?",
+        (now_str, session_id)
+    )
+    conn.commit()
+    conn.close()
+
+def db_get_chat_messages(session_id: str) -> list:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT message_id, session_id, role, content, created_at FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC",
+        (session_id,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "message_id": r[0],
+            "session_id": r[1],
+            "role": r[2],
+            "content": r[3],
+            "created_at": r[4]
+        }
+        for r in rows
+    ]
