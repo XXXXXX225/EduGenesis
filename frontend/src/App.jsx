@@ -15,7 +15,15 @@ import {
   GraduationCap,
   Sun,
   Moon,
-  Settings
+  Settings,
+  PanelLeftOpen,
+  PanelLeftClose,
+  Plus,
+  Trash2,
+  FolderDown,
+  FolderUp,
+  ChevronDown,
+  Settings2
 } from 'lucide-react';
 import { clearSession } from './utils/session';
 import MobileTabBar from './components/shared/MobileTabBar';
@@ -95,7 +103,19 @@ function AppContent() {
     goDashboardHome,
     chat,
     speech,
-    quiz
+    quiz,
+    chatSessions,
+    currentSessionId,
+    setCurrentSessionId,
+    isLeftSidebarOpen,
+    setIsLeftSidebarOpen,
+    tutorPersonality,
+    setTutorPersonality,
+    loadSessionMessages,
+    startNewChat,
+    deleteSession,
+    renameSession,
+    clearAllSessions
   } = useAppContext();
 
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
@@ -445,6 +465,24 @@ function AppContent() {
         {/* 🚀 TOP HEADER */}
         <header className="agent-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <button
+              onClick={() => setIsLeftSidebarOpen(prev => !prev)}
+              style={{
+                padding: '8px',
+                borderRadius: '10px',
+                background: 'var(--bg-card-active)',
+                border: '1px solid var(--border-neon)',
+                color: 'var(--text-main)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.3s'
+              }}
+              title={isLeftSidebarOpen ? "收起侧栏" : "展开侧栏"}
+            >
+              {isLeftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+            </button>
             <div style={{ padding: '10px', background: 'linear-gradient(135deg, rgba(15, 118, 110, 0.15) 0%, rgba(29, 78, 216, 0.1) 100%)', borderRadius: '14px', border: '1px solid rgba(15, 118, 110, 0.25)', display: 'flex' }}>
               <GraduationCap size={24} style={{ color: 'var(--primary-neon)' }} />
             </div>
@@ -540,7 +578,183 @@ function AppContent() {
         </header>
 
         {/* 📱 2-COLUMN BODY */}
-        <div className="agent-body" style={{ '--sidebar-width': `${sidebarWidth}px` }}>
+        <div 
+          className="agent-body" 
+          style={{ 
+            '--sidebar-width': `${sidebarWidth}px`,
+            '--left-sidebar-width': isLeftSidebarOpen ? '260px' : '0px'
+          }}
+        >
+          {/* Collapsible Left Sidebar */}
+          <aside 
+            className="agent-panel-left-collapsible"
+            style={{
+              borderRight: isLeftSidebarOpen ? undefined : 'none',
+              padding: isLeftSidebarOpen ? '20px 14px' : '0px'
+            }}
+          >
+            {isLeftSidebarOpen && (
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                {/* Top: New Chat button */}
+                <div>
+                  <button
+                    onClick={startNewChat}
+                    className="cyber-btn"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontSize: '13px',
+                      fontWeight: 'bold',
+                      marginBottom: '20px'
+                    }}
+                  >
+                    <Plus size={16} /> 开启新对话
+                  </button>
+                  
+                  {/* Middle: Sessions scroll list */}
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '8px', paddingLeft: '4px' }}>
+                    会话历史
+                  </div>
+                  
+                  <div style={{ flexGrow: 1, overflowY: 'auto', maxHeight: 'calc(100vh - 430px)', paddingRight: '2px' }}>
+                    {chatSessions && chatSessions.map((sess) => (
+                      <div
+                        key={sess.session_id}
+                        className={`history-session-item ${currentSessionId === sess.session_id ? 'active' : ''}`}
+                        onClick={() => {
+                          setCurrentSessionId(sess.session_id);
+                          loadSessionMessages(sess.session_id);
+                        }}
+                      >
+                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '160px' }}>
+                          💬 {sess.title}
+                        </span>
+                        <div className="history-item-actions">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newTitle = prompt("输入新标题:", sess.title);
+                              if (newTitle) renameSession(sess.session_id, newTitle);
+                            }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '10px' }}
+                            title="重命名"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm("确定要删除此对话吗？")) deleteSession(sess.session_id);
+                            }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '10px' }}
+                            title="删除"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Bottom: Quick Console panel */}
+                <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '15px' }}>
+                  {/* Character personality select */}
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 'bold', marginBottom: '6px' }}>导师性格设定</div>
+                    <select
+                      value={tutorPersonality}
+                      onChange={(e) => setTutorPersonality(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        borderRadius: '8px',
+                        background: 'var(--bg-card-active)',
+                        border: '1px solid var(--border-neon)',
+                        color: 'var(--text-main)',
+                        fontSize: '12px',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="academic">🎓 严肃学术风</option>
+                      <option value="encouraging">🌟 温暖鼓励风</option>
+                      <option value="coder">🤖 极客代码风</option>
+                    </select>
+                  </div>
+
+                  {/* Shortcut triggers */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '12px' }}>
+                    <button
+                      onClick={() => {
+                        chat.setChatInput("我想学 Python 基础");
+                        setTimeout(() => {
+                          // Programmatically dispatch submit event to trigger send message
+                          const formEl = document.querySelector("form");
+                          if (formEl) {
+                            const submitEvent = new Event("submit", { cancelable: true, bubbles: true });
+                            formEl.dispatchEvent(submitEvent);
+                          }
+                        }, 150);
+                      }}
+                      style={{ padding: '6px', fontSize: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.02)', border: '1px solid var(--border-neon)', color: 'var(--text-muted)', cursor: 'pointer' }}
+                    >
+                      🐍 Python基础
+                    </button>
+                    <button
+                      onClick={() => {
+                        chat.setChatInput("我想学习机器学习");
+                        setTimeout(() => {
+                          const formEl = document.querySelector("form");
+                          if (formEl) {
+                            const submitEvent = new Event("submit", { cancelable: true, bubbles: true });
+                            formEl.dispatchEvent(submitEvent);
+                          }
+                        }, 150);
+                      }}
+                      style={{ padding: '6px', fontSize: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.02)', border: '1px solid var(--border-neon)', color: 'var(--text-muted)', cursor: 'pointer' }}
+                    >
+                      📈 机器学习
+                    </button>
+                  </div>
+                  
+                  {/* Clear all and export buttons */}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => {
+                        const historyText = chat.chatHistory.map(m => `**${m.role === 'user' ? '学生' : '智能导师'}**: ${m.content}\n`).join('\n');
+                        const blob = new Blob([historyText], { type: 'text/markdown;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `edugenesis-chat-${currentSessionId}.md`;
+                        a.click();
+                      }}
+                      className="cyber-btn"
+                      style={{ flex: 1, padding: '6px', fontSize: '11px', textTransform: 'none' }}
+                    >
+                      📤 导出
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm("确定要清空全部会话历史吗？")) clearAllSessions();
+                      }}
+                      className="cyber-btn"
+                      style={{ flex: 1, padding: '6px', fontSize: '11px', textTransform: 'none', background: 'rgba(190, 18, 60, 0.04)', borderColor: 'rgba(190, 18, 60, 0.12)', color: 'var(--danger)' }}
+                    >
+                      🗑️ 清空
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </aside>
+
           {/* Left Column: Core chat (occupies 1fr) */}
           <main className="agent-panel-middle" ref={mainContentRef}>
             <ChatView chatEndRef={chatEndRef} />
