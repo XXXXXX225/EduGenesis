@@ -23,6 +23,28 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
     _, api_key, _ = get_route_llm_params(target_user, 'chat')
     
     async def event_generator():
+        # Fetch relevant Bilibili videos from video agent
+        from app.video_agent import get_video_recommendations_for_node
+        rec_videos = []
+        try:
+            active_node = None
+            nodes = db_get_path_nodes(target_user)
+            active_node = next((n for n in nodes if n.status == 'active'), None)
+            if not active_node and nodes:
+                active_node = nodes[0]
+            node_title = active_node.title if active_node else "Python 变量与数据类型"
+            node_desc = active_node.description if active_node else "探索 Python 基础语法"
+            
+            rec_videos = await asyncio.to_thread(
+                get_video_recommendations_for_node,
+                node_title,
+                node_desc,
+                current_profile,
+                target_user
+            )
+        except Exception as e:
+            print(f"Failed to fetch videos in chat route: {e}")
+
         # Step 1: Supervisor orchestrator thinking state
         yield f"data: {json.dumps({'type': 'status', 'status': '🧠 [主管智能体] 正在唤醒协同智能体网络...'})}\n\n"
         await asyncio.sleep(0.4)
@@ -60,7 +82,7 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             
             yield f"data: {json.dumps({'type': 'status', 'status': '💬 [导师智能体] 正在根据新画像为您生成个性化讲义...'})}\n\n"
             
-            stream_response = await asyncio.to_thread(call_llm_stream_tutor, request.messages, current_profile, target_user)
+            stream_response = await asyncio.to_thread(call_llm_stream_tutor, request.messages, current_profile, target_user, rec_videos)
             
             if stream_response and stream_response.status_code == 200:
                 yield f"data: {json.dumps({'type': 'status', 'status': ''})}\n\n"
@@ -138,7 +160,23 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
 
         tutor_response = ""
         if "video" in user_input_clean or "视频" in user_input_clean:
-            tutor_response = """结合你的学习目标与风格，为您精选了以下实战导向的入门视频，均侧重基础夯实，帮您避开常见语法和缩进坑：
+            if rec_videos:
+                v = rec_videos[0]
+                video_json_str = json.dumps({
+                    "bvid": v["bvid"],
+                    "title": v["title"],
+                    "pic": v["pic"],
+                    "play": v["play"],
+                    "duration": v["duration"],
+                    "reason": v["recommend_reason"]
+                }, ensure_ascii=False)
+                tutor_response = f"""结合你的学习目标与风格，为您精选了以下来自我们生成资源库的实战精讲视频，均侧重基础夯实，帮您避开常见语法和缩进坑：
+
+[VIDEO_RECOMMEND: {video_json_str}]
+
+如果您看完视频，可以发送“我要做测试”来检验一下自己的基础知识！"""
+            else:
+                tutor_response = """结合你的学习目标与风格，为您精选了以下实战导向的入门视频，均侧重基础夯实，帮您避开常见语法和缩进坑：
 
 [VIDEO_RECOMMEND: {"bvid": "BV1rpWjevEip", "title": "B站最火的 Python 零基础精讲课程", "pic": "https://i2.hdslb.com/bfs/archive/a979056b1a32012cdd00d48fbc3732d253e30620.jpg", "play": "1671.8万", "duration": "39:58:14", "reason": "B站播放量最高的经典零基础教程，适合新手入门"}]
 
