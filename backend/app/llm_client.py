@@ -110,7 +110,7 @@ Output STRICTLY a JSON object (no markdown formatting, no code block backticks, 
         print(f"LLM Structured Analysis failed: {e}")
     return None
 
-def call_llm_stream_tutor(messages: List[BaseModel], current_profile: UserProfile, username: str = "default_user"):
+def call_llm_stream_tutor(messages: List[BaseModel], current_profile: UserProfile, username: str = "default_user", videos_context: List[dict] = None, tutor_personality: Optional[str] = None):
     api_base, api_key, model = get_route_llm_params(username, "chat")
     
     if not api_key:
@@ -137,6 +137,13 @@ You can embed interactive educational resource cards in your response when appro
 4. Code Block: [CODE: python | <python source code>]
 5. Slides Carousel: [SLIDES: Title 1 | Content 1 --- Title 2 | Content 2]
 6. PDF Textbook: [PDF: Title | <detailed markdown textbook explanation>]"""
+
+    if tutor_personality:
+        system_prompt += f"\n\nYour tutoring personality/style is: {tutor_personality}. Please adapt your tone, explanations, and interaction style to match this personality."
+
+    if videos_context:
+        videos_str = json.dumps(videos_context, ensure_ascii=False)
+        system_prompt += f"\n\nHere are some relevant Bilibili videos from our database for the current topic. If the student asks for video recommendations, you MUST select from this list and output them exactly using the [VIDEO_RECOMMEND: ...] format:\n{videos_str}"
 
     api_messages = [{"role": "system", "content": system_prompt}]
     for msg in messages:

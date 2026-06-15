@@ -6,7 +6,7 @@ const LOGGED_IN_KEY = 'isLoggedIn';
 // 如需进一步加固，可将 JWT 改为 httpOnly Cookie（需后端配合 Set-Cookie）。
 // 建议添加 Content-Security-Policy 头防止内联脚本注入。
 
-const storage = window.sessionStorage;
+const storage = window.localStorage;
 
 export function getAccessToken() {
   return storage.getItem(ACCESS_TOKEN_KEY) || '';
