@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
-import { apiGet, apiPost } from '../utils/api';
+import { apiGet, apiPost, apiDelete, apiPut } from '../utils/api';
 import { clearSession, getStoredUsername, isAuthenticated } from '../utils/session';
 import { useRouteSync } from '../utils/routing';
 import { useChat } from '../hooks/useChat';
@@ -295,7 +295,7 @@ export function AppProvider({ children }) {
 
   const deleteSession = async (sessionId) => {
     try {
-      await apiPost(`/chat/sessions/${sessionId}`, {}, 'DELETE');
+      await apiDelete(`/chat/sessions/${sessionId}`);
       setChatSessions(prev => {
         const updated = prev.filter(s => s.session_id !== sessionId);
         if (currentSessionId === sessionId) {
@@ -317,7 +317,7 @@ export function AppProvider({ children }) {
   const renameSession = async (sessionId, newTitle) => {
     if (!newTitle.trim()) return;
     try {
-      await apiPost(`/chat/sessions/${sessionId}`, { title: newTitle }, 'PUT');
+      await apiPut(`/chat/sessions/${sessionId}`, { title: newTitle });
       setChatSessions(prev => prev.map(s => {
         if (s.session_id === sessionId) {
           return { ...s, title: newTitle };
@@ -331,7 +331,7 @@ export function AppProvider({ children }) {
 
   const clearAllSessions = async () => {
     try {
-      await apiPost('/chat/sessions', {}, 'DELETE');
+      await apiDelete('/chat/sessions');
       setChatSessions([]);
       setCurrentSessionId(null);
       startNewChat();

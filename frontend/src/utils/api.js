@@ -116,4 +116,20 @@ export async function apiDelete(path) {
   return res.json();
 }
 
+export async function apiPut(path, body = {}) {
+  const url = `${API_BASE}${path}`;
+  const doFetch = () => fetch(url, {
+    method: 'PUT',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
+  });
+  const res = await withTimeout(doFetch());
+  if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/auth/')) { handleAuthExpired(); throw new Error('登录已过期，请重新登录'); }
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `API ${path} returned ${res.status}`);
+  }
+  return res.json();
+}
+
 export { API_BASE };
