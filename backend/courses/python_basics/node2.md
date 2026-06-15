@@ -1,18 +1,25 @@
-# Python 变量声明与动态强类型系统
+# Variables and Basic Data Types
 
-理解 Python 的内存模型和变量绑定机制是写出高效、无 Bug 代码的关键。
+Python dynamic type system is powerful but requires discipline.
 
-## 1. 变量引用的本质
-与 C/C++ 等静态语言不同，Python 中的变量本身**没有类型**，也不分配专门的存储空间。
-* **对象模型**：所有的值（如整数 `10`、字符串 `"hello"`）在内存中都是以“对象”（PyObject）的形式独立存在的。
-* **标签绑定**：赋值语句 `x = 10` 实际上是让变量名 `x` 指向值 `10` 的内存地址。变量仅是对象的“标签”或引用。
-* **垃圾回收**：当一个对象的引用计数归零（即没有任何变量名指向它）时，Python 的垃圾回收器（Garbage Collector）会自动释放该内存。
+## Core Types
+- int: arbitrary-precision, e.g. x = 42
+- float: IEEE 754 double, e.g. pi = 3.14159
+- str: immutable sequence, e.g. name = Alice
+- bool: True / False
+- None: represents absence of value
 
-## 2. 动态类型与强类型
-* **动态（Dynamic）**：变量可以随时重新绑定到其他类型的对象。例如 `x = 10` 之后紧接着 `x = "hello"` 是完全合法的。
-* **强类型（Strong）**：不支持隐式的非安全类型转换。试图将数字与字符串直接相加（`10 + "hello"`）会触发 `TypeError` 错误，必须显式进行类型转换（`str(10) + "hello"`）。
+## Type Conversion
+int('5') -> 5 | float(3) -> 3.0 | str(42) -> '42'
 
-## 3. 核心基础数据类型
-* **数值型**：`int`（支持无限精度）、`float`（双精度浮点数）、`bool`（`True`/`False`）。
-* **序列类型**：`str`（不可变 Unicode 字符序列）、`list`（可变列表）、`tuple`（不可变元组）。
-* **防御性编码提示**：使用 `isinstance(var, type)` 可以在动态调用前确保变量符合预期类型，防止运行时崩溃。
+## String Operations
+- f-strings: f'Hello {name}'
+- Methods: .upper(), .lower(), .strip(), .split(), .join()
+- Indexing and slicing: s[0], s[1:3]
+
+## Variable Rules
+- Dynamic typing: variables can be reassigned to different types
+- Naming: snake_case, start with letter or underscore
+- Multiple assignment: a, b = 1, 2
+
+**Key Takeaway**: Validate types at function boundaries.

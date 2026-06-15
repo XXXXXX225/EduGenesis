@@ -14,7 +14,8 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.1",
     "lucide-react": "^0.395.0",
-    "gsap": "^3.12.5"
+    "gsap": "^3.12.5",
+    "mermaid": "^11.15.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

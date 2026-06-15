@@ -1,18 +1,25 @@
-# 前馈神经网络与多层线性变换激活堆叠
+# Feedforward Neural Networks
 
-神经网络是模拟生物神经元网络结构的多层级联计算系统。
+Neural networks learn hierarchical representations from data.
 
-## 1. 神经元模型与偏置结构
-每个神经元接收上一层传来的多个输入 $\mathbf{x}$，分别乘以权重 $w$，求和后加上偏置 $b$，最后经过激活函数得到输出：
-$$a = f(\mathbf{w}^T\mathbf{x} + b)$$
+## Architecture
+- Input layer -> Hidden layers -> Output layer
+- Each neuron: activation(W*x + b)
+- Universal approximation theorem
 
-## 2. 前向传播的多层表示
-在多层感知机中，数据以矩阵形式在不同隐藏层之间流转：
-$$\mathbf{z}^{[1]} = \mathbf{W}^{[1]}\mathbf{a}^{[0]} + \mathbf{b}^{[1]}$$
-$$\mathbf{a}^{[1]} = \sigma(\mathbf{z}^{[1]})$$
-其中，上标 $[l]$ 表示第几层，$\sigma$ 表示非线性激活函数（如 ReLU, Tanh 等）。
+## Activation Functions
+- ReLU: max(0, z) — most common
+- Sigmoid: 1/(1+e^(-z)) — for binary output
+- Tanh: (e^z - e^(-z))/(e^z + e^(-z)) — zero-centered
+- Leaky ReLU, ELU, Swish
 
-## 3. 非线性激活函数的作用
-如果去掉激活函数，无论堆叠多少层网络，其多层变换由于线性的可乘性，最终都可以合成为一个单一的线性方程：
-$$\mathbf{y} = \mathbf{W}_k \dots \mathbf{W}_1 \mathbf{x} = \mathbf{W}_{combined} \mathbf{x}$$
-非线性激活函数的引入，使神经网络拥有了**无限逼近任意非线性高维边界**的能力。
+## Forward Propagation
+- Layer by layer: a^(l) = activation(W^(l)*a^(l-1) + b^(l))
+
+## Training Loop
+1. Forward pass: compute predictions
+2. Compute loss
+3. Backward pass: compute gradients
+4. Update weights: w -= lr * grad
+
+**Key Takeaway**: Start with ReLU + Adam optimizer for most tasks.

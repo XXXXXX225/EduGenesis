@@ -1573,3 +1573,110 @@ body.dark-mode .timeline-badge-wrapper {
   }
 }
 
+
+/* --- 移动端底部 Tab Bar --- */
+.mobile-tab-bar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-tab-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    height: 60px;
+    background: var(--bg-card-solid);
+    border-top: 1px solid var(--border-neon);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 4px;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .dark-mode .mobile-tab-bar {
+    background: rgba(10, 15, 30, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .mobile-tab-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 6px 8px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    min-width: 48px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-tab-item:hover,
+  .mobile-tab-item:active {
+    color: var(--primary);
+  }
+
+  .mobile-tab-item.active {
+    color: var(--primary-neon);
+  }
+
+  .mobile-tab-label {
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  /* 移动端隐藏侧边栏 */
+  .agent-panel-right {
+    display: none !important;
+  }
+
+  .resize-handle {
+    display: none !important;
+  }
+
+  .agent-body {
+    grid-template-columns: 1fr !important;
+    padding-bottom: 60px;
+  }
+
+  .agent-panel-left {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+
+  .agent-panel-middle {
+    min-height: 50vh;
+  }
+
+  .agent-header {
+    padding: 0 12px;
+  }
+}
+
+/* --- Tab 切换过度动画 --- */
+.tab-fade-in {
+  animation: tabFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes tabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

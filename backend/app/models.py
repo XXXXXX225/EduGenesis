@@ -71,3 +71,5 @@ class ConsoleLogRequest(BaseModel):
 class CompleteNodeRequest(BaseModel):
     node_id: str
     username: Optional[str] = None
+    score: Optional[int] = None
+    total: Optional[int] = None

@@ -1,6 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Map } from 'lucide-react';
-import { gsap } from 'gsap';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Map, Loader2 } from 'lucide-react';
+import mermaid from 'mermaid';
+
+// Initialize mermaid once
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  securityLevel: 'loose',
+  themeVariables: {
+    primaryColor: '#0f766e',
+    primaryTextColor: '#ffffff',
+    primaryBorderColor: '#0f766e',
+    lineColor: 'rgba(255,255,255,0.2)',
+    secondaryColor: '#7c3aed',
+    tertiaryColor: '#f59e0b',
+  },
+});
 
 const modalHeaderStyle = {
   display: 'flex',
@@ -21,202 +36,85 @@ const modalCloseButtonStyle = {
   fontWeight: '700'
 };
 
-// Helper to parse Mermaid graph TD syntax
-const parseMermaidToGraph = (mermaidText) => {
-  if (!mermaidText) return { nodes: [], links: [] };
+// Pre-process mermaid text to ensure compatibility
+function preprocessMermaidText(text) {
+  if (!text) return '';
+  let processed = text.trim();
 
-  const lines = mermaidText.split('\n');
-  const nodeMap = {};
-  const links = [];
+  // Strip markdown fences
+  const fenceMatch = processed.match(/```(?:mermaid)?[\s\n]*([\s\S]*?)```/);
+  if (fenceMatch) {
+    processed = fenceMatch[1].trim();
+  }
 
-  // Pass 1: Extract all node label definitions of the form: id["label"] or id[label]
-  lines.forEach(line => {
-    const trimmed = line.trim();
-    const labelMatches = trimmed.matchAll(/([a-zA-Z0-9_-]+)\["([^"]+)"\]/g);
-    for (const match of labelMatches) {
-      const id = match[1];
-      const label = match[2];
-      nodeMap[id] = { id, label };
-    }
-    const labelMatchesSquare = trimmed.matchAll(/([a-zA-Z0-9_-]+)\[([^\]"]+)\]/g);
-    for (const match of labelMatchesSquare) {
-      const matchedId = match[1];
-      const matchedLabel = match[2];
-      if (!nodeMap[matchedId]) {
-        nodeMap[matchedId] = { id: matchedId, label: matchedLabel };
-      }
-    }
-  });
+  // Convert deprecated 'graph TD/LR/etc' to 'flowchart TD/LR/etc' for mermaid v11+
+  processed = processed.replace(/^\s*graph\s+(TD|LR|RL|BT|TB)\b/m, 'flowchart $1');
 
-  // Pass 2: Extract all connections of the form: id1 --> id2
-  lines.forEach(line => {
-    let cleanLine = line.trim();
-    if (!cleanLine || cleanLine.startsWith('graph')) return;
-
-    cleanLine = cleanLine.replace(/([a-zA-Z0-9_-]+)\["([^"]+)"\]/g, '$1');
-    cleanLine = cleanLine.replace(/([a-zA-Z0-9_-]+)\[([^\]"]+)\]/g, '$1');
-
-    const linkMatch = cleanLine.match(/([a-zA-Z0-9_-]+)\s*-->\s*([a-zA-Z0-9_-]+)/);
-    if (linkMatch) {
-      const sourceId = linkMatch[1];
-      const targetId = linkMatch[2];
-      links.push({ source: sourceId, target: targetId });
-
-      if (!nodeMap[sourceId]) nodeMap[sourceId] = { id: sourceId, label: sourceId };
-      if (!nodeMap[targetId]) nodeMap[targetId] = { id: targetId, label: targetId };
-    }
-  });
-
-  const nodes = Object.values(nodeMap);
-  return { nodes, links };
-};
-
-// Helper to compute node layout radially
-const layoutGraph = (nodes, links) => {
-  const width = 540;
-  const height = 380;
-  const cx = width / 2;
-  const cy = height / 2;
-
-  if (nodes.length === 0) return [];
-
-  const adj = {};
-  const incoming = {};
-  nodes.forEach(n => {
-    adj[n.id] = [];
-    incoming[n.id] = 0;
-  });
-
-  links.forEach(l => {
-    if (adj[l.source]) {
-      adj[l.source].push(l.target);
-    }
-    incoming[l.target] = (incoming[l.target] || 0) + 1;
-  });
-
-  let rootId = nodes[0].id;
-  let minIncoming = Infinity;
-  nodes.forEach(n => {
-    if ((incoming[n.id] || 0) < minIncoming) {
-      minIncoming = incoming[n.id] || 0;
-      rootId = n.id;
-    }
-  });
-
-  const positionedNodes = {};
-  const colors = ['var(--secondary)', 'var(--warning)', 'var(--accent)', 'var(--success)', 'var(--accent-cyan)'];
-  const visited = new Set([rootId]);
-
-  positionedNodes[rootId] = {
-    id: rootId,
-    label: nodes.find(n => n.id === rootId)?.label || rootId,
-    x: cx,
-    y: cy,
-    r: 40,
-    color: 'var(--primary-neon)'
-  };
-
-  const depthRadius = [0, 85, 150, 205];
-  const level1 = adj[rootId] || [];
-  const level1Count = level1.length;
-
-  level1.forEach((childId, idx) => {
-    const angle = (idx * 2 * Math.PI) / level1Count - Math.PI / 2;
-    const r1 = depthRadius[1];
-    const x = cx + r1 * Math.cos(angle);
-    const y = cy + r1 * Math.sin(angle);
-    positionedNodes[childId] = {
-      id: childId,
-      label: nodes.find(n => n.id === childId)?.label || childId,
-      x,
-      y,
-      r: 32,
-      color: colors[idx % colors.length]
-    };
-    visited.add(childId);
-
-    const level2 = adj[childId] || [];
-    const level2Count = level2.length;
-    level2.forEach((grandChildId, gIdx) => {
-      const parentAngle = angle;
-      const arcSpan = Math.PI * 0.5;
-      let gAngle = parentAngle;
-      if (level2Count > 1) {
-        const startAngle = parentAngle - arcSpan / 2;
-        const step = arcSpan / (level2Count - 1);
-        gAngle = startAngle + gIdx * step;
-      }
-      const r2 = 65;
-      const gx = x + r2 * Math.cos(gAngle);
-      const gy = y + r2 * Math.sin(gAngle);
-
-      positionedNodes[grandChildId] = {
-        id: grandChildId,
-        label: nodes.find(n => n.id === grandChildId)?.label || grandChildId,
-        x: gx,
-        y: gy,
-        r: 26,
-        color: colors[(idx + gIdx + 1) % colors.length]
-      };
-      visited.add(grandChildId);
-
-      const level3 = adj[grandChildId] || [];
-      const level3Count = level3.length;
-      level3.forEach((greatGrandChildId, ggIdx) => {
-        const ggParentAngle = gAngle;
-        const ggArcSpan = Math.PI * 0.4;
-        let ggAngle = ggParentAngle;
-        if (level3Count > 1) {
-          const startAngle = ggParentAngle - ggArcSpan / 2;
-          const step = ggArcSpan / (level3Count - 1);
-          ggAngle = startAngle + ggIdx * step;
-        }
-        const r3 = 55;
-        const ggx = gx + r3 * Math.cos(ggAngle);
-        const ggy = gy + r3 * Math.sin(ggAngle);
-
-        positionedNodes[greatGrandChildId] = {
-          id: greatGrandChildId,
-          label: nodes.find(n => n.id === greatGrandChildId)?.label || greatGrandChildId,
-          x: ggx,
-          y: ggy,
-          r: 22,
-          color: colors[(idx + gIdx + ggIdx + 2) % colors.length]
-        };
-        visited.add(greatGrandChildId);
-      });
-    });
-  });
-
-  nodes.forEach(n => {
-    if (!positionedNodes[n.id]) {
-      positionedNodes[n.id] = {
-        id: n.id,
-        label: n.label,
-        x: cx + (Math.random() - 0.5) * 120,
-        y: cy + (Math.random() - 0.5) * 120,
-        r: 25,
-        color: 'var(--text-muted)'
-      };
-    }
-  });
-
-  return Object.values(positionedNodes);
-};
+  return processed;
+}
 
 export default function MindmapModal({ isOpen, onClose, mindmapContent, nodeTitle }) {
   const [scale, setScale] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  
-  const dragStartRef = useRef({ x: 0, y: 0 });
-  const svgRef = useRef(null);
+  const [svgHtml, setSvgHtml] = useState('');
+  const [isRendering, setIsRendering] = useState(false);
+  const [renderError, setRenderError] = useState(null);
 
-  // Wheel listener with passive: false to allow e.preventDefault()
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const containerRef = useRef(null);
+  const mermaidRef = useRef(null);
+  const renderIdRef = useRef(0);
+
   useEffect(() => {
-    const svgEl = svgRef.current;
-    if (!svgEl || !isOpen) return;
+    if (!isOpen || !mindmapContent || !mermaidRef.current) return;
+
+    const doRender = async () => {
+      setIsRendering(true);
+      setRenderError(null);
+      const currentId = ++renderIdRef.current;
+      const id = `mindmap-svg-${currentId}`;
+
+      try {
+        const mermaidText = preprocessMermaidText(mindmapContent);
+
+        // Clear previous content
+        mermaidRef.current.innerHTML = '';
+
+        const { svg } = await mermaid.render(id, mermaidText);
+        if (currentId === renderIdRef.current) {
+          mermaidRef.current.innerHTML = svg;
+        }
+      } catch (err) {
+        console.warn('Mermaid render failed:', err);
+        if (currentId === renderIdRef.current) {
+          setRenderError('Mermaid render error: ' + (err.message || 'unknown'));
+        }
+      } finally {
+        if (currentId === renderIdRef.current) {
+          setIsRendering(false);
+        }
+      }
+    };
+
+    doRender();
+  }, [isOpen, mindmapContent]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setScale(1);
+      setPanX(0);
+      setPanY(0);
+      setIsDragging(false);
+      setSvgHtml('');
+      setRenderError(null);
+    }
+  }, [isOpen, mindmapContent]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !isOpen) return;
 
     const handleWheel = (e) => {
       e.preventDefault();
@@ -228,133 +126,25 @@ export default function MindmapModal({ isOpen, onClose, mindmapContent, nodeTitl
       });
     };
 
-    svgEl.addEventListener('wheel', handleWheel, { passive: false });
-    return () => {
-      svgEl.removeEventListener('wheel', handleWheel);
-    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
   }, [isOpen]);
 
-  // Reset zoom & pan when modal opens or content changes
-  useEffect(() => {
-    if (isOpen) {
-      setScale(1);
-      setPanX(0);
-      setPanY(0);
-      setIsDragging(false);
-    }
-  }, [isOpen, mindmapContent]);
-
-  const handleMouseDown = (e) => {
-    // Only drag on left click and avoid clicking nodes directly
+  const handleMouseDown = useCallback((e) => {
     if (e.button !== 0) return;
-    if (e.target.tagName === 'circle' || e.target.tagName === 'text') return;
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX - panX, y: e.clientY - panY };
-  };
+  }, [panX, panY]);
 
-  const handleMouseMove = (e) => {
+  const handleMouseMove = useCallback((e) => {
     if (!isDragging) return;
     setPanX(e.clientX - dragStartRef.current.x);
     setPanY(e.clientY - dragStartRef.current.y);
-  };
+  }, [isDragging]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false);
-  };
-
-  const drawMindmapSVG = () => {
-    const { nodes, links } = parseMermaidToGraph(mindmapContent);
-    const positionedNodes = layoutGraph(nodes, links);
-
-    return (
-      <svg
-        ref={svgRef}
-        width="540"
-        height="380"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        style={{
-          background: '#0e1726',
-          borderRadius: '16px',
-          overflow: 'hidden',
-          cursor: isDragging ? 'grabbing' : 'grab',
-          userSelect: 'none'
-        }}
-      >
-        <g
-          style={{
-            transform: `translate(${panX}px, ${panY}px) scale(${scale})`,
-            transformOrigin: '270px 190px',
-            transition: isDragging ? 'none' : 'transform 0.15s ease-out'
-          }}
-        >
-          {links.map((link, idx) => {
-            const sourceNode = positionedNodes.find(n => n.id === link.source);
-            const targetNode = positionedNodes.find(n => n.id === link.target);
-            if (!sourceNode || !targetNode) return null;
-            return (
-              <line
-                key={idx}
-                x1={sourceNode.x}
-                y1={sourceNode.y}
-                x2={targetNode.x}
-                y2={targetNode.y}
-                stroke="rgba(255,255,255,0.15)"
-                strokeWidth="2.5"
-                strokeDasharray="4,4"
-              />
-            );
-          })}
-          {positionedNodes.map(node => (
-            <g key={node.id}>
-              <circle
-                cx={node.x}
-                cy={node.y}
-                r={node.r + 5}
-                fill="none"
-                stroke={node.color}
-                strokeWidth="2"
-                opacity="0.3"
-                style={{ filter: 'blur(2px)' }}
-              />
-              <circle
-                cx={node.x}
-                cy={node.y}
-                r={node.r}
-                fill="rgba(255,255,255,0.06)"
-                stroke={node.color}
-                strokeWidth="2.5"
-                style={{ cursor: 'pointer' }}
-                onClick={() => {
-                  gsap.fromTo(`.mindmap-text-${node.id}`,
-                    { scale: 0.8 },
-                    { scale: 1, duration: 0.3, ease: "back.out(1.5)" }
-                  );
-                }}
-              >
-                <title>{node.label}</title>
-              </circle>
-              <text
-                x={node.x}
-                y={node.y + 4}
-                fill="#ffffff"
-                fontSize={node.r > 30 ? "11.5px" : "10px"}
-                fontWeight="800"
-                textAnchor="middle"
-                className={`mindmap-text-${node.id}`}
-                style={{ pointerEvents: 'none' }}
-              >
-                <title>{node.label}</title>
-                {node.label.length > 8 ? node.label.substring(0, 7) + '..' : node.label}
-              </text>
-            </g>
-          ))}
-        </g>
-      </svg>
-    );
-  };
+  }, []);
 
   if (!isOpen || !mindmapContent) return null;
 
@@ -377,12 +167,12 @@ export default function MindmapModal({ isOpen, onClose, mindmapContent, nodeTitl
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-content" style={{ maxWidth: '600px', borderRadius: '16px', alignItems: 'center' }}>
+      <div className="modal-content" style={{ maxWidth: '640px', borderRadius: '16px', alignItems: 'center' }}>
         <div style={{ ...modalHeaderStyle, width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Map size={20} style={{ color: 'var(--warning)' }} />
             <h3 style={{ fontSize: '18px', fontWeight: '800' }}>
-              《{nodeTitle || "Python Basics"}》知识脑图拓扑
+              {nodeTitle || 'Knowledge Graph'} Mindmap
             </h3>
           </div>
           <button onClick={onClose} style={modalCloseButtonStyle}>
@@ -390,45 +180,102 @@ export default function MindmapModal({ isOpen, onClose, mindmapContent, nodeTitl
           </button>
         </div>
 
+        {/* Mermaid SVG Canvas */}
         <div
+          ref={containerRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
           style={{
             margin: '16px 0',
             border: '1px solid rgba(255,255,255,0.06)',
             borderRadius: '16px',
             overflow: 'hidden',
             position: 'relative',
-            width: '540px',
-            height: '380px'
+            width: '100%',
+            height: '420px',
+            background: '#0e1726',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            userSelect: 'none',
           }}
         >
-          {drawMindmapSVG()}
-          
-          {/* Zoom & Reset Floating Overlay */}
+          <div
+            style={{
+              transform: `translate(${panX}px, ${panY}px) scale(${scale})`,
+              transformOrigin: 'center center',
+              transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <div
+              ref={mermaidRef}
+              style={{ display: 'inline-block' }}
+            >
+              <div style={{ padding: '20px', color: 'rgba(255,255,255,0.4)', fontSize: '13px', textAlign: 'center' }}>
+                Rendering mindmap...
+              </div>
+            </div>
+          </div>
+
+          {isRendering && (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(14, 23, 38, 0.7)',
+              backdropFilter: 'blur(2px)',
+              zIndex: 5,
+            }}>
+              <Loader2 size={28} style={{ color: 'var(--primary-neon)', animation: 'spin 1s linear infinite' }} />
+            </div>
+          )}
+
+          {renderError && !isRendering && (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(14, 23, 38, 0.85)',
+              zIndex: 5,
+            }}>
+              <p style={{ color: '#ef4444', fontSize: '14px', fontWeight: '600' }}>{renderError}</p>
+            </div>
+          )}
+
           <div style={{ position: 'absolute', bottom: '12px', right: '12px', display: 'flex', gap: '6px', zIndex: 10 }}>
             <button
               onClick={() => setScale(prev => Math.min(3.0, prev + 0.15))}
               style={controlButtonStyle}
-              title="放大"
+              title="Zoom In"
             >
               +
             </button>
             <button
               onClick={() => setScale(prev => Math.max(0.4, prev - 0.15))}
               style={controlButtonStyle}
-              title="缩小"
+              title="Zoom Out"
             >
               -
             </button>
             <button
               onClick={() => { setScale(1); setPanX(0); setPanY(0); }}
               style={{ ...controlButtonStyle, fontSize: '10px' }}
-              title="重置"
+              title="Reset"
             >
               1:1
             </button>
           </div>
 
-          {/* Zoom Percent indicator */}
           <div
             style={{
               position: 'absolute',
@@ -449,12 +296,12 @@ export default function MindmapModal({ isOpen, onClose, mindmapContent, nodeTitl
         </div>
 
         <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', textAlign: 'center', maxWidth: '460px', lineHeight: '1.5' }}>
-          💡 智能提示：您可以<b>按住背景拖动</b>以平移脑图，或<b>使用鼠标滚轮</b>进行缩放。点击节点气泡仍可触发微互动。
+          Tip: <b>Drag</b> to pan, <b>Scroll</b> to zoom.
         </p>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', paddingTop: '12px', borderTop: '1px solid var(--border-neon)' }}>
           <button className="cyber-btn" onClick={onClose} style={{ padding: '8px 20px', fontSize: '12px' }}>
-            关闭脑图
+            Close
           </button>
         </div>
       </div>

@@ -18,6 +18,8 @@ import {
   Settings
 } from 'lucide-react';
 import { clearSession } from './utils/session';
+import MobileTabBar from './components/shared/MobileTabBar';
+import { ContentSkeleton } from './components/shared/Skeleton';
 import LandingView from './components/landing/LandingView';
 import AuthView from './components/auth/AuthView';
 
@@ -71,6 +73,7 @@ function AppContent() {
     setRegLearningGoal,
     isLoadingOrchestration,
     setIsLoadingOrchestration,
+    isLoadingDashboard,
     orchestrationStep,
     setOrchestrationStep,
     activeTab,
@@ -606,12 +609,14 @@ function AppContent() {
 
             {/* 2. Content viewport (left edge, 290px wide) */}
             <div className="right-sidebar-content-viewport" ref={sidebarViewportRef}>
-              {(() => {
+              {isLoadingDashboard ? (
+                <ContentSkeleton lines={4} />
+              ) : (() => {
                 const rightTabList = ['home', 'path', 'resources', 'errors', 'agent-console', 'achievements'];
                 const sidebarTab = rightTabList.includes(activeTab) ? activeTab : 'resources';
 
                 return (
-                  <>
+                  <div key={sidebarTab} className="tab-fade-in">
                     {sidebarTab === 'home' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                         {/* Cognitive Radar Chart Card */}
@@ -624,6 +629,54 @@ function AppContent() {
                           </div>
                           {renderRadarChart(displayProfile)}
                           <div style={{ width: '100%', borderTop: '1px solid rgba(255, 255, 255, 0.05)', marginTop: '8px', paddingTop: '10px', fontSize: '11.5px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>知识掌握度:</span>
+                              <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
+                                {profile.knowledge_base}%
+                                {profile.learning_stats?.knowledge_base_delta > 0 && (
+                                  <span style={{ color: '#10b981', marginLeft: '4px', fontWeight: 'bold' }} className="pulse-glow-green">
+                                    (↑ {profile.learning_stats.knowledge_base_delta}%)
+                                  </span>
+                                )}
+                                {profile.learning_stats?.knowledge_base_delta < 0 && (
+                                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>
+                                    (↓ {Math.abs(profile.learning_stats.knowledge_base_delta)}%)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>自适应节奏:</span>
+                              <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
+                                {profile.learning_pace}%
+                                {profile.learning_stats?.learning_pace_delta > 0 && (
+                                  <span style={{ color: '#10b981', marginLeft: '4px', fontWeight: 'bold' }} className="pulse-glow-green">
+                                    (↑ {profile.learning_stats.learning_pace_delta}%)
+                                  </span>
+                                )}
+                                {profile.learning_stats?.learning_pace_delta < 0 && (
+                                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>
+                                    (↓ {Math.abs(profile.learning_stats.learning_pace_delta)}%)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>自适应活跃度:</span>
+                              <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
+                                {profile.engagement}%
+                                {profile.learning_stats?.engagement_delta > 0 && (
+                                  <span style={{ color: '#10b981', marginLeft: '4px', fontWeight: 'bold' }} className="pulse-glow-green">
+                                    (↑ {profile.learning_stats.engagement_delta}%)
+                                  </span>
+                                )}
+                                {profile.learning_stats?.engagement_delta < 0 && (
+                                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>
+                                    (↓ {Math.abs(profile.learning_stats.engagement_delta)}%)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                               <span style={{ color: 'var(--text-muted)' }}>首选风格:</span>
                               <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>{profile.cognitive_style}</span>
@@ -682,7 +735,7 @@ function AppContent() {
                     {sidebarTab === 'errors' && <ErrorsView />}
                     {sidebarTab === 'agent-console' && <ConsoleView />}
                     {sidebarTab === 'achievements' && <AchievementsView />}
-                  </>
+                  </div>
                 );
               })()}
             </div>
@@ -690,6 +743,7 @@ function AppContent() {
         </div>
       </div>
 
+      <MobileTabBar activeTab={activeTab} onTabChange={setActiveTab} onSettingsOpen={() => setIsSettingsOpen(true)} />
       {/* 🎬 Interactive Modals */}
       <PDFModal
         isOpen={activeModal === 'pdf'}

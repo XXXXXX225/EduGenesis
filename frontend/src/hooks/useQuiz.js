@@ -39,27 +39,42 @@ export function useQuiz({
       const newData = await apiPost('/profile', updatedProfile);
       setProfile(newData);
 
-      if (passed && selectedNode) {
+      if (selectedNode) {
         const pathData = await apiPost('/path/complete-node', {
-          node_id: selectedNode.id
+          node_id: selectedNode.id,
+          score: score,
+          total: total
         });
         setPathNodes(pathData.nodes);
 
-        const currentUpdatedNode = pathData.nodes.find(n => n.id === selectedNode.id);
-        if (currentUpdatedNode) {
-          setSelectedNode(currentUpdatedNode);
-        }
-
-        setProfileAlert("恭喜通关！自适应答题合格，下一阶段关卡及资源已成功解锁。");
-        setDiagnosticLogs(prev => [
-          ...prev,
-          {
-            time: new Date().toLocaleTimeString(),
-            log: `关卡解锁: 节点 [${selectedNode.title}] 已通关！下一节点已开启。`
+        if (passed) {
+          const currentUpdatedNode = pathData.nodes.find(n => n.id === selectedNode.id);
+          if (currentUpdatedNode) {
+            setSelectedNode(currentUpdatedNode);
           }
-        ]);
-      } else {
-        setProfileAlert("自适应测验已完成！答题指标已同步更新到您的画像。但由于正确率未达标（要求 60%），关卡未能晋级，建议重新阅读课本后重试。");
+          setProfileAlert("恭喜通关！自适应答题合格，下一阶段关卡及资源已成功解锁。");
+          setDiagnosticLogs(prev => [
+            ...prev,
+            {
+              time: new Date().toLocaleTimeString(),
+              log: `关卡解锁: 节点 [${selectedNode.title}] 已通关！下一节点已开启。`
+            }
+          ]);
+        } else {
+          const extraNodeId = `${selectedNode.id}_extra`;
+          const extraNodeObj = pathData.nodes.find(n => n.id === extraNodeId);
+          if (extraNodeObj) {
+            setSelectedNode(extraNodeObj);
+          }
+          setProfileAlert("自适应测验完成！由于正确率未达标，路径智能体已为您定制并自动挂载了 [加固关卡]，快去点击加固突破吧！");
+          setDiagnosticLogs(prev => [
+            ...prev,
+            {
+              time: new Date().toLocaleTimeString(),
+              log: `路径加固: 测验正确率未达标，动态分支 [${selectedNode.title} 强化] 挂载并解锁。`
+            }
+          ]);
+        }
       }
 
       setTimeout(() => setProfileAlert(''), 5000);

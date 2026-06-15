@@ -497,6 +497,25 @@ def db_get_profile(username: str) -> UserProfile:
     )
 
 def db_save_profile(username: str, profile: UserProfile):
+    # Fetch old profile to calculate deltas
+    old_profile = None
+    try:
+        old_profile = db_get_profile(username)
+    except Exception:
+        pass
+        
+    if old_profile:
+        kb_delta = profile.knowledge_base - old_profile.knowledge_base
+        lp_delta = profile.learning_pace - old_profile.learning_pace
+        eg_delta = profile.engagement - old_profile.engagement
+        
+        # Merge deltas into learning_stats
+        stats = dict(profile.learning_stats)
+        stats["knowledge_base_delta"] = kb_delta
+        stats["learning_pace_delta"] = lp_delta
+        stats["engagement_delta"] = eg_delta
+        profile.learning_stats = stats
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
@@ -570,6 +589,631 @@ def db_sync_path_nodes_by_goals(username: str, goals: List[str]):
         if is_ml != is_existing_ml:
             nodes_to_seed = ml_path_nodes if is_ml else python_path_nodes
             db_save_path_nodes(username, nodes_to_seed)
+
+def seed_errors_and_logs_for_user(username: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # 1. Check if user_errors has entries
+    cursor.execute("SELECT COUNT(*) FROM user_errors WHERE username = ?", (username,))
+    err_count = cursor.fetchone()[0]
+    if err_count == 0:
+        cursor.execute(
+            """INSERT INTO user_errors (username, error_id, title, code, error_msg, ai_explanation, solution, status) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                username,
+                "err1",
+                "局部变量引用错误 (UnboundLocalError)",
+                "def process_data(x):\n    print(y)  # 在赋值前尝试引用 y\n    y = x + 10\n    return y\n\nprocess_data(5)",
+                "UnboundLocalError: local variable 'y' referenced before assignment",
+                "在 Python 中，如果在函数体内部对一个变量进行了赋值（如 `y = x + 10`），Python 会默认将该变量标记为局部变量。但在执行第 2 行 `print(y)` 时，局部变量 `y` 尚未被定义和赋值，因此抛出 UnboundLocalError。修改方案：将 `print(y)` 移到赋值语句 `y = x + 10` 之后，或者显式声明 `global` / `nonlocal`。",
+                "def process_data(x):\n    y = x + 10\n    print(y)\n    return y\n\nprocess_data(5)",
+                "unresolved"
+            )
+        )
+        cursor.execute(
+            """INSERT INTO user_errors (username, error_id, title, code, error_msg, ai_explanation, solution, status) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                username,
+                "err2",
+                "列表索引越界错误 (IndexError)",
+                "def get_last_element(lst):\n    # 试图通过 lst[len(lst)] 访问最后一个元素\n    return lst[len(lst)]\n\nget_last_element([1, 2, 3])",
+                "IndexError: list index out of range",
+                "Python 中列表索引是从 0 开始的。一个长度为 N 的列表，其最大有效索引是 N - 1。当传入列表 `[1, 2, 3]` 时，其长度为 3，有效索引为 0, 1, 2。调用 `lst[len(lst)]` 即 `lst[3]` 就会触发 IndexError。修改方案：获取最后一个元素应该使用 `lst[-1]` 或 `lst[len(lst) - 1]`。",
+                "def get_last_element(lst):\n    if not lst:\n        return None\n    return lst[-1]\n\nget_last_element([1, 2, 3])",
+                "unresolved"
+            )
+        )
+        
+    # 2. Check if system_logs has entries
+    cursor.execute("SELECT COUNT(*) FROM system_logs WHERE username = ?", (username,))
+    log_count = cursor.fetchone()[0]
+    if log_count == 0:
+        import datetime
+        default_logs = [
+            ("主管智能体", "多智能体协同自适应教学系统已就绪，学术控制台连接成功。", "info"),
+            ("画像智能体", "认知特征雷达诊断模块初始化完成：感知引擎就绪。", "consensus"),
+            ("路径智能体", "个性化研学路线规划引擎启动：首期自适应课程就绪。", "info"),
+            ("安全校验智能体", "学术风控审计沙盒安全防御层加载成功。", "consensus")
+        ]
+        for idx, (sender, message, log_type) in enumerate(default_logs):
+            staggered_time = (datetime.datetime.now() - datetime.timedelta(seconds=4-idx)).strftime("%H:%M:%S")
+            cursor.execute(
+                "INSERT INTO system_logs (username, timestamp, sender, message, log_type) VALUES (?, ?, ?, ?, ?)",
+                (username, staggered_time, sender, message, log_type)
+            )
+            
+    conn.commit()
+    conn.close()
+
+def db_log_agent_action(username: str, sender: str, message: str, log_type: str = "info"):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    t_str = datetime.datetime.now().strftime("%H:%M:%S")
+    cursor.execute(
+        "INSERT INTO system_logs (username, timestamp, sender, message, log_type) VALUES (?, ?, ?, ?, ?)",
+        (username, t_str, sender, message, log_type)
+    )
+    conn.commit()
+    conn.close()
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Users Credentials Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        cognitive_style TEXT NOT NULL,
+        learning_goals TEXT NOT NULL
+    )
+    """)
+    
+    # User Profiles Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_profiles (
+        username TEXT PRIMARY KEY,
+        knowledge_base INTEGER NOT NULL,
+        learning_pace INTEGER NOT NULL,
+        cognitive_style TEXT NOT NULL,
+        error_patterns TEXT NOT NULL,
+        learning_goals TEXT NOT NULL,
+        engagement INTEGER NOT NULL,
+        learning_stats TEXT
+    )
+    """)
+    
+    # User Path Nodes Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_path_nodes (
+        username TEXT,
+        node_id TEXT,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL,
+        description TEXT NOT NULL,
+        resources TEXT NOT NULL,
+        PRIMARY KEY (username, node_id)
+    )
+    """)
+    
+    # User Resources Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_resources (
+        username TEXT,
+        node_id TEXT,
+        resource_type TEXT,
+        content TEXT,
+        PRIMARY KEY (username, node_id, resource_type)
+    )
+    """)
+    
+    # User Errors Notebook Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_errors (
+        username TEXT,
+        error_id TEXT,
+        title TEXT NOT NULL,
+        code TEXT NOT NULL,
+        error_msg TEXT NOT NULL,
+        ai_explanation TEXT NOT NULL,
+        solution TEXT NOT NULL,
+        status TEXT NOT NULL,
+        PRIMARY KEY (username, error_id)
+    )
+    """)
+    
+    # System Multi-Agent Operation Logs Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS system_logs (
+        username TEXT,
+        timestamp TEXT NOT NULL,
+        sender TEXT NOT NULL,
+        message TEXT NOT NULL,
+        log_type TEXT NOT NULL
+    )
+    """)
+    
+    # User LLM Providers Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_llm_providers (
+        username TEXT,
+        provider_id TEXT,
+        provider_name TEXT NOT NULL,
+        api_base TEXT NOT NULL,
+        api_key TEXT NOT NULL,
+        is_enabled INTEGER NOT NULL,
+        models TEXT NOT NULL,
+        PRIMARY KEY (username, provider_id)
+    )
+    """)
+    
+    # User Model Routing Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_model_routing (
+        username TEXT PRIMARY KEY,
+        chat_provider_id TEXT,
+        chat_model TEXT,
+        planner_provider_id TEXT,
+        planner_model TEXT,
+        diagnostics_provider_id TEXT,
+        diagnostics_model TEXT,
+        resources_provider_id TEXT,
+        resources_model TEXT
+    )
+    """)
+    
+    # Seed default user
+    cursor.execute("SELECT username, password_hash FROM users WHERE username = 'default_user'")
+    row = cursor.fetchone()
+    if not row:
+        pwd_hash = get_password_hash("default_password", "default_user")
+        cursor.execute(
+            "INSERT INTO users (username, password_hash, cognitive_style, learning_goals) VALUES (?, ?, ?, ?)",
+            ("default_user", pwd_hash, "Practical Coding", "Python Basics")
+        )
+        cursor.execute(
+            "INSERT INTO user_profiles (username, knowledge_base, learning_pace, cognitive_style, error_patterns, learning_goals, engagement, learning_stats) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("default_user", 40, 50, "Practical Coding", json.dumps(["Syntax Errors", "Indentation Issues"]), json.dumps(["Python Basics"]), 80, json.dumps({
+                "study_time": 45,
+                "quiz_accuracy": 85,
+                "mastered_nodes": 1,
+                "streak": [True, True, False, False, False, False, False]
+            }))
+        )
+
+        for node in python_path_nodes:
+            cursor.execute(
+                "INSERT INTO user_path_nodes (username, node_id, title, status, description, resources) VALUES (?, ?, ?, ?, ?, ?)",
+                ("default_user", node.id, node.title, node.status, node.description, json.dumps(node.resources))
+            )
+            default_profile = UserProfile(
+                knowledge_base=40,
+                learning_pace=50,
+                cognitive_style="Practical Coding",
+                error_patterns=["Syntax Errors", "Indentation Issues"],
+                learning_goals=["Python Basics"],
+                engagement=80
+            )
+            default_assets = get_fallback_assets_for_topic(node.title, default_profile, node.id)
+            for res_type in node.resources:
+                content_val = default_assets.get(res_type, "")
+                if not isinstance(content_val, str):
+                    content_val = json.dumps(content_val, ensure_ascii=False)
+                cursor.execute(
+                    "INSERT INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
+                    ("default_user", node.id, res_type, content_val)
+                )
+    else:
+        stored_hash = row[1]
+        if not stored_hash.startswith("pbkdf2_sha256$"):
+            new_hash = get_password_hash("default_password", "default_user")
+            cursor.execute("UPDATE users SET password_hash = ? WHERE username = 'default_user'", (new_hash,))
+
+    # Seed default Xunfei provider for default_user if not exists
+    cursor.execute("SELECT COUNT(*) FROM user_llm_providers WHERE username = 'default_user' AND provider_id = 'xunfei'")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            """INSERT INTO user_llm_providers 
+               (username, provider_id, provider_name, api_base, api_key, is_enabled, models) 
+               VALUES (?, 'xunfei', '讯飞星火 Spark', 'https://spark-api-open.xf-yun.com/v1', 'env', 1, ?)""",
+            (
+                "default_user",
+                json.dumps([
+                    {"name": "generalv3.5", "enabled": True, "tags": ["默认", "推荐", "上下文 8K"]},
+                    {"name": "lite", "enabled": False, "tags": ["轻量", "上下文 4K"]},
+                    {"name": "pro-128k", "enabled": False, "tags": ["推理", "高上下文 128K"]}
+                ], ensure_ascii=False)
+            )
+        )
+        
+    # Seed default routing for default_user if not exists
+    cursor.execute("SELECT COUNT(*) FROM user_model_routing WHERE username = 'default_user'")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            """INSERT INTO user_model_routing 
+               (username, chat_provider_id, chat_model, 
+                planner_provider_id, planner_model, 
+                diagnostics_provider_id, diagnostics_model, 
+                resources_provider_id, resources_model) 
+               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5')""",
+            ("default_user",)
+        )
+
+    conn.commit()
+    conn.close()
+    
+    seed_errors_and_logs_for_user("default_user")
+
+def db_get_user_providers(username: str) -> list:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT provider_id, provider_name, api_base, api_key, is_enabled, models FROM user_llm_providers WHERE username = ?",
+        (username,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # Auto-seed default Xunfei Spark if empty
+    if not rows:
+        default_xunfei = {
+            "provider_id": "xunfei",
+            "provider_name": "讯飞星火 Spark",
+            "api_base": "https://spark-api-open.xf-yun.com/v1",
+            "api_key": "env",
+            "is_enabled": 1,
+            "models": json.dumps([
+                {"name": "generalv3.5", "enabled": True, "tags": ["默认", "推荐", "上下文 8K"]},
+                {"name": "lite", "enabled": False, "tags": ["轻量", "上下文 4K"]},
+                {"name": "pro-128k", "enabled": False, "tags": ["推理", "高上下文 128K"]}
+            ], ensure_ascii=False)
+        }
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO user_llm_providers 
+               (username, provider_id, provider_name, api_base, api_key, is_enabled, models) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                username,
+                default_xunfei["provider_id"],
+                default_xunfei["provider_name"],
+                default_xunfei["api_base"],
+                default_xunfei["api_key"],
+                default_xunfei["is_enabled"],
+                default_xunfei["models"]
+            )
+        )
+        conn.commit()
+        conn.close()
+        return [default_xunfei]
+        
+    res = []
+    for r in rows:
+        res.append({
+            "provider_id": r[0],
+            "provider_name": r[1],
+            "api_base": r[2],
+            "api_key": r[3],
+            "is_enabled": r[4],
+            "models": r[5]
+        })
+    return res
+
+def db_save_user_provider(username: str, provider_data: dict):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT OR REPLACE INTO user_llm_providers 
+           (username, provider_id, provider_name, api_base, api_key, is_enabled, models) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (
+            username,
+            provider_data["provider_id"],
+            provider_data["provider_name"],
+            provider_data["api_base"],
+            provider_data["api_key"],
+            int(provider_data["is_enabled"]),
+            provider_data["models"]
+        )
+    )
+    conn.commit()
+    conn.close()
+
+def db_delete_user_provider(username: str, provider_id: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM user_llm_providers WHERE username = ? AND provider_id = ?",
+        (username, provider_id)
+    )
+    conn.commit()
+    conn.close()
+
+def db_get_model_routing(username: str) -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT chat_provider_id, chat_model, 
+                  planner_provider_id, planner_model, 
+                  diagnostics_provider_id, diagnostics_model, 
+                  resources_provider_id, resources_model 
+           FROM user_model_routing WHERE username = ?""",
+        (username,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        default_routing = {
+            "chat_provider_id": "xunfei",
+            "chat_model": "generalv3.5",
+            "planner_provider_id": "xunfei",
+            "planner_model": "generalv3.5",
+            "diagnostics_provider_id": "xunfei",
+            "diagnostics_model": "generalv3.5",
+            "resources_provider_id": "xunfei",
+            "resources_model": "generalv3.5"
+        }
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO user_model_routing 
+               (username, chat_provider_id, chat_model, 
+                planner_provider_id, planner_model, 
+                diagnostics_provider_id, diagnostics_model, 
+                resources_provider_id, resources_model) 
+               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5')""",
+            (username,)
+        )
+        conn.commit()
+        conn.close()
+        return default_routing
+        
+    return {
+        "chat_provider_id": row[0],
+        "chat_model": row[1],
+        "planner_provider_id": row[2],
+        "planner_model": row[3],
+        "diagnostics_provider_id": row[4],
+        "diagnostics_model": row[5],
+        "resources_provider_id": row[6],
+        "resources_model": row[7]
+    }
+
+def db_save_model_routing(username: str, routing_data: dict):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT OR REPLACE INTO user_model_routing 
+           (username, chat_provider_id, chat_model, 
+            planner_provider_id, planner_model, 
+            diagnostics_provider_id, diagnostics_model, 
+            resources_provider_id, resources_model) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            username,
+            routing_data.get("chat_provider_id", "xunfei"),
+            routing_data.get("chat_model", "generalv3.5"),
+            routing_data.get("planner_provider_id", "xunfei"),
+            routing_data.get("planner_model", "generalv3.5"),
+            routing_data.get("diagnostics_provider_id", "xunfei"),
+            routing_data.get("diagnostics_model", "generalv3.5"),
+            routing_data.get("resources_provider_id", "xunfei"),
+            routing_data.get("resources_model", "generalv3.5")
+        )
+    )
+    conn.commit()
+    conn.close()
+
+
+# ─── Error Tag Extraction for Dynamic Path Reinforcement ───
+def db_get_error_tags(username: str) -> list:
+    """
+    Extract error pattern tags from user_errors table.
+    These tags are used to insert reinforcement nodes in the learning path.
+    Returns list of unique tag strings.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT DISTINCT title FROM user_errors WHERE username = ? AND status = 'unresolved'",
+        (username,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    
+    tags = []
+    for r in rows:
+        title = r[0] if r[0] else ""
+        # Extract core concept from error title
+        tag = title.strip()
+        if tag:
+            tags.append(tag)
+    
+    # Also extract from profile error_patterns
+    profile = db_get_profile(username)
+    for pattern in profile.error_patterns:
+        if pattern and pattern not in tags:
+            tags.append(pattern)
+    
+    return tags
+
+def db_insert_reinforcement_node(username: str, position_after_node_id: str, error_tags: list) -> list:
+    """
+    Insert a reinforcement node after the specified node in the user''s path.
+    The reinforcement node consolidates error-prone concepts.
+    Returns the updated path nodes list.
+    """
+    nodes = db_get_path_nodes(username)
+    if not nodes or not error_tags:
+        return nodes
+    
+    # Find the position to insert after
+    insert_idx = None
+    for i, node in enumerate(nodes):
+        if node.id == position_after_node_id:
+            insert_idx = i + 1
+            break
+    
+    if insert_idx is None or insert_idx > len(nodes):
+        return nodes
+    
+    # Check if a reinforcement node for these tags already exists
+    existing_tag = ", ".join(error_tags[:2])
+    for node in nodes:
+        if node.id.startswith("reinforce_") and existing_tag[:10] in node.title:
+            return nodes  # Already exists, skip
+    
+    # Create reinforcement node
+    new_id = f"reinforce_{position_after_node_id}_{len(error_tags)}"
+    tag_text = ", ".join(error_tags[:3])
+    reinforcement_node = PathNode(
+        id=new_id,
+        title=f"Reinforcement: {tag_text}",
+        status="active",
+        description=f"Targeted practice for weak areas: {tag_text}. Complete this to solidify your understanding.",
+        resources=["quiz", "code", "pdf"]
+    )
+    
+    nodes.insert(insert_idx, reinforcement_node)
+    
+    # Re-number subsequent node IDs to maintain order
+    # But keep the original IDs for nodes that are not reinforcement nodes
+    
+    db_save_path_nodes(username, nodes)
+    db_log_agent_action(username, "Path Agent",
+        f"Inserted reinforcement node [{new_id}] for error tags: {tag_text}",
+        "info")
+    
+    return nodes
+
+def db_delete_reinforcement_node(username: str, node_id: str) -> list:
+    """
+    Remove a reinforcement node from the user''s path.
+    Called when the reinforcement node is completed or when errors are resolved.
+    """
+    nodes = db_get_path_nodes(username)
+    
+    # Filter out the reinforcement node
+    updated_nodes = [n for n in nodes if n.id != node_id]
+    
+    if len(updated_nodes) < len(nodes):
+        db_save_path_nodes(username, updated_nodes)
+        db_log_agent_action(username, "Path Agent",
+            f"Removed reinforcement node [{node_id}] after completion.",
+            "info")
+    
+    return updated_nodes
+
+def db_cleanup_reinforcement_nodes(username: str) -> int:
+    """
+    Remove all completed reinforcement nodes for a user.
+    Returns the number of nodes removed.
+    """
+    nodes = db_get_path_nodes(username)
+    original_count = len(nodes)
+    
+    # Keep non-reinforcement nodes + active reinforcement nodes
+    cleaned = [n for n in nodes 
+               if not n.id.startswith("reinforce_") or n.status == "active"]
+    
+    if len(cleaned) < original_count:
+        db_save_path_nodes(username, cleaned)
+        removed = original_count - len(cleaned)
+        db_log_agent_action(username, "Path Agent",
+            f"Cleaned up {removed} completed reinforcement nodes.",
+            "info")
+        return removed
+    
+    return 0
+
+
+
+# --- Profile Snapshot & Delta ---
+def db_save_profile_snapshot(username, profile_data):
+    """Save a snapshot of the current profile for delta comparison."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS profile_snapshots ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "username TEXT NOT NULL,"
+        "snapshot_json TEXT NOT NULL,"
+        "created_at TEXT NOT NULL)"
+    )
+    conn.commit()
+    snapshot_json = json.dumps(profile_data, ensure_ascii=False)
+    created_at = datetime.datetime.now().isoformat()
+    cursor.execute(
+        "INSERT INTO profile_snapshots (username, snapshot_json, created_at) VALUES (?, ?, ?)",
+        (username, snapshot_json, created_at)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+def db_get_latest_profile_snapshot(username):
+    """Get the most recent profile snapshot for a user."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS profile_snapshots ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "username TEXT NOT NULL,"
+        "snapshot_json TEXT NOT NULL,"
+        "created_at TEXT NOT NULL)"
+    )
+    conn.commit()
+    cursor.execute(
+        "SELECT snapshot_json FROM profile_snapshots WHERE username = ? ORDER BY id DESC LIMIT 1",
+        (username,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return json.loads(row[0])
+    return {}
+
+def db_get_profile_delta(username):
+    """
+    Compute the delta between current profile and the latest snapshot.
+    Returns radar values delta and learning_stats delta.
+    """
+    current = db_get_profile(username)
+    previous = db_get_latest_profile_snapshot(username)
+    radar_delta = {
+        "knowledge_base": current.knowledge_base - previous.get("knowledge_base", current.knowledge_base),
+        "learning_pace": current.learning_pace - previous.get("learning_pace", current.learning_pace),
+        "engagement": current.engagement - previous.get("engagement", current.engagement),
+    }
+    prev_stats = previous.get("learning_stats", {})
+    curr_stats = current.learning_stats or {}
+    stats_delta = {
+        "study_time": curr_stats.get("study_time", 0) - prev_stats.get("study_time", 0),
+        "quiz_accuracy": curr_stats.get("quiz_accuracy", 0) - prev_stats.get("quiz_accuracy", 0),
+        "mastered_nodes": curr_stats.get("mastered_nodes", 0) - prev_stats.get("mastered_nodes", 0),
+    }
+    return {
+        "current": {
+            "knowledge_base": current.knowledge_base,
+            "learning_pace": current.learning_pace,
+            "engagement": current.engagement,
+            "learning_stats": curr_stats
+        },
+        "previous": {
+            "knowledge_base": previous.get("knowledge_base", 0),
+            "learning_pace": previous.get("learning_pace", 0),
+            "engagement": previous.get("engagement", 0),
+            "learning_stats": prev_stats
+        },
+        "radar_delta": radar_delta,
+        "stats_delta": stats_delta
+    }
 
 def seed_errors_and_logs_for_user(username: str):
     conn = sqlite3.connect(DB_PATH)

@@ -1,7 +1,8 @@
 // Unified API fetch layer for EduGenesis
-import { getAccessToken } from './session';
+import { getAccessToken, clearSession } from './session';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
+const DEFAULT_TIMEOUT_MS = 15000;
 
 function buildHeaders(extraHeaders = {}) {
   const token = getAccessToken();
@@ -12,13 +13,37 @@ function buildHeaders(extraHeaders = {}) {
   return headers;
 }
 
+function withTimeout(promise, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      controller.signal.addEventListener('abort', () => reject(new Error('请求超时，请检查网络连接后重试')))
+    ),
+  ]).finally(() => clearTimeout(timer));
+}
+
+function handleAuthExpired() {
+  clearSession();
+  if (typeof window !== 'undefined') {
+    window.location.hash = '#/login';
+    window.location.reload();
+  }
+}
+
 export async function apiGet(path, params = {}) {
   const qs = new URLSearchParams(params).toString();
   const url = qs ? `${API_BASE}${path}?${qs}` : `${API_BASE}${path}`;
-  const res = await fetch(url, {
-    headers: buildHeaders(),
+  const doFetch = () => fetch(url, { headers: buildHeaders() });
+  const res = await withTimeout(doFetch()).catch(async (err) => {
+    if (err.name === 'TypeError' || err.message?.includes('超时')) {
+      return withTimeout(doFetch());
+    }
+    throw err;
   });
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/auth/')) { handleAuthExpired(); throw new Error('登录已过期，请重新登录'); }
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || `API ${path} returned ${res.status}`);
   }
@@ -26,23 +51,21 @@ export async function apiGet(path, params = {}) {
 }
 
 export async function apiPost(path, body = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const url = `${API_BASE}${path}`;
+  const doFetch = () => fetch(url, {
     method: 'POST',
     headers: buildHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
   });
+  const res = await withTimeout(doFetch());
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/auth/')) { handleAuthExpired(); throw new Error('登录已过期，请重新登录'); }
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || `API ${path} returned ${res.status}`);
   }
   return res.json();
 }
 
-/**
- * SSE streaming helper.
- * Calls `onChunk(data)` for each `data:` line parsed as JSON.
- * Returns the raw response body so the caller can also read directly.
- */
 export async function apiSSEStream(path, body, onChunk) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',

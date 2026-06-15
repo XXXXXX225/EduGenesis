@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { apiGet, apiPost } from '../utils/api';
 
-export function useSandbox() {
+export function useSandbox({
+  setProfile,
+  setPathNodes,
+  setSelectedNode,
+  setProfileAlert,
+  setDiagnosticLogs
+} = {}) {
   const [sandboxChallenge, setSandboxChallenge] = useState(null);
   const [sandboxCode, setSandboxCode] = useState(
     "# 任务：编写一个函数 check_even(num)，判断一个数字是否是偶数，返回 True 或 False\n" +
@@ -29,7 +35,7 @@ export function useSandbox() {
     }
   };
 
-  const runSandboxTest = async (setProfile) => {
+  const runSandboxTest = async (passedSetProfile) => {
     setIsSandboxRunning(true);
     setSandboxTerminal(prev => [...prev, ">>> PyTest test_main.py -v", "运行中..."]);
     try {
@@ -42,8 +48,33 @@ export function useSandbox() {
         ...(result.console_output || '').split('\n').filter(Boolean)
       ]);
       if (result.status === 'success') {
+        const activeSetProfile = passedSetProfile || setProfile;
         const updatedProfile = await apiGet('/profile');
-        if (setProfile) setProfile(updatedProfile);
+        if (activeSetProfile) activeSetProfile(updatedProfile);
+        
+        // Also fetch path nodes to sync skipped and unlocked nodes
+        const pathData = await apiGet('/path');
+        if (setPathNodes) setPathNodes(pathData.nodes);
+        
+        if (setProfileAlert) {
+          setProfileAlert("恭喜！代码测试全部通过！系统分析显示您的学习能力极佳，已自动剪枝跳过后续概念关卡，直接推送高级实操！");
+        }
+        if (setDiagnosticLogs) {
+          setDiagnosticLogs(prev => [
+            ...prev,
+            {
+              time: new Date().toLocaleTimeString(),
+              log: `代码挑战: 关卡 [${sandboxChallenge?.title || '实操关卡'}] 单元测试通过！触发自适应路径快速剪枝机制。`
+            }
+          ]);
+        }
+        
+        if (setSelectedNode && pathData.nodes) {
+          const activeNode = pathData.nodes.find(n => n.status === 'active');
+          if (activeNode) {
+            setSelectedNode(activeNode);
+          }
+        }
       }
     } catch (err) {
       setSandboxTerminal(prev => [...prev, `❌ 运行失败：${err.message}`]);
