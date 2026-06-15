@@ -1427,6 +1427,10 @@ body.dark-mode .timeline-badge-wrapper {
   transition: none !important;
 }
 
+.agent-body.resizing .agent-panel-left-collapsible {
+  transition: none !important;
+}
+
 /* Collapsible Left Panel Styles */
 .agent-panel-left-collapsible {
   width: var(--left-sidebar-width, 260px);
