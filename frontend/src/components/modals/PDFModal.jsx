@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, FileText, MessageSquare, Send, Sparkles, BookOpen } from 'lucide-react';
 import { apiSSEStream } from '../../utils/api';
+import { useAppContext } from '../../context/AppContext';
 
 const modalHeaderStyle = {
   display: 'flex',
@@ -49,6 +50,7 @@ const parseMarkdownToReact = (text) => {
 };
 
 export default function PDFModal({ isOpen, onClose, pdfContent, nodeTitle }) {
+  const { showCustomAlert } = useAppContext();
   const [showTutor, setShowTutor] = useState(false);
   const [tutorMessages, setTutorMessages] = useState([]);
   const [tutorInput, setTutorInput] = useState('');
@@ -134,12 +136,12 @@ Provide a friendly, encouraging, and academically accurate explanation to the st
     }
   };
 
-  const handleImportSelection = () => {
+  const handleImportSelection = async () => {
     const selectedText = window.getSelection().toString().trim();
     if (selectedText) {
       setTutorInput(prev => prev + (prev ? '\n' : '') + `关于这段课本文字：\n"${selectedText}"\n我想请问：`);
     } else {
-      alert('💡 智能提示：请先用鼠标在左侧课本中框选需要提问的段落文字，然后再点击本按钮导入！');
+      await showCustomAlert('💡 智能提示：请先用鼠标在左侧课本中框选需要提问的段落文字，然后再点击本按钮导入！');
     }
   };
 

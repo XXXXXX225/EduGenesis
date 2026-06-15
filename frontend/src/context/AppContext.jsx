@@ -33,6 +33,42 @@ export function AppProvider({ children }) {
     return localStorage.getItem('tutorPersonality') || 'academic';
   });
 
+  const [customDialog, setCustomDialog] = useState(null);
+
+  const showCustomAlert = (message, title = '提示') => {
+    return new Promise((resolve) => {
+      setCustomDialog({
+        type: 'alert',
+        title,
+        message,
+        resolve
+      });
+    });
+  };
+
+  const showCustomConfirm = (message, title = '确认') => {
+    return new Promise((resolve) => {
+      setCustomDialog({
+        type: 'confirm',
+        title,
+        message,
+        resolve
+      });
+    });
+  };
+
+  const showCustomPrompt = (message, defaultValue = '', title = '输入') => {
+    return new Promise((resolve) => {
+      setCustomDialog({
+        type: 'prompt',
+        title,
+        message,
+        defaultValue,
+        resolve
+      });
+    });
+  };
+
   useEffect(() => {
     localStorage.setItem('isLeftSidebarOpen', isLeftSidebarOpen);
   }, [isLeftSidebarOpen]);
@@ -593,6 +629,11 @@ export function AppProvider({ children }) {
         deleteSession,
         renameSession,
         clearAllSessions,
+        customDialog,
+        setCustomDialog,
+        showCustomAlert,
+        showCustomConfirm,
+        showCustomPrompt,
         // Hooks values
         chat: chatHook,
         speech: speechHook,

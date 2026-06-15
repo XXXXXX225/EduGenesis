@@ -53,6 +53,65 @@ import SettingsModal from './components/modals/SettingsModal';
 
 import { AppProvider, useAppContext } from './context/AppContext';
 
+const PromptInput = ({ defaultValue, onSubmit, onCancel }) => {
+  const [value, setValue] = React.useState(defaultValue || '');
+  const inputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, []);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      onSubmit(value);
+    } else if (e.key === 'Escape') {
+      onCancel();
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', marginTop: '10px' }}>
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        style={{
+          width: '100%',
+          padding: '10px 14px',
+          borderRadius: '10px',
+          background: 'var(--bg-card-active)',
+          border: '1px solid var(--border-neon)',
+          color: 'var(--text-main)',
+          fontSize: '14px',
+          outline: 'none',
+          boxSizing: 'border-box'
+        }}
+      />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+        <button
+          onClick={onCancel}
+          className="cyber-btn"
+          style={{ padding: '8px 16px', fontSize: '13px', background: 'rgba(0,0,0,0.02)', borderColor: 'rgba(0,0,0,0.1)' }}
+        >
+          取消
+        </button>
+        <button
+          onClick={() => onSubmit(value)}
+          className="cyber-btn"
+          style={{ padding: '8px 20px', fontSize: '13px' }}
+        >
+          确定
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   return (
     <AppProvider>
@@ -115,11 +174,32 @@ function AppContent() {
     startNewChat,
     deleteSession,
     renameSession,
-    clearAllSessions
+    clearAllSessions,
+    customDialog,
+    setCustomDialog,
+    showCustomAlert,
+    showCustomConfirm,
+    showCustomPrompt
   } = useAppContext();
 
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
   const [deltas, setDeltas] = useState({ study_time: 0, quiz_accuracy: 0, mastered_nodes: 0 });
+
+  useEffect(() => {
+    if (!customDialog) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (customDialog.type === 'confirm') {
+          customDialog.resolve(false);
+        } else {
+          customDialog.resolve(null);
+        }
+        setCustomDialog(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [customDialog, setCustomDialog]);
 
   useEffect(() => {
     if (profile && profile.learning_stats) {
@@ -636,9 +716,9 @@ function AppContent() {
                         </span>
                         <div className="history-item-actions">
                           <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              const newTitle = prompt("输入新标题:", sess.title);
+                              const newTitle = await showCustomPrompt("输入新标题:", sess.title);
                               if (newTitle) renameSession(sess.session_id, newTitle);
                             }}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '10px' }}
@@ -647,9 +727,10 @@ function AppContent() {
                             ✏️
                           </button>
                           <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              if (confirm("确定要删除此对话吗？")) deleteSession(sess.session_id);
+                              const confirmed = await showCustomConfirm("确定要删除此对话吗？");
+                              if (confirmed) deleteSession(sess.session_id);
                             }}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '10px' }}
                             title="删除"
@@ -741,8 +822,9 @@ function AppContent() {
                       📤 导出
                     </button>
                     <button
-                      onClick={() => {
-                        if (confirm("确定要清空全部会话历史吗？")) clearAllSessions();
+                      onClick={async () => {
+                        const confirmed = await showCustomConfirm("确定要清空全部会话历史吗？");
+                        if (confirmed) clearAllSessions();
                       }}
                       className="cyber-btn"
                       style={{ flex: 1, padding: '6px', fontSize: '11px', textTransform: 'none', background: 'rgba(190, 18, 60, 0.04)', borderColor: 'rgba(190, 18, 60, 0.12)', color: 'var(--danger)' }}
@@ -997,6 +1079,67 @@ function AppContent() {
         nodeTitle={selectedNode?.title}
       />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
+      {/* 🎨 Custom Glassmorphic Dialog Overlay */}
+      {customDialog && (
+        <div className="modal-backdrop" style={{ zIndex: 1500 }}>
+          <div className="cyber-card modal-content" style={{ maxWidth: '400px', width: '90%', padding: '24px', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-neon)', paddingBottom: '10px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0 }}>
+                {customDialog.type === 'alert' && '⚠️ ' + (customDialog.title || '提示')}
+                {customDialog.type === 'confirm' && '❓ ' + (customDialog.title || '确认')}
+                {customDialog.type === 'prompt' && '✏️ ' + (customDialog.title || '输入')}
+              </h3>
+            </div>
+            
+            <div style={{ fontSize: '13px', color: 'var(--text-main)', lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+              {customDialog.message}
+            </div>
+
+            {customDialog.type === 'prompt' && (
+              <PromptInput 
+                defaultValue={customDialog.defaultValue} 
+                onSubmit={(val) => {
+                  customDialog.resolve(val);
+                  setCustomDialog(null);
+                }}
+                onCancel={() => {
+                  customDialog.resolve(null);
+                  setCustomDialog(null);
+                }}
+              />
+            )}
+
+            {customDialog.type !== 'prompt' && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+                {customDialog.type === 'confirm' && (
+                  <button
+                    onClick={() => {
+                      customDialog.resolve(false);
+                      setCustomDialog(null);
+                    }}
+                    className="cyber-btn"
+                    style={{ padding: '8px 16px', fontSize: '12px', background: 'rgba(0,0,0,0.02)', borderColor: 'rgba(0,0,0,0.1)' }}
+                  >
+                    取消
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    customDialog.resolve(true);
+                    setCustomDialog(null);
+                  }}
+                  className="cyber-btn"
+                  style={{ padding: '8px 20px', fontSize: '12px' }}
+                  ref={(btn) => btn && btn.focus()}
+                >
+                  确定
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

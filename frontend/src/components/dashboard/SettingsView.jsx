@@ -4,6 +4,7 @@ import {
   RefreshCw, Key, Database, Cpu, Settings, Sliders, Globe
 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../../utils/api';
+import { useAppContext } from '../../context/AppContext';
 
 const CustomSelect = ({ value, options, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -109,6 +110,7 @@ const CustomSelect = ({ value, options, onChange }) => {
 };
 
 export default function SettingsView() {
+  const { showCustomAlert, showCustomConfirm } = useAppContext();
   const [activeSubTab, setActiveSubTab] = useState('providers'); // 'providers' | 'routing'
   const [providers, setProviders] = useState([]);
   const [routing, setRouting] = useState({
@@ -169,7 +171,7 @@ export default function SettingsView() {
       await apiPost('/settings/providers', updated);
       fetchSettings();
     } catch (err) {
-      alert('更改启用状态失败: ' + err.message);
+      await showCustomAlert('更改启用状态失败: ' + err.message);
     }
   };
 
@@ -193,7 +195,7 @@ export default function SettingsView() {
       await apiPost('/settings/providers', updated);
       fetchSettings();
     } catch (err) {
-      alert('更新模型状态失败: ' + err.message);
+      await showCustomAlert('更新模型状态失败: ' + err.message);
     }
   };
 
@@ -218,16 +220,17 @@ export default function SettingsView() {
 
   const handleDeleteProvider = async (providerId) => {
     if (providerId === 'xunfei') {
-      alert('无法删除内置讯飞星火服务商。');
+      await showCustomAlert('无法删除内置讯飞星火服务商。');
       return;
     }
-    if (!window.confirm('您确定要删除此模型服务商吗？所有绑定的路由将重置为讯飞星火。')) return;
+    const confirmed = await showCustomConfirm('您确定要删除此模型服务商吗？所有绑定的路由将重置为讯飞星火。');
+    if (!confirmed) return;
     
     try {
       await apiDelete(`/settings/providers/${providerId}`);
       fetchSettings();
     } catch (err) {
-      alert('删除服务商失败: ' + err.message);
+      await showCustomAlert('删除服务商失败: ' + err.message);
     }
   };
 
@@ -293,7 +296,7 @@ export default function SettingsView() {
       setShowAddModal(false);
       fetchSettings();
     } catch (err) {
-      alert('保存供应商配置失败: ' + err.message);
+      await showCustomAlert('保存供应商配置失败: ' + err.message);
     }
   };
 
@@ -309,7 +312,7 @@ export default function SettingsView() {
     try {
       await apiPost('/settings/routing', newRouting);
     } catch (err) {
-      alert('保存路由绑定失败: ' + err.message);
+      await showCustomAlert('保存路由绑定失败: ' + err.message);
     }
   };
 
