@@ -1423,6 +1423,10 @@ body.dark-mode .timeline-badge-wrapper {
   transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.agent-body.resizing {
+  transition: none !important;
+}
+
 /* Collapsible Left Panel Styles */
 .agent-panel-left-collapsible {
   width: var(--left-sidebar-width, 260px);

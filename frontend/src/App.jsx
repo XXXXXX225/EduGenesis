@@ -659,7 +659,7 @@ function AppContent() {
 
         {/* 📱 2-COLUMN BODY */}
         <div 
-          className="agent-body" 
+          className={`agent-body ${isResizing ? 'resizing' : ''}`}
           style={{ 
             '--sidebar-width': `${sidebarWidth}px`,
             '--left-sidebar-width': isLeftSidebarOpen ? '260px' : '0px'
