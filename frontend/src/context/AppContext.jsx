@@ -23,6 +23,24 @@ export function AppProvider({ children }) {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  const [chatSessions, setChatSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem('isLeftSidebarOpen');
+    return saved !== 'false'; // default true
+  });
+  const [tutorPersonality, setTutorPersonality] = useState(() => {
+    return localStorage.getItem('tutorPersonality') || 'academic';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('isLeftSidebarOpen', isLeftSidebarOpen);
+  }, [isLeftSidebarOpen]);
+
+  useEffect(() => {
+    localStorage.setItem('tutorPersonality', tutorPersonality);
+  }, [tutorPersonality]);
+
   const [currentView, setCurrentView] = useState(() => {
     const loggedIn = isAuthenticated();
     const pathname = window.location.pathname;
@@ -178,13 +196,114 @@ export function AppProvider({ children }) {
     }
   };
 
+  const loadChatSessions = async () => {
+    try {
+      const data = await apiGet('/chat/sessions');
+      setChatSessions(data);
+      if (data.length > 0 && !currentSessionId) {
+        const latestSessionId = data[0].session_id;
+        setCurrentSessionId(latestSessionId);
+        await loadSessionMessages(latestSessionId);
+      } else if (data.length === 0) {
+        await startNewChat();
+      }
+    } catch (err) {
+      console.warn("Failed to load chat sessions from server:", err);
+    }
+  };
+
+  const loadSessionMessages = async (sessionId) => {
+    try {
+      const data = await apiGet(`/chat/sessions/${sessionId}/messages`);
+      if (data.length > 0) {
+        chatHook.setChatHistory(data.map(m => ({
+          role: m.role,
+          content: m.content
+        })));
+      } else {
+        chatHook.setChatHistory([
+          { role: 'assistant', content: '您好！我是您的个性化学习助教。我会根据我们的对话动态构建您的学习画像，并定制专属的学习路径。你可以告诉我你的编程水平，或者发送“我想学机器学习”来调整内容。' }
+        ]);
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch messages for session ${sessionId}:`, err);
+    }
+  };
+
+  const startNewChat = async () => {
+    const newSessionId = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    try {
+      const newSess = await apiPost('/chat/sessions', {
+        session_id: newSessionId,
+        title: '新对话'
+      });
+      setChatSessions(prev => [newSess, ...prev]);
+      setCurrentSessionId(newSessionId);
+      chatHook.setChatHistory([
+        { role: 'assistant', content: '您好！我是您的个性化学习助教。我会根据我们的对话动态构建您的学习画像，并定制专属的学习路径。你可以告诉我你的编程水平，或者发送“我想学机器学习”来调整内容。' }
+      ]);
+    } catch (err) {
+      console.error("Failed to create new session:", err);
+    }
+  };
+
+  const deleteSession = async (sessionId) => {
+    try {
+      await apiPost(`/chat/sessions/${sessionId}`, {}, 'DELETE');
+      setChatSessions(prev => {
+        const updated = prev.filter(s => s.session_id !== sessionId);
+        if (currentSessionId === sessionId) {
+          if (updated.length > 0) {
+            const nextSess = updated[0].session_id;
+            setCurrentSessionId(nextSess);
+            loadSessionMessages(nextSess);
+          } else {
+            setTimeout(() => startNewChat(), 100);
+          }
+        }
+        return updated;
+      });
+    } catch (err) {
+      console.error(`Failed to delete session ${sessionId}:`, err);
+    }
+  };
+
+  const renameSession = async (sessionId, newTitle) => {
+    if (!newTitle.trim()) return;
+    try {
+      await apiPost(`/chat/sessions/${sessionId}`, { title: newTitle }, 'PUT');
+      setChatSessions(prev => prev.map(s => {
+        if (s.session_id === sessionId) {
+          return { ...s, title: newTitle };
+        }
+        return s;
+      }));
+    } catch (err) {
+      console.error(`Failed to rename session ${sessionId}:`, err);
+    }
+  };
+
+  const clearAllSessions = async () => {
+    try {
+      await apiPost('/chat/sessions', {}, 'DELETE');
+      setChatSessions([]);
+      setCurrentSessionId(null);
+      startNewChat();
+    } catch (err) {
+      console.error("Failed to clear sessions:", err);
+    }
+  };
+
   // Load dashboard data on mount when already authenticated (page refresh)
   useEffect(() => {
     if (isLoggedIn) {
       setIsLoadingDashboard(true);
-      loadDashboardState().finally(() => setIsLoadingDashboard(false));
+      Promise.all([
+        loadDashboardState(),
+        loadChatSessions()
+      ]).finally(() => setIsLoadingDashboard(false));
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goPortalHome = () => {
     if (currentView === 'landing') {
@@ -450,6 +569,20 @@ export function AppProvider({ children }) {
         handleDiagnoseError,
         handleRemedyPractice,
         handleRegeneratePath,
+        chatSessions,
+        setChatSessions,
+        currentSessionId,
+        setCurrentSessionId,
+        isLeftSidebarOpen,
+        setIsLeftSidebarOpen,
+        tutorPersonality,
+        setTutorPersonality,
+        loadChatSessions,
+        loadSessionMessages,
+        startNewChat,
+        deleteSession,
+        renameSession,
+        clearAllSessions,
         // Hooks values
         chat: chatHook,
         speech: speechHook,
