@@ -867,7 +867,11 @@ function AppContent() {
           <div
             className={`resize-handle ${isResizingLeft ? 'active' : ''}`}
             onMouseDown={startResizeLeft}
-            style={{ display: isLeftSidebarOpen ? 'block' : 'none' }}
+            style={{
+              width: isLeftSidebarOpen ? undefined : '0px',
+              opacity: isLeftSidebarOpen ? 1 : 0,
+              pointerEvents: isLeftSidebarOpen ? 'auto' : 'none'
+            }}
           />
 
           {/* Left Column: Core chat (occupies 1fr) */}
