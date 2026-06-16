@@ -864,12 +864,11 @@ function AppContent() {
           </aside>
 
           {/* Left Drag Resizer Divider */}
-          {isLeftSidebarOpen && (
-            <div
-              className={`resize-handle ${isResizingLeft ? 'active' : ''}`}
-              onMouseDown={startResizeLeft}
-            />
-          )}
+          <div
+            className={`resize-handle ${isResizingLeft ? 'active' : ''}`}
+            onMouseDown={startResizeLeft}
+            style={{ display: isLeftSidebarOpen ? 'block' : 'none' }}
+          />
 
           {/* Left Column: Core chat (occupies 1fr) */}
           <main className="agent-panel-middle" ref={mainContentRef}>
