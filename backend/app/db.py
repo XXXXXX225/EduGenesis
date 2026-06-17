@@ -1438,6 +1438,33 @@ def init_db():
         FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id)
     )
     """)
+
+    # Registered Courses Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS registered_courses (
+        course_id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        keywords TEXT NOT NULL,
+        description TEXT NOT NULL,
+        nodes TEXT NOT NULL
+    )
+    """)
+    
+    # Seed default courses if empty
+    cursor.execute("SELECT COUNT(*) FROM registered_courses")
+    if cursor.fetchone()[0] == 0:
+        # Convert default nodes to JSON strings
+        python_nodes_json = json.dumps([n.model_dump() for n in python_path_nodes], ensure_ascii=False)
+        ml_nodes_json = json.dumps([n.model_dump() for n in ml_path_nodes], ensure_ascii=False)
+        
+        cursor.execute(
+            "INSERT INTO registered_courses (course_id, display_name, keywords, description, nodes) VALUES (?, ?, ?, ?, ?)",
+            ("python_basics", "Python 编程基础", json.dumps(["python", "变量", "循环", "条件", "函数", "数据结构"], ensure_ascii=False), "Python 基础语法与控制流", python_nodes_json)
+        )
+        cursor.execute(
+            "INSERT INTO registered_courses (course_id, display_name, keywords, description, nodes) VALUES (?, ?, ?, ?, ?)",
+            ("machine_learning", "机器学习与深度学习", json.dumps(["机器学习", "线性代数", "梯度", "神经网络", "深度学习", "回归", "分类", "反向传播"], ensure_ascii=False), "经典机器学习数学原理与深度学习算法", ml_nodes_json)
+        )
     
     # Seed default user
     cursor.execute("SELECT username, password_hash FROM users WHERE username = 'default_user'")

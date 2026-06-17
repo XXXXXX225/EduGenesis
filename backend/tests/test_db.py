@@ -103,3 +103,18 @@ def test_db_logging_and_seeding():
     conn.close()
     
     assert count > 0
+
+def test_registered_courses_seeding():
+    import sqlite3
+    from app.db import DB_PATH
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM registered_courses")
+    count = cursor.fetchone()[0]
+    assert count >= 2  # python_basics and machine_learning should be seeded
+    
+    cursor.execute("SELECT display_name FROM registered_courses WHERE course_id = 'python_basics'")
+    display_name = cursor.fetchone()[0]
+    assert "Python" in display_name
+    conn.close()
+
