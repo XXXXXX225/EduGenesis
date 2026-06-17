@@ -142,13 +142,22 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             
             yield f"data: {json.dumps({'type': 'status', 'status': '💬 [导师智能体] 正在根据新画像为您生成个性化讲义...'})}\n\n"
             
+            from app.knowledge_base import clean_subject_name, rag_retrieve_context
+            subject = current_profile.learning_goals[0] if (current_profile.learning_goals and len(current_profile.learning_goals) > 0) else "python_basics"
+            subject_id = clean_subject_name(subject)
+            user_msg = request.messages[-1].content if request.messages else ""
+            knowledge_context = ""
+            if user_msg:
+                knowledge_context = rag_retrieve_context(user_msg, subject_id, username=target_user)
+
             stream_response = await asyncio.to_thread(
                 call_llm_stream_tutor,
                 request.messages,
                 current_profile,
                 target_user,
                 rec_videos,
-                request.tutor_personality
+                request.tutor_personality,
+                knowledge_context
             )
             
             if stream_response and stream_response.status_code == 200:

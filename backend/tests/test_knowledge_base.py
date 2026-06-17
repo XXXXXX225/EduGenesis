@@ -71,3 +71,18 @@ def test_dynamic_clean_subject_name():
         conn.close()
 
 
+def test_semantic_similarity_search():
+    from app.knowledge_base import rag_search, seed_default_course_chunks
+    
+    # Run seeding to make sure we have default course chunks seeded
+    seed_default_course_chunks()
+    
+    # Query something about variables in Python
+    results = rag_search("how do we define variables in Python", "python_basics", top_k=3)
+    assert len(results) > 0
+    assert "content" in results[0]
+    assert "title" in results[0]
+    assert "node_id" in results[0]
+    assert results[0]["score"] >= 0.0
+
+

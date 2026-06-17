@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, Search, Trash2, Edit, ChevronDown, ChevronUp, Check, 
-  RefreshCw, Key, Database, Cpu, Settings, Sliders, Globe, GraduationCap
+  RefreshCw, Key, Database, Cpu, Settings, Sliders, Globe, GraduationCap,
+  Upload
 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../../utils/api';
 import { useAppContext } from '../../context/AppContext';
@@ -156,6 +157,91 @@ export default function SettingsView() {
       description: ''
     }))
   });
+  const [uploadStatuses, setUploadStatuses] = useState({});
+  const [isGeneratingSyllabus, setIsGeneratingSyllabus] = useState(false);
+
+  const handleFileUpload = async (e, courseId) => {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      await showCustomAlert('\u6587\u4ef6\u8d85\u8fc7 10MB \u9650\u5236\u3002');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setUploadStatuses(prev => ({ ...prev, [courseId]: '\u26a1 \u6b63\u5728\u4e0a\u4f20\u4e0e\u89e3\u6790\u8bb2\u4e49...' }));
+
+    try {
+      const token = localStorage.getItem('token');
+      const baseUrl = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+        ? 'http://127.0.0.1:8000'
+        : '';
+        
+      const response = await fetch(`${baseUrl}/api/kb/courses/${courseId}/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const resData = await response.json();
+      if (response.ok) {
+        setUploadStatuses(prev => ({ 
+          ...prev, 
+          [courseId]: `\u2728 \u89e3\u6790\u6210\u529f\uff01\u5206\u5207\u4e3a ${resData.chunks_count} \u4e2a\u8bed\u4e49\u5411\u91cf\u5757` 
+        }));
+      } else {
+        setUploadStatuses(prev => ({ 
+          ...prev, 
+          [courseId]: `\u274c \u5931\u8d25: ${resData.detail || '\u672a\u660e\u89e3\u6790\u9519\u8bef'}` 
+        }));
+      }
+    } catch (err) {
+      console.error(err);
+      setUploadStatuses(prev => ({ ...prev, [courseId]: '\u274c \u7f51\u7edc\u4e0a\u4f20\u5f02\u5e38' }));
+    }
+  };
+
+  const handleGenerateAISyllabus = async () => {
+    if (!courseFormData.display_name.trim()) {
+      await showCustomAlert('\u8bf7\u5148\u586b\u5199\u8bfe\u7a0b\u663e\u793a\u540d\u79f0\uff01');
+      return;
+    }
+    if (!courseFormData.description.trim()) {
+      await showCustomAlert('\u8bf7\u5148\u586b\u5199\u8bfe\u7a0b\u7b80\u4ecb\uff0c\u4ee5\u4fbf AI \u89c4\u5212\u6674\u51c6\u7684\u5927\u7eb2\uff01');
+      return;
+    }
+
+    setIsGeneratingSyllabus(true);
+    try {
+      const response = await apiPost('/kb/courses/generate_syllabus', {
+        course_name: courseFormData.display_name.trim(),
+        description: courseFormData.description.trim()
+      });
+      
+      if (response && response.nodes && response.nodes.length === 8) {
+        setCourseFormData(prev => ({
+          ...prev,
+          nodes: response.nodes.map((n, i) => ({
+            title: n.title || `\u5173\u5361 ${i + 1}`,
+            description: n.description || `\u5173\u5361 ${i + 1} \u77e5\u8bc6\u70b9\u5927\u7eb2`
+          }))
+        }));
+        await showCustomAlert('\u2728 AI \u667a\u80fd\u5927\u7eb2\u89c4\u5212\u5b8c\u6210\uff01\u5df2\u81ea\u52a8\u586b\u5145 8 \u7ea7\u5173\u5361\uff01');
+      } else {
+        await showCustomAlert('AI \u751f\u6210\u5927\u7eb2\u683c\u5f0f\u4e0d\u6b63\u786e\uff0c\u8bf7\u91cd\u8bd5\u3002');
+      }
+    } catch (err) {
+      console.error(err);
+      await showCustomAlert('AI \u5927\u7eb2\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u6a21\u578b\u8def\u7531\u914d\u7f6e\u6216\u7f51\u7edc\u3002');
+    } finally {
+      setIsGeneratingSyllabus(false);
+    }
+  };
 
   useEffect(() => {
     fetchSettings();
@@ -896,6 +982,67 @@ export default function SettingsView() {
                             ))}
                           </div>
                         </div>
+
+                        {/* Drag-and-drop file upload zone */}
+                        <div 
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                          }}
+                          onDrop={async (e) => {
+                            e.preventDefault();
+                            const file = e.dataTransfer.files[0];
+                            if (file) {
+                              const mockEvent = { target: { files: [file] } };
+                              await handleFileUpload(mockEvent, course.course_id);
+                            }
+                          }}
+                          style={{
+                            border: '1px dashed rgba(20, 184, 166, 0.2)',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            background: 'rgba(20, 184, 166, 0.01)',
+                            marginTop: '8px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-main)', fontWeight: '600' }}>
+                              {"\u62d6\u62fd\u8bfe\u4ef6\u6216\u5728\u6b64\u9009\u62e9\u6587\u4ef6\u4e0a\u4f20 (PDF / TXT / MD)"}
+                            </div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
+                              {"\u9650 10MB\uff0c\u81ea\u52a8\u751f\u6210 600 \u5b57\u7b26\u91cd\u53e0\u8bed\u4e49\u5207\u7247\u5411\u91cf"}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <input 
+                              type="file" 
+                              accept=".pdf,.txt,.md"
+                              id={`file-upload-${course.course_id}`}
+                              style={{ display: 'none' }}
+                              onChange={(e) => handleFileUpload(e, course.course_id)}
+                            />
+                            <button 
+                              onClick={() => document.getElementById(`file-upload-${course.course_id}`).click()}
+                              className="cyber-btn"
+                              style={{ 
+                                padding: '5px 10px', 
+                                fontSize: '10px', 
+                                background: 'rgba(20, 184, 166, 0.05)', 
+                                borderColor: 'rgba(20, 184, 166, 0.2)', 
+                                color: 'var(--primary-neon)' 
+                              }}
+                            >
+                              <Upload size={10} style={{ marginRight: '4px' }} /> {"\u9009\u62e9\u6587\u4ef6"}
+                            </button>
+                            {uploadStatuses[course.course_id] && (
+                              <span style={{ fontSize: '10px', color: 'var(--primary-neon)', fontWeight: 'bold' }}>
+                                {uploadStatuses[course.course_id]}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -1121,9 +1268,29 @@ export default function SettingsView() {
 
                 {/* Right Side: 8-node outline editor */}
                 <div style={{ flex: 1.2, display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', paddingRight: '4px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary-neon)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary-neon)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>第二部分: 自适应关卡节点 (共8关)</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>建议按由易到难排序</span>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={handleGenerateAISyllabus}
+                        disabled={isGeneratingSyllabus}
+                        className="cyber-btn"
+                        style={{
+                          padding: '3px 8px',
+                          fontSize: '10px',
+                          background: 'rgba(20, 184, 166, 0.08)',
+                          borderColor: 'var(--primary-neon)',
+                          color: 'var(--primary-neon)',
+                          height: '22px',
+                          minHeight: '22px',
+                          cursor: isGeneratingSyllabus ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {isGeneratingSyllabus ? '⚡ \u6b63\u5728\u667a\u80fd\u89c4\u5212\u5927\u7eb2...' : '\u2728 AI \u4e00\u952e\u751f\u6210\u5927\u7eb2'}
+                      </button>
+                      <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>建议按由易到难排序</span>
+                    </div>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

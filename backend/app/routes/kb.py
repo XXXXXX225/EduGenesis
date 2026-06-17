@@ -2,14 +2,20 @@ import os
 import re
 import json
 import sqlite3
+import logging
 from typing import List
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel, Field
 from app.models import PathNode
 from app.db import DB_PATH
-from app.knowledge_base import COURSES_DIR
+from app.knowledge_base import COURSES_DIR, generate_embedding, extract_keywords
+from app.auth_utils import get_current_username
+from app.llm_client import call_llm_syllabus_generator
+import io
+import uuid
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class CourseInput(BaseModel):
     course_id: str
@@ -20,15 +26,18 @@ class CourseInput(BaseModel):
 
 @router.get("/courses")
 def get_courses():
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT course_id, display_name, keywords, description, nodes FROM registered_courses")
         rows = cursor.fetchall()
-        conn.close()
     except Exception as e:
-        # Prevent exposing database/SQL errors to users
+        logger.error(f"Database error occurred in get_courses: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Database error occurred")
+    finally:
+        if conn:
+            conn.close()
         
     courses = []
     for row in rows:
@@ -64,9 +73,11 @@ def register_course(course: CourseInput):
     try:
         os.makedirs(course_dir, exist_ok=True)
     except Exception as e:
+        logger.error(f"Failed to create course directory {course_dir}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create course directory")
         
     # Save/Register course in database
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -83,48 +94,208 @@ def register_course(course: CourseInput):
             )
         )
         conn.commit()
-        conn.close()
     except Exception as e:
+        logger.error(f"Database error during course registration for {course.course_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Database error occurred during registration")
+    finally:
+        if conn:
+            conn.close()
         
     return {"status": "success", "course_id": course.course_id}
 
 @router.delete("/courses/{course_id}")
 def delete_course(course_id: str):
+    # Validate course_id matches ^[a-zA-Z0-9_]+$ to prevent directory traversal / parameter injection
+    if not re.match(r"^[a-zA-Z0-9_]+$", course_id):
+        raise HTTPException(status_code=400, detail="Invalid course_id format. Must match ^[a-zA-Z0-9_]+$")
+
     # Block deletion of python_basics and machine_learning
     if course_id in ("python_basics", "machine_learning"):
         raise HTTPException(status_code=400, detail="Cannot delete default system courses")
         
     # Check if course exists
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM registered_courses WHERE course_id = ?", (course_id,))
         exists = cursor.fetchone()[0] > 0
-    except Exception as e:
-        if 'conn' in locals():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error occurred")
         
-    if not exists:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Course not found")
-        
-    try:
+        if not exists:
+            raise HTTPException(status_code=404, detail="Course not found")
+            
         cursor.execute("DELETE FROM registered_courses WHERE course_id = ?", (course_id,))
         conn.commit()
-        conn.close()
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Database error during deletion of course {course_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Database error occurred during deletion")
+    finally:
+        if conn:
+            conn.close()
         
     # Clean up physical directory under COURSES_DIR
     import shutil
     course_dir = os.path.join(COURSES_DIR, course_id)
     if os.path.exists(course_dir):
+        # Additional safety check: ensure path is still within COURSES_DIR to prevent directory traversal on deletion
+        abs_courses_dir = os.path.abspath(COURSES_DIR)
+        abs_course_dir = os.path.abspath(course_dir)
+        if not abs_course_dir.startswith(abs_courses_dir + os.sep) and abs_course_dir != abs_courses_dir:
+            logger.error(f"Attempted out-of-bounds directory deletion: {course_dir}")
+            raise HTTPException(status_code=400, detail="Invalid course directory path")
+            
         try:
             shutil.rmtree(course_dir)
         except Exception as e:
-            # Non-blocking, but we can log or ignore
+            logger.warning(f"Non-blocking cleanup of physical directory failed for {course_id}: {e}")
             pass
             
     return {"status": "success", "message": f"Course '{course_id}' deleted successfully"}
+
+
+class SyllabusGenerateRequest(BaseModel):
+    course_name: str
+    description: str
+
+@router.post("/courses/generate_syllabus")
+def generate_syllabus(request: SyllabusGenerateRequest, current_username: str = Depends(get_current_username)):
+    nodes = call_llm_syllabus_generator(request.course_name, request.description, current_username)
+    if not nodes:
+        raise HTTPException(status_code=500, detail="Failed to generate syllabus via AI.")
+    return {"nodes": nodes}
+
+@router.post("/courses/{course_id}/upload")
+async def upload_course_file(
+    course_id: str,
+    file: UploadFile = File(...),
+    current_username: str = Depends(get_current_username)
+):
+    if not re.match(r"^[a-zA-Z0-9_]+$", course_id):
+        raise HTTPException(status_code=400, detail="Invalid course_id. Must match ^[a-zA-Z0-9_]+$")
+        
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM registered_courses WHERE course_id = ?", (course_id,))
+        exists = cursor.fetchone()[0] > 0
+        if not exists:
+            raise HTTPException(status_code=404, detail="Course not found.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Database error in upload check: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Database check failed.")
+    finally:
+        if conn:
+            conn.close()
+
+    filename = file.filename
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in (".pdf", ".txt", ".md"):
+        raise HTTPException(status_code=400, detail="Unsupported file format. Only .pdf, .txt, and .md are allowed.")
+
+    max_size = 10 * 1024 * 1024
+    contents = b""
+    try:
+        while True:
+            chunk = await file.read(64 * 1024)
+            if not chunk:
+                break
+            contents += chunk
+            if len(contents) > max_size:
+                raise HTTPException(status_code=400, detail="File size exceeds the 10MB limit.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to read file: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to read file content.")
+
+    course_dir = os.path.join(COURSES_DIR, course_id)
+    os.makedirs(course_dir, exist_ok=True)
+    
+    sanitized_filename = os.path.basename(filename)
+    sanitized_filename = re.sub(r'[\/\x00\\\s]', '_', sanitized_filename)
+    
+    file_path = os.path.join(course_dir, sanitized_filename)
+    try:
+        with open(file_path, "wb") as f:
+            f.write(contents)
+    except Exception as e:
+        logger.error(f"Failed to save file to physical disk: {e}", exc_info=True)
+
+    text_content = ""
+    if ext == ".pdf":
+        try:
+            pdf_file = io.BytesIO(contents)
+            from pypdf import PdfReader
+            reader = PdfReader(pdf_file)
+            extracted_pages = []
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    extracted_pages.append(t)
+            text_content = "\n".join(extracted_pages)
+        except Exception as e:
+            logger.error(f"Failed to parse PDF file: {e}", exc_info=True)
+            raise HTTPException(status_code=400, detail="Failed to parse PDF document.")
+    else:
+        try:
+            text_content = contents.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                text_content = contents.decode("gbk")
+            except Exception:
+                raise HTTPException(status_code=400, detail="Failed to decode text file. Ensure UTF-8 or GBK encoding.")
+                
+    text_content = text_content.strip()
+    if not text_content:
+        raise HTTPException(status_code=400, detail="Extracted text content is empty.")
+
+    step = 500
+    chunks = []
+    i = 0
+    while i < len(text_content):
+        chunk_text = text_content[i : i + 600].strip()
+        if chunk_text:
+            chunks.append(chunk_text)
+        if i + 600 >= len(text_content):
+            break
+        i += step
+
+    if not chunks:
+        raise HTTPException(status_code=400, detail="No chunks created from text.")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        for idx, chunk_text in enumerate(chunks):
+            chunk_id = f"{course_id}_{uuid.uuid4().hex[:12]}_{idx}"
+            chunk_title = f"{sanitized_filename} (Section {idx + 1})"
+            kws = extract_keywords(chunk_text)
+            keywords_json = json.dumps(kws, ensure_ascii=False)
+            
+            embedding_vector = generate_embedding(chunk_text, current_username)
+            embedding_json = json.dumps(embedding_vector, ensure_ascii=False)
+            
+            cursor.execute(
+                "INSERT INTO course_chunks (chunk_id, course_id, title, content, keywords, embedding) VALUES (?, ?, ?, ?, ?, ?)",
+                (chunk_id, course_id, chunk_title, chunk_text, keywords_json, embedding_json)
+            )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Database error during chunks insertion: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to store chunks in database.")
+    finally:
+        if conn:
+            conn.close()
+
+    return {
+        "status": "success",
+        "chunks_count": len(chunks),
+        "message": f"Successfully parsed and indexed {len(chunks)} chunks from {sanitized_filename}."
+    }

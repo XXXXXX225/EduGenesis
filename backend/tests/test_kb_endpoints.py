@@ -124,3 +124,115 @@ def test_delete_default_course_blocked():
     assert response.status_code == 400
     assert "Cannot delete default system courses" in response.json()["detail"]
 
+def test_delete_invalid_course_id():
+    # DELETE /api/kb/courses/{course_id} with invalid course_id formats (like hyphens, dots)
+    invalid_ids = ["invalid-id", "invalid.id"]
+    for cid in invalid_ids:
+        response = client.delete(f"/api/kb/courses/{cid}")
+        assert response.status_code == 400
+        assert "Invalid course_id format" in response.json()["detail"]
+
+
+TEST_KB_USER = "kb_endpoints_test_user"
+
+def get_kb_test_auth_token():
+    import sqlite3
+    from app.db import DB_PATH
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users WHERE username = ?", (TEST_KB_USER,))
+    conn.commit()
+    conn.close()
+
+    reg_payload = {
+        "username": TEST_KB_USER,
+        "password": "securepassword123",
+        "cognitive_style": "Practical Coding",
+        "learning_goals": ["Python Basics"]
+    }
+    response = client.post("/api/auth/register", json=reg_payload)
+    if response.status_code == 200:
+        return response.json()["access_token"]
+    
+    login_payload = {
+        "username": TEST_KB_USER,
+        "password": "securepassword123"
+    }
+    response = client.post("/api/auth/login", json=login_payload)
+    return response.json()["access_token"]
+
+def test_generate_syllabus_api(monkeypatch):
+    token = get_kb_test_auth_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    dummy_nodes = [
+        {"id": f"node{i}", "title": f"Mock Node {i}", "description": "Mock description", "resources": ["pdf"]}
+        for i in range(1, 9)
+    ]
+    monkeypatch.setattr("app.routes.kb.call_llm_syllabus_generator", lambda course_name, description, username: dummy_nodes)
+    
+    payload = {
+        "course_name": "Test Syllabus Course",
+        "description": "An introductory course on testing and RAG."
+    }
+    response = client.post("/api/kb/courses/generate_syllabus", json=payload, headers=headers)
+    assert response.status_code == 200
+    res_data = response.json()
+    assert "nodes" in res_data
+    assert len(res_data["nodes"]) == 8
+    assert res_data["nodes"][0]["title"] == "Mock Node 1"
+
+def test_upload_file_traversal_and_parsing(monkeypatch):
+    token = get_kb_test_auth_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    course_id = "test_upload_course"
+    nodes = [
+        {
+            "id": f"node{i}",
+            "title": f"Test Node {i}",
+            "status": "locked",
+            "description": f"Description for test node {i}",
+            "resources": ["pdf", "code"]
+        }
+        for i in range(1, 9)
+    ]
+    register_payload = {
+        "course_id": course_id,
+        "display_name": "Upload Test Course",
+        "keywords": ["upload", "test"],
+        "description": "This is a test course for file upload",
+        "nodes": nodes
+    }
+    client.post("/api/kb/courses", json=register_payload)
+    
+    monkeypatch.setattr("app.routes.kb.generate_embedding", lambda text, username: [0.1] * 128)
+    
+    file_content = b"Python variables are used to store data values. A variable is created the moment you first assign a value to it."
+    files = {"file": ("variables.txt", file_content, "text/plain")}
+    
+    response = client.post(
+        f"/api/kb/courses/{course_id}/upload",
+        files=files,
+        headers=headers
+    )
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "success"
+    assert res_json["chunks_count"] > 0
+    
+    import sqlite3
+    from app.db import DB_PATH
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, content, embedding FROM course_chunks WHERE course_id = ?", (course_id,))
+    rows = cursor.fetchall()
+    assert len(rows) > 0
+    assert "variables.txt" in rows[0][0]
+    import json
+    emb = json.loads(rows[0][2])
+    assert len(emb) == 128
+    conn.close()
+    
+    client.delete(f"/api/kb/courses/{course_id}")
+

@@ -105,8 +105,6 @@ def test_db_logging_and_seeding():
     assert count > 0
 
 def test_registered_courses_seeding():
-    import sqlite3
-    from app.db import DB_PATH
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM registered_courses")
@@ -118,3 +116,29 @@ def test_registered_courses_seeding():
     assert "Python" in display_name
     conn.close()
 
+
+def test_db_idempotency():
+    # 1. Test init_db idempotency by calling it multiple times
+    init_db()
+    init_db()
+    
+    # 2. Test seed_errors_and_logs_for_user idempotency
+    seed_errors_and_logs_for_user(TEST_USER)
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM user_errors WHERE username = ?", (TEST_USER,))
+    count_before = cursor.fetchone()[0]
+    conn.close()
+    
+    # Run seeding again
+    seed_errors_and_logs_for_user(TEST_USER)
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM user_errors WHERE username = ?", (TEST_USER,))
+    count_after = cursor.fetchone()[0]
+    conn.close()
+    
+    # Check that count hasn't changed (idempotence)
+    assert count_before == count_after

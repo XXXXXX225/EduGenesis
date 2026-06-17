@@ -1032,6 +1032,19 @@ def init_db():
         nodes TEXT NOT NULL
     )
     """)
+
+    # Course Chunks Table (For advanced RAG semantic retrieval)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS course_chunks (
+        chunk_id TEXT PRIMARY KEY,
+        course_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        keywords TEXT NOT NULL,
+        embedding TEXT NOT NULL,
+        FOREIGN KEY (course_id) REFERENCES registered_courses(course_id) ON DELETE CASCADE
+    )
+    """)
     
     # Seed default courses if empty
     cursor.execute("SELECT COUNT(*) FROM registered_courses")

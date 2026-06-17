@@ -27,3 +27,7 @@ router.include_router(kb_router, prefix="/kb")
 # Ensure DB is initialized
 init_db()
 
+# Seed default course chunks
+from app.knowledge_base import seed_default_course_chunks
+seed_default_course_chunks()
+

@@ -110,7 +110,7 @@ Output STRICTLY a JSON object (no markdown formatting, no code block backticks, 
         print(f"LLM Structured Analysis failed: {e}")
     return None
 
-def call_llm_stream_tutor(messages: List[BaseModel], current_profile: UserProfile, username: str = "default_user", videos_context: List[dict] = None, tutor_personality: Optional[str] = None):
+def call_llm_stream_tutor(messages: List[BaseModel], current_profile: UserProfile, username: str = "default_user", videos_context: List[dict] = None, tutor_personality: Optional[str] = None, knowledge_context: Optional[str] = None):
     api_base, api_key, model = get_route_llm_params(username, "chat")
     
     if not api_key:
@@ -137,6 +137,9 @@ You can embed interactive educational resource cards in your response when appro
 4. Code Block: [CODE: python | <python source code>]
 5. Slides Carousel: [SLIDES: Title 1 | Content 1 --- Title 2 | Content 2]
 6. PDF Textbook: [PDF: Title | <detailed markdown textbook explanation>]"""
+
+    if knowledge_context:
+        system_prompt += f"\n\n[Here is some authoritative academic context retrieved from the course knowledge base. You MUST reference this context to answer the student's question accurately and professionally if relevant. Do not tell the student you got this from a database/knowledge base; present it naturally as your own tutoring knowledge]:\n{knowledge_context}"
 
     if tutor_personality:
         system_prompt += f"\n\nYour tutoring personality/style is: {tutor_personality}. Please adapt your tone, explanations, and interaction style to match this personality."
@@ -388,5 +391,66 @@ Your task is to generate exactly 8 customized learning nodes for the student.
             db_log_agent_action(username, "路径智能体", f"大模型接口请求失败，HTTP 状态码: {response.status_code}，响应: {response.text[:200]}", "error")
     except Exception as e:
         db_log_agent_action(username, "路径智能体", f"调用大模型路径规划异常: {str(e)}", "error")
+        
+    return []
+
+
+def call_llm_syllabus_generator(course_name: str, description: str, username: str = "default_user") -> List[dict]:
+    api_base, api_key, model = get_route_llm_params(username, "planner")
+    
+    db_log_agent_action(username, "\u89c4\u5212\u667a\u80fd\u4f53", f"\u6b63\u5728\u667a\u80fd\u8bbe\u8ba1\u8bfe\u7a0b\u5927\u7eb2\u3002\u5927\u6a21\u578b\u914d\u7f6e: Key={api_key[:10] if api_key else 'None'}..., Base={api_base}, Model={model}", "info")
+    
+    if not api_key:
+        db_log_agent_action(username, "\u89c4\u5212\u667a\u80fd\u4f53", "\u5927\u7eb2\u89c4\u5212\u4e2d\u6b62: \u672a\u68c0\u6d4b\u5230\u6709\u6548\u7684\u5927\u6a21\u578b\u670d\u52a1 Key\u3002", "warning")
+        return []
+        
+    url = f"{api_base.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    system_prompt = f"""You are a senior university curriculum and syllabus expert. Your task is to design a standard syllabus containing exactly 8 sequential chapters/nodes for a course.
+Course Name: {course_name}
+Course Description: {description}
+
+You must output a JSON object containing a "nodes" key, which is a list of exactly 8 nodes. Each node must have the following structure:
+- id: "node1" to "node8"
+- title: A concise, academic Chinese title for the chapter.
+- description: A detailed syllabus outline/description for this chapter in Chinese.
+- resources: A list of default resources, e.g., ["pdf", "slide", "quiz", "code", "mindmap", "video"]. Every node should include "video" and "pdf".
+
+All titles and descriptions must be in Simplified Chinese.
+Output ONLY the raw JSON object. Do not include markdown block backticks or any other text.
+"""
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Now generate the 8 chapters syllabus JSON immediately."}
+        ],
+        "temperature": 0.4
+    }
+    
+    model_lower = model.lower()
+    base_lower = api_base.lower()
+    if "gpt" in model_lower or "deepseek" in model_lower or "openrouter" in base_lower or "siliconflow" in base_lower:
+        payload["response_format"] = {"type": "json_object"}
+        
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=25)
+        if response.status_code == 200:
+            res_data = response.json()
+            content = res_data["choices"][0]["message"]["content"]
+            content = extract_json_block(content)
+            parsed = json.loads(content)
+            nodes = parsed.get("nodes", [])
+            db_log_agent_action(username, "\u89c4\u5212\u667a\u80fd\u4f53", f"\u5927\u7eb2\u5927\u6a21\u578b\u751f\u6210\u6210\u529f\u3002\u8fd4\u56de\u5173\u5361\u6570\u91cf: {len(nodes)}", "info")
+            return nodes
+        else:
+            db_log_agent_action(username, "\u89c4\u5212\u667a\u80fd\u4f53", f"\u5927\u7eb2\u5927\u6a21\u578b\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0cHTTP \u72b6\u6001\u7801: {response.status_code}\uff0c\u54cd\u5e94: {response.text[:200]}", "error")
+    except Exception as e:
+        db_log_agent_action(username, "\u89c4\u5212\u667a\u80fd\u4f53", f"\u8c03\u7528\u89c4\u5212\u667a\u80fd\u4f53\u5f02\u5e38: {str(e)}", "error")
         
     return []

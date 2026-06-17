@@ -92,8 +92,12 @@ class ResourceAgent(BaseAgent):
         style_instructions = context.get("style_instructions", "")
         trigger_type = context.get("trigger_type", "auto")
         
+        from app.knowledge_base import clean_subject_name, rag_retrieve_context
         subject = profile.learning_goals[0] if (profile.learning_goals and len(profile.learning_goals) > 0) else "Python Basics"
-        course_context = load_course_material(subject, node_id)
+        subject_id = clean_subject_name(subject)
+        course_context = load_course_material(subject_id, node_id)
+        if not course_context:
+            course_context = rag_retrieve_context(f"{node_title} {node_description}", subject_id, username=username)
         
         if trigger_type == "manual":
             msg_start = f"正在调用星火大模型，重新生成关卡 [{node_title}] 的多模态资源包（{', '.join(node_resources)}）..."
