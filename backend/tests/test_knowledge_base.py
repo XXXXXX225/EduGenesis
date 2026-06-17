@@ -1,5 +1,11 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+import pytest
+from app.db import init_db
 from app.knowledge_base import clean_subject_name, load_course_material
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_database():
+    init_db()
 
 def test_clean_subject_name():
     assert clean_subject_name("Python Basics") == "python_basics"
@@ -30,3 +36,38 @@ def test_load_course_material_not_exists():
     # Non-existing node should return empty string
     res = load_course_material("Python Basics", "node999")
     assert res == ""
+
+def test_dynamic_clean_subject_name():
+    import sqlite3
+    import json
+    from app.db import DB_PATH
+    
+    # 1. Connect and insert test course
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    # Delete first in case of leftover from prior aborted runs
+    cursor.execute("DELETE FROM registered_courses WHERE course_id = 'data_structures'")
+    cursor.execute(
+        "INSERT INTO registered_courses (course_id, display_name, keywords, description, nodes) VALUES (?, ?, ?, ?, ?)",
+        ("data_structures", "\u6570\u636e\u7ed3\u6784\u4e0e\u7b97\u6cd5", json.dumps(["\u6570\u636e\u7ed3\u6784", "\u4e8c\u53c9\u6811", "\u56fe", "\u7b97\u6cd5"], ensure_ascii=False), "\u6570\u636e\u7ed3\u6784\u4e0e\u7b97\u6cd5\u57fa\u784d", "[]")
+    )
+    conn.commit()
+    conn.close()
+    
+    try:
+        # 2. Assert correct clean_subject_name behaviors
+        assert clean_subject_name("\u6570\u636e\u7ed3\u6784") == "data_structures"
+        assert clean_subject_name("\u4e8c\u53c9\u6811\u548c\u56fe") == "data_structures"
+        assert clean_subject_name("\u7b97\u6cd5\u5bfc\u8b6a") == "data_structures"
+        # Exact match tests
+        assert clean_subject_name("\u6570\u636e\u7ed3\u6784\u4e0e\u7b97\u6cd5") == "data_structures"
+        assert clean_subject_name("data_structures") == "data_structures"
+    finally:
+        # 3. Clean up the test course
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM registered_courses WHERE course_id = 'data_structures'")
+        conn.commit()
+        conn.close()
+
+

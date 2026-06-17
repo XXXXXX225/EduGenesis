@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, Search, Trash2, Edit, ChevronDown, ChevronUp, Check, 
-  RefreshCw, Key, Database, Cpu, Settings, Sliders, Globe
+  RefreshCw, Key, Database, Cpu, Settings, Sliders, Globe, GraduationCap
 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../../utils/api';
 import { useAppContext } from '../../context/AppContext';
@@ -111,7 +111,7 @@ const CustomSelect = ({ value, options, onChange }) => {
 
 export default function SettingsView() {
   const { showCustomAlert, showCustomConfirm } = useAppContext();
-  const [activeSubTab, setActiveSubTab] = useState('providers'); // 'providers' | 'routing'
+  const [activeSubTab, setActiveSubTab] = useState('providers'); // 'providers' | 'routing' | 'courses'
   const [providers, setProviders] = useState([]);
   const [routing, setRouting] = useState({
     chat_provider_id: 'xunfei',
@@ -142,8 +142,24 @@ export default function SettingsView() {
     models_raw: ''
   });
 
+  // Dynamic Course Management State
+  const [courses, setCourses] = useState([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false);
+  const [showAddCourseModal, setShowAddCourseModal] = useState(false);
+  const [courseFormData, setCourseFormData] = useState({
+    course_id: '',
+    display_name: '',
+    keywords: '',
+    description: '',
+    nodes: Array(8).fill(null).map((_, i) => ({
+      title: '',
+      description: ''
+    }))
+  });
+
   useEffect(() => {
     fetchSettings();
+    fetchCourses();
   }, []);
 
   const fetchSettings = async () => {
@@ -155,6 +171,77 @@ export default function SettingsView() {
     } catch (err) {
       console.error('Failed to load settings:', err);
       setErrorMessage('加载配置信息失败，请稍后重试。');
+    }
+  };
+
+  const fetchCourses = async () => {
+    setIsLoadingCourses(true);
+    try {
+      const data = await apiGet('/kb/courses');
+      setCourses(data);
+    } catch (err) {
+      console.error('Failed to fetch registered courses:', err);
+    } finally {
+      setIsLoadingCourses(false);
+    }
+  };
+
+  const handleSaveCourse = async (e) => {
+    e.preventDefault();
+    if (!/^[a-zA-Z0-9_]+$/.test(courseFormData.course_id.trim())) {
+      await showCustomAlert('课程 ID 只能包含字母、数字和下划线！');
+      return;
+    }
+    
+    // Assemble nodes
+    const finalNodes = courseFormData.nodes.map((n, i) => {
+      const nodeNum = i + 1;
+      return {
+        id: `node${nodeNum}`,
+        title: n.title.trim() || `关卡 ${nodeNum}`,
+        status: nodeNum === 1 ? 'completed' : (nodeNum === 2 ? 'active' : 'locked'),
+        description: n.description.trim() || `第 ${nodeNum} 阶段自适应学习大纲`,
+        resources: ["pdf", "code", "quiz", "video"]
+      };
+    });
+
+    // Parse keywords
+    const kws = courseFormData.keywords.split(/[,，]/)
+      .map(k => k.trim())
+      .filter(k => k.length > 0);
+
+    const payload = {
+      course_id: courseFormData.course_id.trim(),
+      display_name: courseFormData.display_name.trim(),
+      keywords: kws,
+      description: courseFormData.description.trim(),
+      nodes: finalNodes
+    };
+
+    try {
+      await apiPost('/kb/courses', payload);
+      setShowAddCourseModal(false);
+      await showCustomAlert('新课程注册成功！');
+      fetchCourses();
+    } catch (err) {
+      await showCustomAlert('注册课程失败: ' + err.message);
+    }
+  };
+
+  const handleDeleteCourse = async (courseId) => {
+    if (courseId === 'python_basics' || courseId === 'machine_learning') {
+      await showCustomAlert('无法删除系统默认核心课程！');
+      return;
+    }
+    const confirmed = await showCustomConfirm('您确定要删除这门课程吗？所有对应的课程节点和知识库索引将被清除，且无法恢复！');
+    if (!confirmed) return;
+
+    try {
+      await apiDelete(`/kb/courses/${courseId}`);
+      await showCustomAlert('课程删除成功！');
+      fetchCourses();
+    } catch (err) {
+      await showCustomAlert('删除课程失败: ' + err.message);
     }
   };
 
@@ -377,6 +464,15 @@ export default function SettingsView() {
           >
             <Cpu size={16} />
             <span style={{ fontSize: '13px' }}>默认模型绑定</span>
+          </button>
+          
+          <button
+            onClick={() => setActiveSubTab('courses')}
+            className={`cyber-nav-tab ${activeSubTab === 'courses' ? 'active' : ''}`}
+            style={{ width: '100%', textAlign: 'left', cursor: 'pointer', outline: 'none' }}
+          >
+            <GraduationCap size={16} />
+            <span style={{ fontSize: '13px' }}>课程管理</span>
           </button>
           
           <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 12px 6px' }}>系统功能(开发中)</span>
@@ -669,6 +765,144 @@ export default function SettingsView() {
               </div>
             </div>
           )}
+
+          {/* TAB 3: COURSES */}
+          {activeSubTab === 'courses' && (
+            <div>
+              {/* Toolbar */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '4px' }}>高等教育自适应课程库</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                    管理当前注册的自适应教学路线。默认系统核心课程不可删除。
+                  </p>
+                </div>
+                
+                <button onClick={() => {
+                  setCourseFormData({
+                    course_id: '',
+                    display_name: '',
+                    keywords: '',
+                    description: '',
+                    nodes: Array(8).fill(null).map((_, i) => ({
+                      title: '',
+                      description: ''
+                    }))
+                  });
+                  setShowAddCourseModal(true);
+                }} className="cyber-btn" style={{ padding: '8px 16px', fontSize: '12px' }}>
+                  <Plus size={14} style={{ marginRight: '6px' }} /> 注册新教学路径
+                </button>
+              </div>
+
+              {/* Course list */}
+              {isLoadingCourses ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-dim)' }}>
+                  <RefreshCw className="spin-anim" size={24} style={{ marginBottom: '8px' }} />
+                  <div>正在检索课程目录...</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {courses.map(course => {
+                    const isDefault = course.course_id === 'python_basics' || course.course_id === 'machine_learning';
+                    const parsedNodes = typeof course.nodes === 'string' ? JSON.parse(course.nodes) : course.nodes;
+                    const parsedKeywords = typeof course.keywords === 'string' ? JSON.parse(course.keywords) : course.keywords;
+                    
+                    return (
+                      <div 
+                        key={course.course_id} 
+                        className="cyber-card" 
+                        style={{ 
+                          background: 'var(--bg-card-glass)', 
+                          padding: '18px 24px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '12px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-main)' }}>
+                              {course.display_name}
+                            </span>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'ui-monospace, monospace' }}>
+                              [{course.course_id}]
+                            </span>
+                            {isDefault && (
+                              <span className="neon-badge neon-badge-primary" style={{ fontSize: '9px', padding: '1px 5px' }}>系统核心</span>
+                            )}
+                          </div>
+
+                          <div>
+                            <button 
+                              onClick={() => handleDeleteCourse(course.course_id)}
+                              disabled={isDefault}
+                              className="cyber-btn"
+                              style={{ 
+                                padding: '6px 10px', 
+                                minHeight: '26px', 
+                                background: isDefault ? 'rgba(255,255,255,0.01)' : 'rgba(190, 18, 60, 0.08)', 
+                                borderColor: isDefault ? 'rgba(255,255,255,0.05)' : 'rgba(190, 18, 60, 0.2)', 
+                                color: isDefault ? 'var(--text-dim)' : 'var(--danger)',
+                                cursor: isDefault ? 'not-allowed' : 'pointer',
+                                opacity: isDefault ? 0.35 : 1
+                              }}
+                              title={isDefault ? "核心课程不可删除" : "删除本课程"}
+                            >
+                              <Trash2 size={12} style={{ marginRight: '4px' }} /> 删除课程
+                            </button>
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                          {course.description || "暂无课程描述。"}
+                        </div>
+
+                        {/* Keywords badges */}
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: '600' }}>识别特征词:</span>
+                          {parsedKeywords && parsedKeywords.map((kw, i) => (
+                            <span key={i} className="neon-badge neon-badge-primary" style={{ fontSize: '9px', padding: '1px 6px', background: 'rgba(15, 118, 110, 0.04)', borderColor: 'rgba(15, 118, 110, 0.15)', color: 'var(--text-muted)' }}>
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Nodes hierarchy summary */}
+                        <div style={{ 
+                          borderTop: '1px dashed rgba(255, 255, 255, 0.04)', 
+                          paddingTop: '12px',
+                          marginTop: '4px'
+                        }}>
+                          <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: '600', marginBottom: '8px' }}>
+                            自适应关卡大纲 (共 {parsedNodes?.length || 0} 级):
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                            {parsedNodes && parsedNodes.map((node, i) => (
+                              <div key={node.id} style={{ 
+                                flex: '0 0 110px', 
+                                background: 'var(--bg-card-active)', 
+                                padding: '6px 8px', 
+                                borderRadius: '6px', 
+                                border: '1px solid rgba(255,255,255,0.02)',
+                                fontSize: '11px',
+                                textAlign: 'center'
+                              }}>
+                                <div style={{ color: 'var(--primary-neon)', fontWeight: '700', marginBottom: '2px' }}>L{i+1}</div>
+                                <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontWeight: '600' }} title={node.title}>
+                                  {node.title}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -780,6 +1014,179 @@ export default function SettingsView() {
                   style={{ padding: '8px 20px' }}
                 >
                   保存配置
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Course Modal */}
+      {showAddCourseModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          backdropFilter: 'blur(5px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999999
+        }}>
+          <div className="cyber-card" style={{
+            width: '800px',
+            maxWidth: '90%',
+            maxHeight: '90vh',
+            background: 'var(--bg-card-solid)',
+            padding: '28px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '18px',
+            overflow: 'hidden'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '900', borderBottom: '1px solid var(--border-neon)', paddingBottom: '12px', marginBottom: '4px' }}>
+              注册高等自适应课程
+            </h3>
+
+            <form onSubmit={handleSaveCourse} style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden', flex: 1 }}>
+              <div style={{ display: 'flex', gap: '20px', flex: 1, overflow: 'hidden' }}>
+                {/* Left Side: General Info */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', paddingRight: '4px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary-neon)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    第一部分: 课程元数据
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                      课程标识 ID (唯一且仅包含英文、数字、下划线)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="如: data_structures"
+                      required
+                      value={courseFormData.course_id}
+                      onChange={(e) => setCourseFormData(prev => ({ ...prev, course_id: e.target.value }))}
+                      className="cyber-input"
+                      style={{ height: '36px', fontSize: '12px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                      课程显示名称
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="如: 数据结构与算法"
+                      required
+                      value={courseFormData.display_name}
+                      onChange={(e) => setCourseFormData(prev => ({ ...prev, display_name: e.target.value }))}
+                      className="cyber-input"
+                      style={{ height: '36px', fontSize: '12px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                      RAG 学科分类特征词 (以逗号分隔)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="如: 数据结构, 二叉树, 链表, 算法, 图"
+                      required
+                      value={courseFormData.keywords}
+                      onChange={(e) => setCourseFormData(prev => ({ ...prev, keywords: e.target.value }))}
+                      className="cyber-input"
+                      style={{ height: '36px', fontSize: '12px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                      课程简介
+                    </label>
+                    <textarea
+                      placeholder="简短描述本自适应课程的学科范围..."
+                      required
+                      value={courseFormData.description}
+                      onChange={(e) => setCourseFormData(prev => ({ ...prev, description: e.target.value }))}
+                      className="cyber-input"
+                      style={{ height: '100px', fontSize: '12px', resize: 'none', padding: '10px 14px' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Vertical Divider */}
+                <div style={{ width: '1px', background: 'var(--border-neon)', alignSelf: 'stretch' }} />
+
+                {/* Right Side: 8-node outline editor */}
+                <div style={{ flex: 1.2, display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', paddingRight: '4px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary-neon)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>第二部分: 自适应关卡节点 (共8关)</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>建议按由易到难排序</span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {courseFormData.nodes.map((node, index) => (
+                      <div key={index} style={{ 
+                        background: 'var(--bg-card-active)', 
+                        padding: '10px 14px', 
+                        borderRadius: '8px', 
+                        border: '1px solid rgba(255,255,255,0.02)' 
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--primary-neon)', fontWeight: '800', fontFamily: 'monospace' }}>
+                            LEVEL {index + 1}
+                          </span>
+                          <input
+                            type="text"
+                            placeholder={`关卡 ${index + 1} 主题标题`}
+                            required
+                            value={node.title}
+                            onChange={(e) => {
+                              const updatedNodes = [...courseFormData.nodes];
+                              updatedNodes[index].title = e.target.value;
+                              setCourseFormData(prev => ({ ...prev, nodes: updatedNodes }));
+                            }}
+                            className="cyber-input"
+                            style={{ height: '28px', fontSize: '11px', padding: '0 8px', flex: 1 }}
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder={`输入该关卡的核心考核大纲简介...`}
+                          required
+                          value={node.description}
+                          onChange={(e) => {
+                            const updatedNodes = [...courseFormData.nodes];
+                            updatedNodes[index].description = e.target.value;
+                            setCourseFormData(prev => ({ ...prev, nodes: updatedNodes }));
+                          }}
+                          className="cyber-input"
+                          style={{ height: '28px', fontSize: '11px', padding: '0 8px' }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '16px', marginTop: '4px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddCourseModal(false)}
+                  className="cyber-btn"
+                  style={{ padding: '8px 18px', background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}
+                >
+                  取消
+                </button>
+                <button 
+                  type="submit" 
+                  className="cyber-btn"
+                  style={{ padding: '8px 24px' }}
+                >
+                  提交注册并建档
                 </button>
               </div>
             </form>

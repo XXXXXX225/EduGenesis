@@ -572,467 +572,50 @@ def db_save_path_nodes(username: str, nodes: List[PathNode]):
     conn.close()
 
 def db_sync_path_nodes_by_goals(username: str, goals: List[str]):
+    from app.knowledge_base import clean_subject_name
+    
+    if not goals:
+        return
+        
+    subject = goals[0]
+    course_id = clean_subject_name(subject)
+    
+    # Fetch course nodes from database
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT count(*) FROM user_path_nodes WHERE username = ?", (username,))
-    count = cursor.fetchone()[0]
+    cursor.execute("SELECT nodes FROM registered_courses WHERE course_id = ?", (course_id,))
+    row = cursor.fetchone()
     conn.close()
     
-    is_ml = any("Machine Learning" in g for g in goals)
-    
-    if count != 8:
-        nodes_to_seed = ml_path_nodes if is_ml else python_path_nodes
-        db_save_path_nodes(username, nodes_to_seed)
-    else:
-        existing = db_get_path_nodes(username)
-        is_existing_ml = any("线性代数" in node.title or "梯度下降" in node.title or "Linear" in node.title for node in existing)
-        if is_ml != is_existing_ml:
-            nodes_to_seed = ml_path_nodes if is_ml else python_path_nodes
-            db_save_path_nodes(username, nodes_to_seed)
-
-def seed_errors_and_logs_for_user(username: str):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    # 1. Check if user_errors has entries
-    cursor.execute("SELECT COUNT(*) FROM user_errors WHERE username = ?", (username,))
-    err_count = cursor.fetchone()[0]
-    if err_count == 0:
-        cursor.execute(
-            """INSERT INTO user_errors (username, error_id, title, code, error_msg, ai_explanation, solution, status) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                username,
-                "err1",
-                "局部变量引用错误 (UnboundLocalError)",
-                "def process_data(x):\n    print(y)  # 在赋值前尝试引用 y\n    y = x + 10\n    return y\n\nprocess_data(5)",
-                "UnboundLocalError: local variable 'y' referenced before assignment",
-                "在 Python 中，如果在函数体内部对一个变量进行了赋值（如 `y = x + 10`），Python 会默认将该变量标记为局部变量。但在执行第 2 行 `print(y)` 时，局部变量 `y` 尚未被定义和赋值，因此抛出 UnboundLocalError。修改方案：将 `print(y)` 移到赋值语句 `y = x + 10` 之后，或者显式声明 `global` / `nonlocal`。",
-                "def process_data(x):\n    y = x + 10\n    print(y)\n    return y\n\nprocess_data(5)",
-                "unresolved"
-            )
-        )
-        cursor.execute(
-            """INSERT INTO user_errors (username, error_id, title, code, error_msg, ai_explanation, solution, status) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                username,
-                "err2",
-                "列表索引越界错误 (IndexError)",
-                "def get_last_element(lst):\n    # 试图通过 lst[len(lst)] 访问最后一个元素\n    return lst[len(lst)]\n\nget_last_element([1, 2, 3])",
-                "IndexError: list index out of range",
-                "Python 中列表索引是从 0 开始的。一个长度为 N 的列表，其最大有效索引是 N - 1。当传入列表 `[1, 2, 3]` 时，其长度为 3，有效索引为 0, 1, 2。调用 `lst[len(lst)]` 即 `lst[3]` 就会触发 IndexError。修改方案：获取最后一个元素应该使用 `lst[-1]` 或 `lst[len(lst) - 1]`。",
-                "def get_last_element(lst):\n    if not lst:\n        return None\n    return lst[-1]\n\nget_last_element([1, 2, 3])",
-                "unresolved"
-            )
-        )
-        
-    # 2. Check if system_logs has entries
-    cursor.execute("SELECT COUNT(*) FROM system_logs WHERE username = ?", (username,))
-    log_count = cursor.fetchone()[0]
-    if log_count == 0:
-        import datetime
-        default_logs = [
-            ("主管智能体", "多智能体协同自适应教学系统已就绪，学术控制台连接成功。", "info"),
-            ("画像智能体", "认知特征雷达诊断模块初始化完成：感知引擎就绪。", "consensus"),
-            ("路径智能体", "个性化研学路线规划引擎启动：首期自适应课程就绪。", "info"),
-            ("安全校验智能体", "学术风控审计沙盒安全防御层加载成功。", "consensus")
-        ]
-        for idx, (sender, message, log_type) in enumerate(default_logs):
-            staggered_time = (datetime.datetime.now() - datetime.timedelta(seconds=4-idx)).strftime("%H:%M:%S")
-            cursor.execute(
-                "INSERT INTO system_logs (username, timestamp, sender, message, log_type) VALUES (?, ?, ?, ?, ?)",
-                (username, staggered_time, sender, message, log_type)
-            )
+    nodes_to_seed = []
+    if row:
+        try:
+            nodes_data = json.loads(row[0])
+            nodes_to_seed = [PathNode(**n) for n in nodes_data]
+        except Exception as e:
+            print(f"Error parsing nodes for course {course_id}: {e}")
             
-    conn.commit()
-    conn.close()
-
-def db_log_agent_action(username: str, sender: str, message: str, log_type: str = "info"):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    t_str = datetime.datetime.now().strftime("%H:%M:%S")
-    cursor.execute(
-        "INSERT INTO system_logs (username, timestamp, sender, message, log_type) VALUES (?, ?, ?, ?, ?)",
-        (username, t_str, sender, message, log_type)
-    )
-    conn.commit()
-    conn.close()
-
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    if not nodes_to_seed:
+        # Fallback if course not found or invalid
+        nodes_to_seed = python_path_nodes
+        
+    # Get existing user path nodes
+    existing = db_get_path_nodes(username)
     
-    # Users Credentials Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        username TEXT PRIMARY KEY,
-        password_hash TEXT NOT NULL,
-        cognitive_style TEXT NOT NULL,
-        learning_goals TEXT NOT NULL
-    )
-    """)
-    
-    # User Profiles Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS user_profiles (
-        username TEXT PRIMARY KEY,
-        knowledge_base INTEGER NOT NULL,
-        learning_pace INTEGER NOT NULL,
-        cognitive_style TEXT NOT NULL,
-        error_patterns TEXT NOT NULL,
-        learning_goals TEXT NOT NULL,
-        engagement INTEGER NOT NULL,
-        learning_stats TEXT
-    )
-    """)
-    
-    # User Path Nodes Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS user_path_nodes (
-        username TEXT,
-        node_id TEXT,
-        title TEXT NOT NULL,
-        status TEXT NOT NULL,
-        description TEXT NOT NULL,
-        resources TEXT NOT NULL,
-        PRIMARY KEY (username, node_id)
-    )
-    """)
-    
-    # User Resources Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS user_resources (
-        username TEXT,
-        node_id TEXT,
-        resource_type TEXT,
-        content TEXT,
-        PRIMARY KEY (username, node_id, resource_type)
-    )
-    """)
-    
-    # User Errors Notebook Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS user_errors (
-        username TEXT,
-        error_id TEXT,
-        title TEXT NOT NULL,
-        code TEXT NOT NULL,
-        error_msg TEXT NOT NULL,
-        ai_explanation TEXT NOT NULL,
-        solution TEXT NOT NULL,
-        status TEXT NOT NULL,
-        PRIMARY KEY (username, error_id)
-    )
-    """)
-    
-    # System Multi-Agent Operation Logs Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS system_logs (
-        username TEXT,
-        timestamp TEXT NOT NULL,
-        sender TEXT NOT NULL,
-        message TEXT NOT NULL,
-        log_type TEXT NOT NULL
-    )
-    """)
-    
-    # User LLM Providers Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS user_llm_providers (
-        username TEXT,
-        provider_id TEXT,
-        provider_name TEXT NOT NULL,
-        api_base TEXT NOT NULL,
-        api_key TEXT NOT NULL,
-        is_enabled INTEGER NOT NULL,
-        models TEXT NOT NULL,
-        PRIMARY KEY (username, provider_id)
-    )
-    """)
-    
-    # User Model Routing Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS user_model_routing (
-        username TEXT PRIMARY KEY,
-        chat_provider_id TEXT,
-        chat_model TEXT,
-        planner_provider_id TEXT,
-        planner_model TEXT,
-        diagnostics_provider_id TEXT,
-        diagnostics_model TEXT,
-        resources_provider_id TEXT,
-        resources_model TEXT
-    )
-    """)
-    
-    # Chat Sessions Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS chat_sessions (
-        session_id TEXT PRIMARY KEY,
-        username TEXT,
-        title TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (username) REFERENCES users(username)
-    )
-    """)
-    
-    # Chat Messages Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS chat_messages (
-        message_id TEXT PRIMARY KEY,
-        session_id TEXT,
-        role TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id)
-    )
-    """)
-    
-    # Seed default user
-    cursor.execute("SELECT username, password_hash FROM users WHERE username = 'default_user'")
-    row = cursor.fetchone()
-    if not row:
-        pwd_hash = get_password_hash("default_password", "default_user")
-        cursor.execute(
-            "INSERT INTO users (username, password_hash, cognitive_style, learning_goals) VALUES (?, ?, ?, ?)",
-            ("default_user", pwd_hash, "Practical Coding", "Python Basics")
-        )
-        cursor.execute(
-            "INSERT INTO user_profiles (username, knowledge_base, learning_pace, cognitive_style, error_patterns, learning_goals, engagement, learning_stats) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("default_user", 40, 50, "Practical Coding", json.dumps(["Syntax Errors", "Indentation Issues"]), json.dumps(["Python Basics"]), 80, json.dumps({
-                "study_time": 45,
-                "quiz_accuracy": 85,
-                "mastered_nodes": 1,
-                "streak": [True, True, False, False, False, False, False]
-            }))
-        )
-
-        for node in python_path_nodes:
-            cursor.execute(
-                "INSERT INTO user_path_nodes (username, node_id, title, status, description, resources) VALUES (?, ?, ?, ?, ?, ?)",
-                ("default_user", node.id, node.title, node.status, node.description, json.dumps(node.resources))
-            )
-            default_profile = UserProfile(
-                knowledge_base=40,
-                learning_pace=50,
-                cognitive_style="Practical Coding",
-                error_patterns=["Syntax Errors", "Indentation Issues"],
-                learning_goals=["Python Basics"],
-                engagement=80
-            )
-            default_assets = get_fallback_assets_for_topic(node.title, default_profile, node.id)
-            for res_type in node.resources:
-                content_val = default_assets.get(res_type, "")
-                if not isinstance(content_val, str):
-                    content_val = json.dumps(content_val, ensure_ascii=False)
-                cursor.execute(
-                    "INSERT INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
-                    ("default_user", node.id, res_type, content_val)
-                )
+    # If the user doesn't have exactly the same number of nodes, or their nodes do not match the target course's nodes
+    # (e.g. by comparing the first node's title), then sync/reset the nodes.
+    should_sync = False
+    if len(existing) != len(nodes_to_seed) or len(existing) == 0:
+        should_sync = True
     else:
-        stored_hash = row[1]
-        if not stored_hash.startswith("pbkdf2_sha256$"):
-            new_hash = get_password_hash("default_password", "default_user")
-            cursor.execute("UPDATE users SET password_hash = ? WHERE username = 'default_user'", (new_hash,))
+        # Check if the titles match. If they differ, it means the user switched the course.
+        if existing[0].title != nodes_to_seed[0].title:
+            should_sync = True
+            
+    if should_sync:
+        db_save_path_nodes(username, nodes_to_seed)
 
-    # Seed default Xunfei provider for default_user if not exists
-    cursor.execute("SELECT COUNT(*) FROM user_llm_providers WHERE username = 'default_user' AND provider_id = 'xunfei'")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute(
-            """INSERT INTO user_llm_providers 
-               (username, provider_id, provider_name, api_base, api_key, is_enabled, models) 
-               VALUES (?, 'xunfei', '讯飞星火 Spark', 'https://spark-api-open.xf-yun.com/v1', 'env', 1, ?)""",
-            (
-                "default_user",
-                json.dumps([
-                    {"name": "generalv3.5", "enabled": True, "tags": ["默认", "推荐", "上下文 8K"]},
-                    {"name": "lite", "enabled": False, "tags": ["轻量", "上下文 4K"]},
-                    {"name": "pro-128k", "enabled": False, "tags": ["推理", "高上下文 128K"]}
-                ], ensure_ascii=False)
-            )
-        )
-        
-    # Seed default routing for default_user if not exists
-    cursor.execute("SELECT COUNT(*) FROM user_model_routing WHERE username = 'default_user'")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute(
-            """INSERT INTO user_model_routing 
-               (username, chat_provider_id, chat_model, 
-                planner_provider_id, planner_model, 
-                diagnostics_provider_id, diagnostics_model, 
-                resources_provider_id, resources_model) 
-               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5')""",
-            ("default_user",)
-        )
 
-    conn.commit()
-    conn.close()
-    
-    seed_errors_and_logs_for_user("default_user")
-
-def db_get_user_providers(username: str) -> list:
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT provider_id, provider_name, api_base, api_key, is_enabled, models FROM user_llm_providers WHERE username = ?",
-        (username,)
-    )
-    rows = cursor.fetchall()
-    conn.close()
-    
-    # Auto-seed default Xunfei Spark if empty
-    if not rows:
-        default_xunfei = {
-            "provider_id": "xunfei",
-            "provider_name": "讯飞星火 Spark",
-            "api_base": "https://spark-api-open.xf-yun.com/v1",
-            "api_key": "env",
-            "is_enabled": 1,
-            "models": json.dumps([
-                {"name": "generalv3.5", "enabled": True, "tags": ["默认", "推荐", "上下文 8K"]},
-                {"name": "lite", "enabled": False, "tags": ["轻量", "上下文 4K"]},
-                {"name": "pro-128k", "enabled": False, "tags": ["推理", "高上下文 128K"]}
-            ], ensure_ascii=False)
-        }
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            """INSERT INTO user_llm_providers 
-               (username, provider_id, provider_name, api_base, api_key, is_enabled, models) 
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (
-                username,
-                default_xunfei["provider_id"],
-                default_xunfei["provider_name"],
-                default_xunfei["api_base"],
-                default_xunfei["api_key"],
-                default_xunfei["is_enabled"],
-                default_xunfei["models"]
-            )
-        )
-        conn.commit()
-        conn.close()
-        return [default_xunfei]
-        
-    res = []
-    for r in rows:
-        res.append({
-            "provider_id": r[0],
-            "provider_name": r[1],
-            "api_base": r[2],
-            "api_key": r[3],
-            "is_enabled": r[4],
-            "models": r[5]
-        })
-    return res
-
-def db_save_user_provider(username: str, provider_data: dict):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        """INSERT OR REPLACE INTO user_llm_providers 
-           (username, provider_id, provider_name, api_base, api_key, is_enabled, models) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (
-            username,
-            provider_data["provider_id"],
-            provider_data["provider_name"],
-            provider_data["api_base"],
-            provider_data["api_key"],
-            int(provider_data["is_enabled"]),
-            provider_data["models"]
-        )
-    )
-    conn.commit()
-    conn.close()
-
-def db_delete_user_provider(username: str, provider_id: str):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        "DELETE FROM user_llm_providers WHERE username = ? AND provider_id = ?",
-        (username, provider_id)
-    )
-    conn.commit()
-    conn.close()
-
-def db_get_model_routing(username: str) -> dict:
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        """SELECT chat_provider_id, chat_model, 
-                  planner_provider_id, planner_model, 
-                  diagnostics_provider_id, diagnostics_model, 
-                  resources_provider_id, resources_model 
-           FROM user_model_routing WHERE username = ?""",
-        (username,)
-    )
-    row = cursor.fetchone()
-    conn.close()
-    
-    if not row:
-        default_routing = {
-            "chat_provider_id": "xunfei",
-            "chat_model": "generalv3.5",
-            "planner_provider_id": "xunfei",
-            "planner_model": "generalv3.5",
-            "diagnostics_provider_id": "xunfei",
-            "diagnostics_model": "generalv3.5",
-            "resources_provider_id": "xunfei",
-            "resources_model": "generalv3.5"
-        }
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            """INSERT INTO user_model_routing 
-               (username, chat_provider_id, chat_model, 
-                planner_provider_id, planner_model, 
-                diagnostics_provider_id, diagnostics_model, 
-                resources_provider_id, resources_model) 
-               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5')""",
-            (username,)
-        )
-        conn.commit()
-        conn.close()
-        return default_routing
-        
-    return {
-        "chat_provider_id": row[0],
-        "chat_model": row[1],
-        "planner_provider_id": row[2],
-        "planner_model": row[3],
-        "diagnostics_provider_id": row[4],
-        "diagnostics_model": row[5],
-        "resources_provider_id": row[6],
-        "resources_model": row[7]
-    }
-
-def db_save_model_routing(username: str, routing_data: dict):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        """INSERT OR REPLACE INTO user_model_routing 
-           (username, chat_provider_id, chat_model, 
-            planner_provider_id, planner_model, 
-            diagnostics_provider_id, diagnostics_model, 
-            resources_provider_id, resources_model) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            username,
-            routing_data.get("chat_provider_id", "xunfei"),
-            routing_data.get("chat_model", "generalv3.5"),
-            routing_data.get("planner_provider_id", "xunfei"),
-            routing_data.get("planner_model", "generalv3.5"),
-            routing_data.get("diagnostics_provider_id", "xunfei"),
-            routing_data.get("diagnostics_model", "generalv3.5"),
-            routing_data.get("resources_provider_id", "xunfei"),
-            routing_data.get("resources_model", "generalv3.5")
-        )
-    )
-    conn.commit()
-    conn.close()
 
 
 # ─── Error Tag Extraction for Dynamic Path Reinforcement ───
@@ -1459,11 +1042,11 @@ def init_db():
         
         cursor.execute(
             "INSERT INTO registered_courses (course_id, display_name, keywords, description, nodes) VALUES (?, ?, ?, ?, ?)",
-            ("python_basics", "Python 编程基础", json.dumps(["python", "变量", "循环", "条件", "函数", "数据结构"], ensure_ascii=False), "Python 基础语法与控制流", python_nodes_json)
+            ("python_basics", "Python \u7f16\u7a0b\u57fa\u7840", json.dumps(["python", "basics", "\u53d8\u91cf", "\u5faa\u73af", "\u6761\u4ef6", "\u51fd\u6570", "\u6570\u636e\u7ed3\u6784"], ensure_ascii=False), "Python \u57fa\u784d\u8bed\u6cd5\u4e0e\u63a7\u5236\u6d41", python_nodes_json)
         )
         cursor.execute(
             "INSERT INTO registered_courses (course_id, display_name, keywords, description, nodes) VALUES (?, ?, ?, ?, ?)",
-            ("machine_learning", "机器学习与深度学习", json.dumps(["机器学习", "线性代数", "梯度", "神经网络", "深度学习", "回归", "分类", "反向传播"], ensure_ascii=False), "经典机器学习数学原理与深度学习算法", ml_nodes_json)
+            ("machine_learning", "\u673a\u5668\u5b66\u4e60\u4e0e\u6df1\u5ea6\u5b66\u4e60", json.dumps(["machine", "ml", "learning", "\u673a\u5668\u5b66\u4e60", "\u7ebf\u6027\u4ee3\u6570", "\u68af\u5ea6", "\u795e\u7ecf\u7f51\u7edc", "\u6df1\u5ea6\u5b66\u4e60", "\u56de\u5f52", "\u5206\u7c7b", "\u53cd\u5411\u4f20\u64ad"], ensure_ascii=False), "\u7ecf\u5178\u673a\u5668\u5b66\u4e60\u6570\u5b66\u539f\u7406\u4e0e\u6df1\u5ea6\u5b66\u4e60\u7b97\u6cd5", ml_nodes_json)
         )
     
     # Seed default user

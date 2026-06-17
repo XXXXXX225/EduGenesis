@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GraduationCap, ArrowRight } from 'lucide-react';
-import { apiPost } from '../../utils/api';
+import { apiPost, apiGet } from '../../utils/api';
 import { saveSession } from '../../utils/session';
 import { useAppContext } from '../../context/AppContext';
 
@@ -55,6 +55,31 @@ const AuthView = () => {
   const [authError, setAuthError] = useState('');
   // 字段级校验错误
   const [fieldErrors, setFieldErrors] = useState({});
+
+  // Dynamic registered courses list
+  const [courses, setCourses] = useState([]);
+  const [loadingCourses, setLoadingCourses] = useState(true);
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const data = await apiGet('/kb/courses');
+        setCourses(data);
+        if (data && data.length > 0) {
+          // If the default regLearningGoal is not in fetched list, set to first course
+          const match = data.find(c => c.display_name === regLearningGoal || c.course_id === regLearningGoal);
+          if (!match) {
+            setRegLearningGoal(data[0].display_name);
+          }
+        }
+      } catch (err) {
+        console.error("加载注册课程失败:", err);
+      } finally {
+        setLoadingCourses(false);
+      }
+    };
+    fetchCourses();
+  }, []);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -384,40 +409,50 @@ const AuthView = () => {
             {/* Learning Goal Selector */}
             <div className="form-group" style={{ marginBottom: '28px' }}>
               <label className="form-label">学习目标主题</label>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <div
-                  className={`cyber-card`}
-                  style={{
-                    flex: 1,
-                    padding: '12px',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    background: regLearningGoal === 'Python Basics' ? 'rgba(15, 118, 110, 0.05)' : 'var(--bg-card-solid)',
-                    borderColor: regLearningGoal === 'Python Basics' ? 'var(--primary-neon)' : 'var(--border-neon)',
-                    fontSize: '13px',
-                    fontWeight: '700'
-                  }}
-                  onClick={() => setRegLearningGoal('Python Basics')}
-                >
-                  Python 编程基础
+              {loadingCourses ? (
+                <div style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center', border: '1px dashed var(--border-neon)', borderRadius: '8px' }}>
+                  正在检索自适应云端学术路径...
                 </div>
-                <div
-                  className={`cyber-card`}
-                  style={{
-                    flex: 1,
-                    padding: '12px',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    background: regLearningGoal === 'Machine Learning' ? 'rgba(15, 118, 110, 0.05)' : 'var(--bg-card-solid)',
-                    borderColor: regLearningGoal === 'Machine Learning' ? 'var(--primary-neon)' : 'var(--border-neon)',
-                    fontSize: '13px',
-                    fontWeight: '700'
-                  }}
-                  onClick={() => setRegLearningGoal('Machine Learning')}
-                >
-                  机器学习与深度学习
+              ) : (
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  {courses.map((course) => {
+                    const isSelected = regLearningGoal === course.display_name || regLearningGoal === course.course_id;
+                    return (
+                      <div
+                        key={course.course_id}
+                        className={`cyber-card`}
+                        style={{
+                          flex: '1 1 calc(50% - 6px)',
+                          minWidth: '150px',
+                          padding: '12px',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          background: isSelected ? 'rgba(15, 118, 110, 0.08)' : 'var(--bg-card-solid)',
+                          borderColor: isSelected ? 'var(--primary-neon)' : 'var(--border-neon)',
+                          boxShadow: isSelected ? '0 0 10px rgba(15, 118, 110, 0.15)' : 'none',
+                          fontSize: '13px',
+                          fontWeight: '700',
+                          transition: 'all 0.2s ease',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                          justifyContent: 'center'
+                        }}
+                        onClick={() => setRegLearningGoal(course.display_name)}
+                      >
+                        <div style={{ color: isSelected ? 'var(--primary-neon)' : 'var(--text-main)' }}>
+                          {course.display_name}
+                        </div>
+                        {course.description && (
+                          <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '400', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={course.description}>
+                            {course.description}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
             </div>
 
             <button type="submit" className="cyber-btn" style={{ justifyContent: 'center', padding: '14px', textTransform: 'none', letterSpacing: '0.05em' }}>

@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 RAG (Retrieval-Augmented Generation) Knowledge Base for EduGenesis.
 Provides document chunking, keyword extraction, and semantic retrieval
@@ -15,16 +15,78 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 # ─── Subject name normalization ───
 def clean_subject_name(subject: str) -> str:
-    """Standardize the subject string to map to directory names."""
-    sub_lower = subject.lower()
-    # Chinese keyword mappings for ML
-    ml_cn_keywords = ["机器学习", "线性代数", "梯度", "神经网络", "深度学习", "回归", "分类", "正则化", "反向传播"]
-    for kw in ml_cn_keywords:
-        if kw in subject:
-            return "machine_learning"
-    if "machine" in sub_lower or "ml" in sub_lower or "learning" in sub_lower:
-        return "machine_learning"
+    """Standardize the subject string to map to course_id by querying registered_courses DB."""
+    if not subject:
+        return "python_basics"
+        
+    # Standardize function for fuzzy matching
+    def std(s: str) -> str:
+        return s.lower().replace('_', '').replace(' ', '').replace('-', '')
+        
+    sub_std = std(subject)
+    
+    # Try querying the database
+    conn = None
+    courses = []
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT course_id, display_name, keywords FROM registered_courses")
+        rows = cursor.fetchall()
+        for row in rows:
+            c_id = row[0]
+            display_name = row[1]
+            try:
+                kws = json.loads(row[2])
+            except Exception:
+                kws = []
+            courses.append({
+                "course_id": c_id,
+                "display_name": display_name,
+                "keywords": kws
+            })
+    except Exception as e:
+        print(f"Database error in clean_subject_name: {e}")
+        # Fallback to hardcoded defaults in case database is not accessible
+        courses = [
+            {
+                "course_id": "python_basics",
+                "display_name": "Python 编程基础",
+                "keywords": ["python", "basics", "变量", "循环", "条件", "函数", "数据结构"]
+            },
+            {
+                "course_id": "machine_learning",
+                "display_name": "机器学习与深度学习",
+                "keywords": ["machine", "ml", "learning", "机器学习", "线性代数", "梯度", "神经网络", "深度学习", "回归", "分类", "反向传播"]
+            }
+        ]
+    finally:
+        if conn:
+            conn.close()
+
+    # 1. Exact match on standardized course_id or display_name
+    for course in courses:
+        if sub_std == std(course["course_id"]) or sub_std == std(course["display_name"]):
+            return course["course_id"]
+            
+    # 2. Substring match on standardized course_id or display_name
+    for course in courses:
+        if (std(course["course_id"]) in sub_std or 
+            std(course["display_name"]) in sub_std or 
+            sub_std in std(course["course_id"]) or 
+            sub_std in std(course["display_name"])):
+            return course["course_id"]
+
+    # 3. Substring match on any keyword inside the subject string (case-insensitive)
+    for course in courses:
+        for kw in course["keywords"]:
+            if kw.lower() in subject.lower():
+                return course["course_id"]
+                
+    # 4. Fallback to python_basics
     return "python_basics"
+
+
 
 # ─── Document chunking ───
 def chunk_markdown_by_headers(markdown_text: str) -> list:
