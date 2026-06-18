@@ -9,7 +9,8 @@ from app.db import (
     db_log_agent_action,
     get_fallback_assets_for_topic
 )
-from app.llm_client import call_llm_resource_agent, get_route_llm_params
+from app.ai.scenes import generate_learning_resources
+from app.ai.platform import get_capability_config
 from app.knowledge_base import load_course_material
 from app.video_agent import get_video_recommendations_for_node
 
@@ -92,7 +93,8 @@ class ResourceAgent(BaseAgent):
         style_instructions = context.get("style_instructions", "")
         trigger_type = context.get("trigger_type", "auto")
         
-        from app.knowledge_base import clean_subject_name, rag_retrieve_context
+        from app.knowledge_base import clean_subject_name
+        from app.ai.rag import rag_retrieve_context
         subject = profile.learning_goals[0] if (profile.learning_goals and len(profile.learning_goals) > 0) else "Python Basics"
         subject_id = clean_subject_name(subject)
         course_context = load_course_material(subject_id, node_id)
@@ -105,7 +107,7 @@ class ResourceAgent(BaseAgent):
             msg_start = f"开始为关卡 [{node_title}] 动态编排学术资源，调度资源项：{', '.join(node_resources)}。"
         self.log(username, msg_start, "info")
         
-        api_base, api_key, model = get_route_llm_params(username, 'resources')
+        _cfg = get_capability_config(username, 'resources')
         
         fallback_assets = get_fallback_assets_for_topic(node_title, profile, node_id)
         generated_data = {}
@@ -117,9 +119,9 @@ class ResourceAgent(BaseAgent):
         if style_instructions:
             enhanced_context = f"{style_instructions}\n\n权威内容大纲基础：\n{course_context}"
             
-        if api_key and api_resources:
+        if _cfg.api_key and api_resources:
             try:
-                analysis = call_llm_resource_agent(
+                analysis = generate_learning_resources(
                     node_title, 
                     api_resources, 
                     profile, 

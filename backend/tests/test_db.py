@@ -142,3 +142,35 @@ def test_db_idempotency():
     
     # Check that count hasn't changed (idempotence)
     assert count_before == count_after
+
+
+def test_db_course_switch_clears_resources():
+    # 1. Start with Python Basics
+    db_sync_path_nodes_by_goals(TEST_USER, ["Python 编程基础"])
+    
+    # 2. Insert dummy resources for TEST_USER
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO user_resources (username, node_id, resource_type, content) VALUES (?, 'node1', 'concept_map', 'dummy_content')",
+        (TEST_USER,)
+    )
+    conn.commit()
+    
+    # Verify they were inserted
+    cursor.execute("SELECT COUNT(*) FROM user_resources WHERE username = ?", (TEST_USER,))
+    assert cursor.fetchone()[0] == 1
+    conn.close()
+    
+    # 3. Switch to Machine Learning (which has a different set of nodes/titles, triggering sync)
+    db_sync_path_nodes_by_goals(TEST_USER, ["机器学习与深度学习"])
+    
+    # 4. Verify resources are cleared
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM user_resources WHERE username = ?", (TEST_USER,))
+    count = cursor.fetchone()[0]
+    conn.close()
+    
+    assert count == 0
+

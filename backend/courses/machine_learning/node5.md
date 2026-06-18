@@ -1,25 +1,26 @@
-# Regularization: Preventing Overfitting
+# 正则化防御过拟合机制
 
-Regularization controls model complexity to improve generalization.
+在机器学习模型拟合过程中，我们不仅关注模型在训练集上的拟合程度，更关注其在未知新数据上的泛化能力。正则化是防御过拟合、调整偏差与方差权衡的最核心工程技术。
 
-## Overfitting vs Underfitting
-- Overfitting: low train error, high test error
-- Underfitting: high error on both
-- Bias-variance tradeoff
+## 1. 过拟合与偏差-方差权衡
+* **过拟合（Overfitting）**：模型在训练集上表现完美，但由于过度刻画了训练数据中的随机噪声，导致在测试集（泛化性能）上表现糟糕。高方差（High Variance）。
+* **欠拟合（Underfitting）**：模型过于简单，甚至无法拟合训练集本身的趋势。高偏差（High Bias）。
+* **权衡关系**：
+  $$\text{Total Error} = \text{Bias}^2 + \text{Variance} + \text{Irreducible Noise}$$
+  正则化的核心目的就是通过限制参数的自由度，牺牲微小的偏差来换取方差的大幅下降。
 
-## L1 Regularization (Lasso)
-- Adds |w| penalty: L = MSE + lambda*sum(|w_i|)
-- Produces sparse solutions (feature selection)
+## 2. L1 正则化 (Lasso) 与稀疏特征
+L1 正则化通过在损失函数中添加参数绝对值之和（L1 范数）作为惩罚项：
+* **损失函数表达式**：
+  $$J(\theta) = J_0(\theta) + \lambda \sum_{j=1}^d |\theta_j|$$
+  其中 $J_0(\theta)$ 为原始损失，$\lambda > 0$ 是控制正则化强度的超参数。
+* **稀疏性（Sparsity）**：
+  L1 正则化的几何约束边界是一个棱角分明的方形，最优点极易落在坐标轴上。这意味着**它会使大量无用特征的权重 $\theta_j$ 彻底归零**。因此，Lasso 回归常被用作内建的特征选择工具，适用于高维稀疏特征的提取与剪枝。
 
-## L2 Regularization (Ridge)
-- Adds w^2 penalty: L = MSE + lambda*sum(w_i^2)
-- Shrinks weights toward zero evenly
-
-## Elastic Net
-- Combines L1 + L2: L = MSE + lambda1*|w| + lambda2*w^2
-
-## Cross-Validation
-- k-fold: split data into k parts, train on k-1, test on 1
-- Grid search for hyperparameter tuning
-
-**Key Takeaway**: Always use cross-validation to tune regularization strength.
+## 3. L2 正则化 (Ridge) 与权重衰减
+L2 正则化（也称岭回归、权重衰减 Weight Decay）通过引入参数平方和（L2 范数平方）作为惩罚项：
+* **损失函数表达式**：
+  $$J(\theta) = J_0(\theta) + \frac{\lambda}{2} \sum_{j=1}^d \theta_j^2$$
+* **平滑效果**：
+  L2 正则化的几何约束边界是一个平滑的圆球形。最优点一般不会落在坐标轴上，而是**迫使所有参数值都逼近于零但绝不归零**，促使权重均匀地分布在不同特征上。
+  * **作用**：避免了单一参数过大导致模型对某一项特征输入过于敏感，极大地增强了模型的泛化能力与抗噪性能。

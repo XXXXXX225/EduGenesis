@@ -12,6 +12,8 @@ from app.db import (
     db_save_profile,
     db_get_path_nodes,
     db_sync_path_nodes_by_goals,
+    db_get_all_registered_courses,
+    db_auto_register_course,
     db_create_chat_session,
     db_get_chat_sessions,
     db_update_chat_session_title,
@@ -21,7 +23,9 @@ from app.db import (
     db_get_chat_messages
 )
 from app.limiter import rate_limit_chat
-from app.llm_client import call_llm_structured_analysis, call_llm_stream_tutor, get_route_llm_params
+from app.ai.platform import get_capability_config
+from app.ai.scenes import analyze_chat_profile, stream_tutor_reply, optimize_rag_query
+from app.ai.rag import rag_retrieve_context
 
 router = APIRouter()
 
@@ -60,7 +64,7 @@ async def get_session_messages(session_id: str, current_username: str = Depends(
 async def chat_interaction(request: ChatRequest, current_username: str = Depends(get_current_username)):
     target_user = current_username
     current_profile = db_get_profile(target_user)
-    _, api_key, _ = get_route_llm_params(target_user, 'chat')
+    _chat_cfg = get_capability_config(target_user, 'chat')
     
     async def event_generator():
         assistant_chunks = []
@@ -92,8 +96,19 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             active_node = next((n for n in nodes if n.status == 'active'), None)
             if not active_node and nodes:
                 active_node = nodes[0]
-            node_title = active_node.title if active_node else "Python 变量与数据类型"
-            node_desc = active_node.description if active_node else "探索 Python 基础语法"
+            
+            # Check if user specifically asked for videos in the current message
+            user_msg_content = request.messages[-1].content if request.messages else ""
+            from app.ai import optimize_video_query_from_message
+            specific_kw = await asyncio.to_thread(optimize_video_query_from_message, user_msg_content, target_user)
+            
+            if specific_kw:
+                print(f"[Video Recommendation Query] Extracted specific keyword: '{specific_kw}' from user message")
+                node_title = specific_kw
+                node_desc = f"关于 {specific_kw} 的精品微课推荐"
+            else:
+                node_title = active_node.title if active_node else "Python 变量与数据类型"
+                node_desc = active_node.description if active_node else "探索 Python 基础语法"
             
             rec_videos = await asyncio.to_thread(
                 get_video_recommendations_for_node,
@@ -109,11 +124,11 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
         yield f"data: {json.dumps({'type': 'status', 'status': '🧠 [主管智能体] 正在唤醒协同智能体网络...'})}\n\n"
         await asyncio.sleep(0.4)
         
-        if api_key:
+        if _chat_cfg.api_key:
             # Step 2: Structured Analyzer Call
             yield f"data: {json.dumps({'type': 'status', 'status': '📊 [画像智能体] 正在对您的认知指标进行多维提取与诊断...'})}\n\n"
             
-            analysis = await asyncio.to_thread(call_llm_structured_analysis, request.messages, current_profile, target_user)
+            analysis = await asyncio.to_thread(analyze_chat_profile, request.messages, current_profile, target_user)
             
             profile_updated = False
             path_updated = False
@@ -127,8 +142,39 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                             profile_updated = True
                 
                 subj = analysis.get("switch_to_subject")
-                if subj in ["Python Basics", "Machine Learning"]:
-                    if subj not in current_profile.learning_goals:
+                if not subj and "profile_updates" in analysis and isinstance(analysis["profile_updates"], dict):
+                    subj = analysis["profile_updates"].get("switch_to_subject")
+                
+                if subj:
+                    subj_str = str(subj).strip().lower()
+                    all_courses = db_get_all_registered_courses()
+                    matched_course = None
+                    for course in all_courses:
+                        c_display = course["display_name"].lower()
+                        c_id = course["course_id"].lower()
+                        kws = [k.lower() for k in course.get("keywords", [])]
+                        
+                        # Match display name, course ID, or any of the keywords
+                        if subj_str == c_display or subj_str == c_id or subj_str in c_display or c_display in subj_str or any(kw in subj_str for kw in kws):
+                            matched_course = course
+                            break
+                            
+                    if matched_course:
+                        subj = matched_course["display_name"]
+                        
+                if subj and subj not in current_profile.learning_goals:
+                    # Check if course is already registered
+                    all_courses = db_get_all_registered_courses()
+                    valid_names = {c["display_name"] for c in all_courses}
+                    
+                    if subj not in valid_names:
+                        # Auto-register the new course on-the-fly!
+                        yield f"data: {json.dumps({'type': 'status', 'status': f'🎓 [规划智能体] 正在为「{subj}」自动生成课程大纲，请稍候...'})}\n\n"
+                        registered_ok = await asyncio.to_thread(db_auto_register_course, subj, target_user)
+                        if registered_ok:
+                            valid_names.add(subj)
+                    
+                    if subj in valid_names:
                         current_profile.learning_goals = [subj]
                         db_sync_path_nodes_by_goals(target_user, [subj])
                         profile_updated = True
@@ -142,16 +188,21 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             
             yield f"data: {json.dumps({'type': 'status', 'status': '💬 [导师智能体] 正在根据新画像为您生成个性化讲义...'})}\n\n"
             
-            from app.knowledge_base import clean_subject_name, rag_retrieve_context
+            from app.knowledge_base import clean_subject_name
             subject = current_profile.learning_goals[0] if (current_profile.learning_goals and len(current_profile.learning_goals) > 0) else "python_basics"
             subject_id = clean_subject_name(subject)
             user_msg = request.messages[-1].content if request.messages else ""
             knowledge_context = ""
             if user_msg:
-                knowledge_context = rag_retrieve_context(user_msg, subject_id, username=target_user)
+                if len(request.messages) > 1:
+                    optimized_query = await asyncio.to_thread(optimize_rag_query, request.messages, target_user)
+                    print(f"[RAG Query Optimization] Original: '{user_msg}' -> Optimized: '{optimized_query}'")
+                else:
+                    optimized_query = user_msg
+                knowledge_context = rag_retrieve_context(optimized_query, subject_id, username=target_user)
 
             stream_response = await asyncio.to_thread(
-                call_llm_stream_tutor,
+                stream_tutor_reply,
                 request.messages,
                 current_profile,
                 target_user,
@@ -181,9 +232,66 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                 
                 # If LLM stream produced no content (e.g. API authentication error), fallback to simulator
                 if not assistant_chunks:
-                    async for chunk in run_fallback_simulator(request.messages, current_profile, assistant_chunks):
+                    async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks):
                         yield chunk
                 else:
+                    # Check if we should auto-append video recommendation cards
+                    full_reply = "".join(assistant_chunks)
+                    user_msg_lower = user_msg.lower() if user_msg else ""
+                    video_keywords = ["视频", "录像", "推荐几段", "视频推荐", "b站", "bilibili", "哔哩哔哩", "推荐视频", "视频链接", "网课", "vlog", "讲解", "mv", "课程"]
+                    if any(kw in user_msg_lower for kw in video_keywords) or (request.messages and "video" in request.messages[-1].content.lower()):
+                        if rec_videos and "[VIDEO_RECOMMEND:" not in full_reply:
+                            append_text = "\n\n为您推荐以下相关微课视频，您可以直接点击播放：\n"
+                            yield f"data: {json.dumps({'type': 'content', 'content': append_text})}\n\n"
+                            assistant_chunks.append(append_text)
+                            
+                            for v in rec_videos[:3]:
+                                reason_str = v.get("recommend_reason") or v.get("reason") or "精选相关教学视频"
+                                video_json_str = json.dumps({
+                                    "bvid": v.get("bvid", ""),
+                                    "title": v.get("title", ""),
+                                    "pic": v.get("pic", ""),
+                                    "play": v.get("play", "0"),
+                                    "duration": v.get("duration", "00:00"),
+                                    "reason": reason_str
+                                }, ensure_ascii=False)
+                                
+                                card_tag = f"\n[VIDEO_RECOMMEND: {video_json_str}]\n"
+                                yield f"data: {json.dumps({'type': 'content', 'content': card_tag})}\n\n"
+                                assistant_chunks.append(card_tag)
+
+                    # Check if we should auto-append quiz cards
+                    quiz_keywords = ["测试", "quiz", "题", "测验", "考试"]
+                    if any(kw in user_msg_lower for kw in quiz_keywords) and "[QUIZ:" not in "".join(assistant_chunks):
+                        try:
+                            from app.ai.scenes import generate_learning_resources
+                            res = await asyncio.to_thread(
+                                generate_learning_resources,
+                                node_title,
+                                ["quiz"],
+                                current_profile,
+                                target_user,
+                                knowledge_context
+                            )
+                            if res and "quiz" in res and res["quiz"]:
+                                quiz_data = res["quiz"][0]
+                                quiz_json_str = json.dumps({
+                                    "question": quiz_data.get("question", ""),
+                                    "options": quiz_data.get("options", []),
+                                    "answer": quiz_data.get("answer", 0),
+                                    "explanation": quiz_data.get("explanation", "")
+                                }, ensure_ascii=False)
+                                
+                                append_text = "\n\n根据当前知识点，为您生成了以下随堂测试题，您可以直接点击作答：\n"
+                                yield f"data: {json.dumps({'type': 'content', 'content': append_text})}\n\n"
+                                assistant_chunks.append(append_text)
+                                
+                                card_tag = f"\n[QUIZ: {quiz_json_str}]\n"
+                                yield f"data: {json.dumps({'type': 'content', 'content': card_tag})}\n\n"
+                                assistant_chunks.append(card_tag)
+                        except Exception as e:
+                            print(f"Failed to generate fallback quiz: {e}")
+
                     # Push database updates to client
                     if profile_updated:
                         yield f"data: {json.dumps({'type': 'profile_update', 'profile': current_profile.model_dump()})}\n\n"
@@ -194,11 +302,11 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                         await asyncio.sleep(0.2)
             else:
                 # LLM API call failed, fallback to simulator
-                async for chunk in run_fallback_simulator(request.messages, current_profile, assistant_chunks):
+                async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks):
                     yield chunk
         else:
             # No LLM API key provided, default to simulator fallback
-            async for chunk in run_fallback_simulator(request.messages, current_profile, assistant_chunks):
+            async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks):
                 yield chunk
             
         if request.session_id and assistant_chunks:
@@ -213,7 +321,7 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-    async def run_fallback_simulator(messages, profile, assistant_chunks=None):
+    async def run_fallback_simulator(messages, profile, rec_videos_list=None, assistant_chunks=None):
         yield f"data: {json.dumps({'type': 'status', 'status': '⚠️ 未检测到 API Key，已自动启用本地仿真模型。'})}\n\n"
         await asyncio.sleep(0.6)
         yield f"data: {json.dumps({'type': 'status', 'status': ''})}\n\n"
@@ -234,26 +342,31 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             profile.cognitive_style = "Theoretical/Self-Paced"
             profile_updated_sim = True
             
-        if "machine learning" in user_input_clean or "机器学习" in user_input_clean or "算法" in user_input_clean:
-            if "Machine Learning" not in profile.learning_goals:
-                profile.learning_goals = ["Machine Learning"]
-                db_sync_path_nodes_by_goals(target_user, ["Machine Learning"])
-                profile_updated_sim = True
-                path_updated_sim = True
-        elif "python" in user_input_clean or "基础" in user_input_clean or "重置" in user_input_clean:
-            if "Python Basics" not in profile.learning_goals:
-                profile.learning_goals = ["Python Basics"]
-                db_sync_path_nodes_by_goals(target_user, ["Python Basics"])
-                profile_updated_sim = True
-                path_updated_sim = True
+        # Dynamically match user input against all registered courses by keyword
+        all_courses = db_get_all_registered_courses()
+        switched_course = None
+        for course in all_courses:
+            kws = course.get("keywords", [])
+            # Also check the display_name itself
+            check_terms = kws + [course["display_name"].lower()]
+            if any(term.lower() in user_input_clean for term in check_terms):
+                switched_course = course
+                break
+        
+        if switched_course and switched_course["display_name"] not in profile.learning_goals:
+            profile.learning_goals = [switched_course["display_name"]]
+            db_sync_path_nodes_by_goals(target_user, [switched_course["display_name"]])
+            profile_updated_sim = True
+            path_updated_sim = True
                 
         if profile_updated_sim:
             db_save_profile(target_user, profile)
 
+
         tutor_response = ""
         if "video" in user_input_clean or "视频" in user_input_clean:
-            if rec_videos:
-                v = rec_videos[0]
+            if rec_videos_list:
+                v = rec_videos_list[0]
                 video_json_str = json.dumps({
                     "bvid": v["bvid"],
                     "title": v["title"],

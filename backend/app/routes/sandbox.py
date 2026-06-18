@@ -4,8 +4,8 @@ import json
 import sqlite3
 import tempfile
 import subprocess
-import requests
 from fastapi import APIRouter, Depends, HTTPException
+from app.ai.scenes import diagnose_sandbox_submission
 from app.auth_utils import get_current_username
 from app.models import SandboxRunRequest, SandboxDiagnoseRequest
 from app.db import (
@@ -246,8 +246,6 @@ def run_sandbox_code(request: SandboxRunRequest, current_username: str = Depends
 def diagnose_sandbox_code(request: SandboxDiagnoseRequest, current_username: str = Depends(get_current_username)):
     target_user = current_username
     profile = db_get_profile(target_user)
-    from app.llm_client import get_route_llm_params
-    api_base, api_key, model = get_route_llm_params(target_user, 'diagnostics')
     
     is_safe, err_msg = is_code_safe(request.code)
     if not is_safe:
@@ -255,40 +253,13 @@ def diagnose_sandbox_code(request: SandboxDiagnoseRequest, current_username: str
         blocked_msg = f"❌ 安全检查未通过：{err_msg}请仅使用纯粹的 Python 逻辑进行解题！"
         return {"diagnostic": blocked_msg, "advice": blocked_msg}
         
-    if api_key:
-        try:
-            url = f"{api_base.rstrip('/')}/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            system_prompt = f"""You are the Academic Diagnostics Agent in an adaptive multi-agent tutoring network.
-Analyze the student's python code and provide diagnostic feedback.
-Topic/Challenge Node: {request.node_id}
-Student Cognitive Profile:
-- Learning style: {profile.cognitive_style}
-- Common error patterns: {json.dumps(profile.error_patterns)}
-
-Provide a friendly, encouraging analysis highlighting what is wrong (e.g. indentation, name error, logic) and how to fix it, following their {profile.cognitive_style} style. Keep it concise, professional and written in Chinese."""
-            
-            payload = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Here is my code:\n{request.code}"}
-                ],
-                "temperature": 0.3
-            }
-            
-            response = requests.post(url, headers=headers, json=payload, timeout=10)
-            if response.status_code == 200:
-                res_data = response.json()
-                explanation = res_data["choices"][0]["message"]["content"].strip()
-                db_log_agent_action(target_user, "画像智能体", f"为用户生成代码诊断评估报告成功。", "consensus")
-                return {"diagnostic": explanation, "advice": explanation}
-        except Exception as e:
-            print(f"Xunfei Sandbox Diagnosis failed: {e}")
+    try:
+        explanation = diagnose_sandbox_submission(request.code, request.node_id, profile, target_user)
+        if explanation:
+            db_log_agent_action(target_user, "画像智能体", "为用户生成代码诊断评估报告成功。", "consensus")
+            return {"diagnostic": explanation, "advice": explanation}
+    except Exception as e:
+        print(f"AI platform sandbox diagnosis failed: {e}")
             
     explanation = f"✨ **[自适应画像智能体诊断报告]**\n\n您的代码包含基本 Python 逻辑。建议检查：\n1. 函数缩进是否为标准的 4 个空格。\n2. 是否正确返回了题目要求的结果（而非直接打印）。\n3. 变量生命周期及作用域是否合规。\n\n学习特征提示：基于您的 **{profile.cognitive_style}** 认知风格，建议通过手写 debug 输出方式调试核心逻辑。"
     db_log_agent_action(target_user, "画像智能体", "完成本地规则适配诊断生成。", "consensus")

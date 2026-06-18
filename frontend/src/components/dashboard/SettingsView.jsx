@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Search, Trash2, Edit, ChevronDown, ChevronUp, Check, 
   RefreshCw, Key, Database, Cpu, Settings, Sliders, Globe, GraduationCap,
-  Upload
+  Upload, X
 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../../utils/api';
 import { useAppContext } from '../../context/AppContext';
@@ -509,7 +509,7 @@ export default function SettingsView() {
   };
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: '1200px', margin: '0 auto', width: '100%', color: 'var(--text-main)' }}>
+    <div className="settings-container">
       {/* Page Header */}
       <div style={{ marginBottom: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -529,9 +529,9 @@ export default function SettingsView() {
       )}
 
       {/* Main Dual-pane Container */}
-      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '32px', minHeight: '600px' }}>
+      <div className="settings-layout">
         {/* Left Sub-sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', borderRight: '1px solid var(--border-neon)', paddingRight: '20px' }}>
+        <div className="settings-sidebar">
           <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 12px' }}>模型与工具</span>
           
           <button
@@ -587,7 +587,7 @@ export default function SettingsView() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="cyber-input"
-                    style={{ paddingLeft: '36px', height: '34px', fontSize: '12px', borderRadius: '10px' }}
+                    style={{ padding: '0 12px 0 36px', height: '34px', fontSize: '12px', borderRadius: '10px' }}
                   />
                 </div>
                 
@@ -616,7 +616,7 @@ export default function SettingsView() {
                       }}
                     >
                       {/* Card Header */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: isExpanded ? '1px solid rgba(15, 118, 110, 0.08)' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', padding: '16px 20px', borderBottom: isExpanded ? '1px solid rgba(15, 118, 110, 0.08)' : 'none' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                           <span style={{ fontSize: '16px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             {p.provider_name}
@@ -856,7 +856,7 @@ export default function SettingsView() {
           {activeSubTab === 'courses' && (
             <div>
               {/* Toolbar */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
                 <div>
                   <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '4px' }}>高等教育自适应课程库</h3>
                   <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
@@ -906,7 +906,7 @@ export default function SettingsView() {
                           gap: '12px'
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <span style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-main)' }}>
                               {course.display_name}
@@ -963,7 +963,7 @@ export default function SettingsView() {
                           <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: '600', marginBottom: '8px' }}>
                             自适应关卡大纲 (共 {parsedNodes?.length || 0} 级):
                           </div>
-                          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', maxWidth: '100%', width: '100%', boxSizing: 'border-box' }}>
                             {parsedNodes && parsedNodes.map((node, i) => (
                               <div key={node.id} style={{ 
                                 flex: '0 0 110px', 
@@ -1004,7 +1004,9 @@ export default function SettingsView() {
                             marginTop: '8px',
                             display: 'flex',
                             justifyContent: 'space-between',
-                            alignItems: 'center'
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            gap: '12px'
                           }}
                         >
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -1065,15 +1067,19 @@ export default function SettingsView() {
           justifyContent: 'center',
           zIndex: 999999
         }}>
-          <div className="cyber-card" style={{
-            width: '520px',
-            background: 'var(--bg-card-solid)',
-            padding: '28px',
-            boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
-          }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '900', marginBottom: '18px' }}>
-              {editingProvider ? '编辑模型服务' : '添加大模型服务'}
-            </h3>
+          <div className="cyber-card provider-modal-content" style={{}}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '900', margin: 0 }}>
+                {editingProvider ? '编辑模型服务' : '添加大模型服务'}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowAddModal(false)}
+                className="close-btn"
+              >
+                <X size={16} />
+              </button>
+            </div>
 
             <form onSubmit={handleSaveProvider} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
@@ -1086,7 +1092,7 @@ export default function SettingsView() {
                   value={formData.provider_id}
                   onChange={(e) => setFormData(prev => ({ ...prev, provider_id: e.target.value }))}
                   className="cyber-input"
-                  style={{ height: '38px', fontSize: '13px' }}
+                  style={{ height: '38px', fontSize: '13px', padding: '0 14px' }}
                 />
               </div>
 
@@ -1099,7 +1105,7 @@ export default function SettingsView() {
                   value={formData.provider_name}
                   onChange={(e) => setFormData(prev => ({ ...prev, provider_name: e.target.value }))}
                   className="cyber-input"
-                  style={{ height: '38px', fontSize: '13px' }}
+                  style={{ height: '38px', fontSize: '13px', padding: '0 14px' }}
                 />
               </div>
 
@@ -1112,7 +1118,7 @@ export default function SettingsView() {
                   value={formData.api_base}
                   onChange={(e) => setFormData(prev => ({ ...prev, api_base: e.target.value }))}
                   className="cyber-input"
-                  style={{ height: '38px', fontSize: '13px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
+                  style={{ height: '38px', fontSize: '13px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', padding: '0 14px' }}
                 />
               </div>
 
@@ -1125,7 +1131,7 @@ export default function SettingsView() {
                   value={formData.api_key}
                   onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
                   className="cyber-input"
-                  style={{ height: '38px', fontSize: '13px' }}
+                  style={{ height: '38px', fontSize: '13px', padding: '0 14px' }}
                 />
               </div>
 
@@ -1138,7 +1144,7 @@ export default function SettingsView() {
                   value={formData.models_raw}
                   onChange={(e) => setFormData(prev => ({ ...prev, models_raw: e.target.value }))}
                   className="cyber-input"
-                  style={{ height: '38px', fontSize: '13px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
+                  style={{ height: '38px', fontSize: '13px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', padding: '0 14px' }}
                 />
                 <span style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '4px', display: 'block' }}>
                   填写该服务商下支持的模型名称，保存后可单独开关启用状态。
@@ -1180,28 +1186,35 @@ export default function SettingsView() {
           justifyContent: 'center',
           zIndex: 999999
         }}>
-          <div className="cyber-card" style={{
-            width: '800px',
-            maxWidth: '90%',
-            maxHeight: '90vh',
-            background: 'var(--bg-card-solid)',
-            padding: '28px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '18px',
-            overflow: 'hidden'
-          }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '900', borderBottom: '1px solid var(--border-neon)', paddingBottom: '12px', marginBottom: '4px' }}>
-              注册高等自适应课程
-            </h3>
+          <div className="cyber-card settings-sub-modal" style={{}}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-neon)', paddingBottom: '12px', marginBottom: '4px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '900', margin: 0 }}>
+                注册高等自适应课程
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowAddCourseModal(false)}
+                className="close-btn"
+              >
+                <X size={16} />
+              </button>
+            </div>
 
             <form onSubmit={handleSaveCourse} style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden', flex: 1 }}>
-              <div style={{ display: 'flex', gap: '20px', flex: 1, overflow: 'hidden' }}>
+              <div className="course-form-columns">
                 {/* Left Side: General Info */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', paddingRight: '4px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary-neon)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    第一部分: 课程元数据
+                <div className="course-form-column">
+                  <div style={{ 
+                    marginBottom: '12px',
+                    borderBottom: '1px solid var(--border-neon)',
+                    paddingBottom: '8px'
+                  }}>
+                    <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--primary-neon)', display: 'block' }}>
+                      第一部分: 课程元数据
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '2px', display: 'block' }}>
+                      定义课程的唯一编码与识别特征
+                    </span>
                   </div>
                   <div>
                     <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
@@ -1214,7 +1227,7 @@ export default function SettingsView() {
                       value={courseFormData.course_id}
                       onChange={(e) => setCourseFormData(prev => ({ ...prev, course_id: e.target.value }))}
                       className="cyber-input"
-                      style={{ height: '36px', fontSize: '12px' }}
+                      style={{ height: '36px', fontSize: '12px', padding: '0 14px' }}
                     />
                   </div>
 
@@ -1229,7 +1242,7 @@ export default function SettingsView() {
                       value={courseFormData.display_name}
                       onChange={(e) => setCourseFormData(prev => ({ ...prev, display_name: e.target.value }))}
                       className="cyber-input"
-                      style={{ height: '36px', fontSize: '12px' }}
+                      style={{ height: '36px', fontSize: '12px', padding: '0 14px' }}
                     />
                   </div>
 
@@ -1244,7 +1257,7 @@ export default function SettingsView() {
                       value={courseFormData.keywords}
                       onChange={(e) => setCourseFormData(prev => ({ ...prev, keywords: e.target.value }))}
                       className="cyber-input"
-                      style={{ height: '36px', fontSize: '12px' }}
+                      style={{ height: '36px', fontSize: '12px', padding: '0 14px' }}
                     />
                   </div>
 
@@ -1264,47 +1277,76 @@ export default function SettingsView() {
                 </div>
 
                 {/* Vertical Divider */}
-                <div style={{ width: '1px', background: 'var(--border-neon)', alignSelf: 'stretch' }} />
+                <div className="course-form-divider" />
 
                 {/* Right Side: 8-node outline editor */}
-                <div style={{ flex: 1.2, display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', paddingRight: '4px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary-neon)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>第二部分: 自适应关卡节点 (共8关)</span>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <button
-                        type="button"
-                        onClick={handleGenerateAISyllabus}
-                        disabled={isGeneratingSyllabus}
-                        className="cyber-btn"
-                        style={{
-                          padding: '3px 8px',
-                          fontSize: '10px',
-                          background: 'rgba(20, 184, 166, 0.08)',
-                          borderColor: 'var(--primary-neon)',
-                          color: 'var(--primary-neon)',
-                          height: '22px',
-                          minHeight: '22px',
-                          cursor: isGeneratingSyllabus ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        {isGeneratingSyllabus ? '⚡ \u6b63\u5728\u667a\u80fd\u89c4\u5212\u5927\u7eb2...' : '\u2728 AI \u4e00\u952e\u751f\u6210\u5927\u7eb2'}
-                      </button>
-                      <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>建议按由易到难排序</span>
+                <div className="course-form-column" style={{ flex: 1.2 }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    marginBottom: '12px',
+                    borderBottom: '1px solid var(--border-neon)',
+                    paddingBottom: '8px'
+                  }}>
+                    <div>
+                      <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--primary-neon)', display: 'block' }}>
+                        第二部分: 自适应关卡节点 (共8关)
+                      </span>
+                      <span style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '2px', display: 'block' }}>
+                        建议按由易到难排序
+                      </span>
                     </div>
+                    
+                    <button
+                      type="button"
+                      onClick={handleGenerateAISyllabus}
+                      disabled={isGeneratingSyllabus}
+                      className="cyber-btn"
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        background: 'rgba(20, 184, 166, 0.08)',
+                        borderColor: 'var(--primary-neon)',
+                        color: 'var(--primary-neon)',
+                        height: '24px',
+                        minHeight: '24px',
+                        cursor: isGeneratingSyllabus ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      {isGeneratingSyllabus ? '⚡ 正在规划...' : '✨ AI一键生成'}
+                    </button>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {courseFormData.nodes.map((node, index) => (
                       <div key={index} style={{ 
-                        background: 'var(--bg-card-active)', 
-                        padding: '10px 14px', 
+                        background: 'rgba(20, 184, 166, 0.02)', 
+                        padding: '10px 12px', 
                         borderRadius: '8px', 
-                        border: '1px solid rgba(255,255,255,0.02)' 
+                        border: '1px solid rgba(20, 184, 166, 0.1)',
+                        display: 'flex',
+                        gap: '12px',
+                        alignItems: 'flex-start'
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '11px', color: 'var(--primary-neon)', fontWeight: '800', fontFamily: 'monospace' }}>
-                            LEVEL {index + 1}
-                          </span>
+                        <div style={{ 
+                          background: 'rgba(20, 184, 166, 0.08)',
+                          color: 'var(--primary-neon)',
+                          fontSize: '10px',
+                          fontWeight: '800',
+                          fontFamily: 'monospace',
+                          padding: '3px 6px',
+                          borderRadius: '4px',
+                          textAlign: 'center',
+                          minWidth: '40px',
+                          marginTop: '2px'
+                        }}>
+                          L{index + 1}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
                           <input
                             type="text"
                             placeholder={`关卡 ${index + 1} 主题标题`}
@@ -1316,22 +1358,22 @@ export default function SettingsView() {
                               setCourseFormData(prev => ({ ...prev, nodes: updatedNodes }));
                             }}
                             className="cyber-input"
-                            style={{ height: '28px', fontSize: '11px', padding: '0 8px', flex: 1 }}
+                            style={{ height: '28px', fontSize: '11px', padding: '0 10px' }}
+                          />
+                          <input
+                            type="text"
+                            placeholder={`输入该关卡的核心考核大纲简介...`}
+                            required
+                            value={node.description}
+                            onChange={(e) => {
+                              const updatedNodes = [...courseFormData.nodes];
+                              updatedNodes[index].description = e.target.value;
+                              setCourseFormData(prev => ({ ...prev, nodes: updatedNodes }));
+                            }}
+                            className="cyber-input"
+                            style={{ height: '28px', fontSize: '11px', padding: '0 10px' }}
                           />
                         </div>
-                        <input
-                          type="text"
-                          placeholder={`输入该关卡的核心考核大纲简介...`}
-                          required
-                          value={node.description}
-                          onChange={(e) => {
-                            const updatedNodes = [...courseFormData.nodes];
-                            updatedNodes[index].description = e.target.value;
-                            setCourseFormData(prev => ({ ...prev, nodes: updatedNodes }));
-                          }}
-                          className="cyber-input"
-                          style={{ height: '28px', fontSize: '11px', padding: '0 8px' }}
-                        />
                       </div>
                     ))}
                   </div>
@@ -1339,12 +1381,12 @@ export default function SettingsView() {
               </div>
 
               {/* Action Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '16px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid var(--border-neon)', paddingTop: '16px', marginTop: '4px' }}>
                 <button 
                   type="button" 
                   onClick={() => setShowAddCourseModal(false)}
                   className="cyber-btn"
-                  style={{ padding: '8px 18px', background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}
+                  style={{ padding: '8px 18px', background: 'rgba(0, 0, 0, 0.02)', borderColor: 'var(--border-neon)', color: 'var(--text-muted)' }}
                 >
                   取消
                 </button>

@@ -105,36 +105,7 @@ export default function ErrorsView() {
         ))}
       </div>
 
-      {/* Error explanation details modal */}
-      {selectedErrorExp && (
-        <div className="modal-backdrop">
-          <div className="modal-content" style={{ maxWidth: '600px', borderRadius: '16px' }}>
-            <div style={modalHeaderStyle}>
-              <h3 style={{ fontSize: '18px', fontWeight: '800' }}>智能体错题诊断报告</h3>
-              <button type="button" onClick={() => setSelectedErrorExp(null)} style={modalCloseButtonStyle}>
-                <X size={16} />
-              </button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', color: 'var(--text-main)', fontSize: '14px', lineHeight: '1.6' }}>
-              <h4 style={{ fontWeight: '800', color: 'var(--danger)' }}>错误类型：{selectedErrorExp.title}</h4>
-              <p style={{ background: 'rgba(15, 118, 110, 0.04)', padding: '14px', borderRadius: '12px', borderLeft: '4px solid var(--primary-neon)', fontSize: '13px' }}>
-                {selectedErrorExp.ai_explanation}
-              </p>
-              <div>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>推荐修复后的标准源码：</span>
-                <div style={{ background: '#1e1e24', padding: '14px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#f8f8f2', border: '1px solid rgba(255,255,255,0.05)', whiteSpace: 'pre' }}>
-                  {selectedErrorExp.solution}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-neon)', paddingTop: '12px' }}>
-              <button type="button" className="cyber-btn" onClick={() => setSelectedErrorExp(null)}>
-                我知道了
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </>
   );
 }

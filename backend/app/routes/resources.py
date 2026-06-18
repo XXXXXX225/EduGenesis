@@ -12,6 +12,7 @@ from wsgiref.handlers import format_date_time
 import websocket
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from app.ai.platform import synthesize_tts_audio
 from app.auth_utils import get_current_username
 from app.models import ResourceGenerateRequest
 from app.db import (
@@ -22,98 +23,12 @@ from app.db import (
     get_fallback_assets_for_topic
 )
 from app.limiter import rate_limit_resource
-from app.llm_client import call_llm_resource_agent
+
 
 router = APIRouter()
 
 def call_xfyun_tts(text: str) -> bytes:
-    appid = os.getenv("TTS_APPID")
-    apikey = os.getenv("TTS_API_KEY")
-    apisecret = os.getenv("TTS_API_SECRET")
-
-    if not appid or not apikey or not apisecret:
-        raise ValueError("Xunfei TTS credentials (TTS_APPID, TTS_API_KEY, TTS_API_SECRET) not fully configured in environment.")
-
-    text = text[:800]
-    ws_url = "wss://tts-api.xfyun.cn/v2/tts"
-    parsed_url = urlparse(ws_url)
-    host = parsed_url.netloc
-    path = parsed_url.path
-    date = format_date_time(time.time())
-
-    signature_origin = f"host: {host}\ndate: {date}\nGET {path} HTTP/1.1"
-    signature_sha = hmac.new(
-        apisecret.encode("utf-8"),
-        signature_origin.encode("utf-8"),
-        digestmod=hashlib.sha256
-    ).digest()
-    signature_sha_base64 = base64.b64encode(signature_sha).decode(encoding="utf-8")
-
-    authorization_origin = (
-        f'api_key="{apikey}", algorithm="hmac-sha256", '
-        f'headers="host date request-line", signature="{signature_sha_base64}"'
-    )
-    authorization = base64.b64encode(authorization_origin.encode("utf-8")).decode(encoding="utf-8")
-
-    params = {
-        "authorization": authorization,
-        "date": date,
-        "host": host
-    }
-    auth_url = f"{ws_url}?" + urlencode(params)
-
-    allow_insecure_ssl = os.getenv("TTS_ALLOW_INSECURE_SSL", "").lower() in {"1", "true", "yes"}
-    ssl_options = None
-    if allow_insecure_ssl:
-        ssl_options = {"cert_reqs": ssl.CERT_NONE}
-
-    ws = websocket.create_connection(auth_url, sslopt=ssl_options)
-    text_b64 = base64.b64encode(text.encode("utf-8")).decode("utf-8")
-    
-    payload = {
-        "common": {"app_id": appid},
-        "business": {
-            "aue": "lame",
-            "sfl": 1,
-            "auf": "audio/L16;rate=16000",
-            "vcn": "xiaoyan",
-            "tte": "utf8",
-            "speed": 50,
-            "volume": 50,
-            "pitch": 50
-        },
-        "data": {
-            "status": 2,
-            "text": text_b64,
-            "encoding": "utf8"
-        }
-    }
-    
-    ws.send(json.dumps(payload))
-    
-    audio_data = b""
-    while True:
-        try:
-            message = ws.recv()
-            if not message:
-                break
-            res = json.loads(message)
-            code = res.get("code")
-            if code != 0:
-                raise Exception(f"Xunfei TTS Error Code {code}: {res.get('message')}")
-            
-            data = res.get("data", {})
-            status = data.get("status")
-            audio = data.get("audio", "")
-            if audio:
-                audio_data += base64.b64decode(audio)
-            if status == 2:
-                break
-        except websocket.WebSocketConnectionClosedException:
-            break
-            
-    ws.close()
-    return audio_data
+    return synthesize_tts_audio(text)
 
 @router.get("/resources")
 def get_resources(node_id: str, current_username: str = Depends(get_current_username)):

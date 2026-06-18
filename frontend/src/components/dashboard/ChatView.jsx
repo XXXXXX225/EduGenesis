@@ -25,12 +25,55 @@ const InteractiveChatBubble = ({ msg, isStreaming }) => {
   }, []);
 
   const content = msg.content;
-  if (!content) return null;
+  if (!content || !content.trim()) {
+    if (isStreaming) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '20px' }}>
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: 'var(--primary-neon)',
+                boxShadow: '0 0 6px var(--primary-neon)',
+                display: 'inline-block',
+                animation: 'bounceDot 1.4s infinite ease-in-out both',
+                animationDelay: `${i * 0.2}s`
+              }}
+            />
+          ))}
+          <style>{`
+            @keyframes bounceDot {
+              0%, 80%, 100% { transform: scale(0.3); opacity: 0.3; }
+              40% { transform: scale(1); opacity: 1; }
+            }
+          `}</style>
+        </div>
+      );
+    }
+    return null;
+  }
 
   // Expand regex to capture all resource tags
   const tagsRegex = /(\[QUIZ:\s*\{.*?\}\s*\]|\[VIDEO_RECOMMEND:\s*\{.*?\}\s*\]|\[MINDMAP:\s*[\s\S]*?\s*\]|\[CODE:\s*\w+\s*\|[\s\S]*?\s*\]|\[SLIDES:[\s\S]*?\]|\[PDF:\s*.*?\]|\[DIAGRAM:\s*[^\]|]+\s*\|\s*[^\]]+\]|\[VIDEO:\s*[^\]|]+\s*\|\s*[^\]]+\])/g;
 
   const parts = content.split(tagsRegex);
+
+  // Find the index of the last text part that is actually rendered (not an incomplete tag, and not a parsed tag card)
+  let lastVisibleTextIndex = -1;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i];
+    if (!part) continue;
+    const isTag = part.startsWith('[') && part.endsWith(']');
+    const isIncompleteTag = part.startsWith('[') && !part.endsWith(']');
+    if (!isTag && !isIncompleteTag) {
+      lastVisibleTextIndex = i;
+      break;
+    }
+  }
+  const hasVisibleText = lastVisibleTextIndex !== -1;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -180,14 +223,32 @@ const InteractiveChatBubble = ({ msg, isStreaming }) => {
         }
 
         // Otherwise render as regular text chunk
+        const showCursorHere = isStreaming && index === lastVisibleTextIndex;
         return (
           <div key={index} style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
             {part}
+            {showCursorHere && (
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '8px',
+                  height: '16px',
+                  background: 'var(--primary-neon)',
+                  marginLeft: '2px',
+                  verticalAlign: 'text-bottom',
+                  animation: 'blinkCursor 0.8s step-end infinite',
+                  borderRadius: '1px',
+                  boxShadow: '0 0 6px var(--primary-neon)',
+                }}
+              >
+                &nbsp;
+              </span>
+            )}
           </div>
         );
       })}
 
-      {isStreaming && (
+      {isStreaming && !hasVisibleText && (
         <span
           style={{
             display: 'inline-block',

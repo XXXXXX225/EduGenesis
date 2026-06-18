@@ -3,21 +3,27 @@ import { X, Maximize2, Minimize2 } from 'lucide-react';
 import SettingsView from '../dashboard/SettingsView';
 
 export default function SettingsModal({ isOpen, onClose }) {
-  const [size, setSize] = useState(() => ({
-    width: Math.min(900, window.innerWidth * 0.9),
-    height: Math.min(650, window.innerHeight * 0.8)
-  }));
-  const [isMaximized, setIsMaximized] = useState(false);
+  const [size, setSize] = useState(() => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+    return {
+      width: isMobile ? window.innerWidth * 0.95 : Math.min(1050, window.innerWidth * 0.9),
+      height: isMobile ? window.innerHeight * 0.92 : Math.min(780, window.innerHeight * 0.85)
+    };
+  });
+  const [isMaximized, setIsMaximized] = useState(() => {
+    return typeof window !== 'undefined' && window.innerWidth <= 768;
+  });
   const [isResizing, setIsResizing] = useState(false);
 
   // Reset/re-initialize size when the modal is opened
   useEffect(() => {
     if (isOpen) {
+      const isMobile = window.innerWidth <= 768;
       setSize({
-        width: Math.min(900, window.innerWidth * 0.9),
-        height: Math.min(650, window.innerHeight * 0.8)
+        width: isMobile ? window.innerWidth * 0.95 : Math.min(1050, window.innerWidth * 0.9),
+        height: isMobile ? window.innerHeight * 0.92 : Math.min(780, window.innerHeight * 0.85)
       });
-      setIsMaximized(false);
+      setIsMaximized(isMobile);
     }
   }, [isOpen]);
 

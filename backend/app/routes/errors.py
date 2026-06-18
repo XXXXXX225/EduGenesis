@@ -3,9 +3,9 @@ import re
 import json
 import sqlite3
 import io
-import requests
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from app.ai.scenes import diagnose_runtime_error, generate_remedy_quiz
 from app.auth_utils import get_current_username
 from app.models import ErrorDiagnoseRequest, ErrorRemedyRequest
 from app.db import (
@@ -66,54 +66,15 @@ def diagnose_error(request: ErrorDiagnoseRequest, current_username: str = Depend
         
     err_title, err_code, err_msg = row[0], row[1], row[2]
     profile = db_get_profile(target_user)
-    from app.llm_client import get_route_llm_params
-    api_base, api_key, model = get_route_llm_params(target_user, 'diagnostics')
-    
     explanation = ""
     solution = ""
-    
-    if api_key:
-        try:
-            url = f"{api_base.rstrip('/')}/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            system_prompt = f"""You are the Diagnostics Agent. Analyze this python code and the runtime error it generated.
-Explain the root cause and provide the clean solution code block.
-Title: {err_title}
-Runtime Error: {err_msg}
-Student Cognitive Style: {profile.cognitive_style}
-
-Output STRICTLY a JSON object (no code block backticks, no preamble) with keys:
-- "explanation": a concise explanation of the root cause in Chinese.
-- "solution": the corrected python code block only."""
-            
-            payload = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Code:\n{err_code}\n\nError:\n{err_msg}"}
-                ],
-                "temperature": 0.2
-            }
-            
-            if "gpt" in model or "deepseek" in model:
-                payload["response_format"] = {"type": "json_object"}
-                
-            response = requests.post(url, headers=headers, json=payload, timeout=12)
-            if response.status_code == 200:
-                res_data = response.json()
-                content = res_data["choices"][0]["message"]["content"].strip()
-                if content.startswith("```"):
-                    content = re.sub(r"^```(?:json)?\n", "", content)
-                    content = re.sub(r"\n```$", "", content)
-                parsed = json.loads(content)
-                explanation = parsed.get("explanation", "")
-                solution = parsed.get("solution", "")
-        except Exception as e:
-            print(f"Xunfei Error diagnosis failed: {e}")
+    try:
+        parsed = diagnose_runtime_error(err_title, err_code, err_msg, profile, target_user)
+        if parsed:
+            explanation = parsed.get("explanation", "")
+            solution = parsed.get("solution", "")
+    except Exception as e:
+        print(f"AI platform error diagnosis failed: {e}")
             
     if not explanation or not solution:
         explanation = f"在运行该脚本时发生了运行时异常：`{err_msg}`。这通常是由于作用域绑定错误、索引值超出容器范围或传入了非法类型的参数导致。基于您的 [{profile.cognitive_style}] 风格，系统建议进行边界值防御断言以杜绝该异常。"
@@ -154,59 +115,11 @@ def generate_remedy(request: ErrorRemedyRequest, current_username: str = Depends
         
     err_title, err_msg, err_code = row[0], row[1], row[2]
     profile = db_get_profile(target_user)
-    from app.llm_client import get_route_llm_params
-    api_base, api_key, model = get_route_llm_params(target_user, 'diagnostics')
-    
     quiz_data = None
-    
-    if api_key:
-        try:
-            url = f"{api_base.rstrip('/')}/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            system_prompt = f"""You are the Adaptive Quiz Agent. Generate a single multiple-choice question designed to test the student on the same category of mistake shown here.
-Title: {err_title}
-Mistake Code: {err_code}
-Error Message: {err_msg}
-Student Cognitive Style: {profile.cognitive_style}
-
-Output STRICTLY a JSON object (no markdown, no backticks, no preamble) matching this schema:
-{{
-  "question": "The question description in Chinese...",
-  "options": [
-    "Option A description...",
-    "Option B description...",
-    "Option C description...",
-    "Option D description..."
-  ],
-  "answer": int(0 for A, 1 for B, 2 for C, 3 for D),
-  "explanation": "Detailed explanation in Chinese..."
-}}"""
-            
-            payload = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system_prompt}
-                ],
-                "temperature": 0.4
-            }
-            
-            if "gpt" in model or "deepseek" in model:
-                payload["response_format"] = {"type": "json_object"}
-                
-            response = requests.post(url, headers=headers, json=payload, timeout=12)
-            if response.status_code == 200:
-                res_data = response.json()
-                content = res_data["choices"][0]["message"]["content"].strip()
-                if content.startswith("```"):
-                    content = re.sub(r"^```(?:json)?\n", "", content)
-                    content = re.sub(r"\n```$", "", content)
-                quiz_data = json.loads(content)
-        except Exception as e:
-            print(f"Xunfei Remedy Quiz Generation failed: {e}")
+    try:
+        quiz_data = generate_remedy_quiz(err_title, err_msg, err_code, profile, target_user)
+    except Exception as e:
+        print(f"AI platform remedy quiz generation failed: {e}")
             
     if not quiz_data:
         quiz_data = {

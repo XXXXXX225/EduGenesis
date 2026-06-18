@@ -2,9 +2,9 @@
 import requests
 import re
 import json
-from typing import List
+from typing import List, Optional
+from app.ai.scenes import optimize_video_search_query, rerank_videos_for_learning
 from app.models import UserProfile
-from app.llm_client import get_route_llm_params, extract_json_block
 
 TOPIC_KEYWORDS = {
     "网络": ["网络", "socket", "tcp", "udp", "http", "ip", "port", "端口", "通信", "connect", "web", "ftp", "dns"],
@@ -69,48 +69,7 @@ def generate_optimized_search_query(node_title: str, node_description: str, user
     通过 LLM 分析路径节点的标题与描述，生成一个最聚焦、精准的 B 站搜索关键词，
     避免直接搜宽泛名词返回无关视频或长篇大论。
     """
-    api_base, api_key, model = get_route_llm_params(username, "resources")
-    default_query = f"Python {node_title}" if "python" not in node_title.lower() else node_title
-    
-    if not api_key:
-        return default_query
-        
-    url = f"{api_base.rstrip('/')}/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    system_prompt = """你是一个多智能体协同自适应教学系统中的视频检索检索词优化智能体。
-你的任务是根据一个学习节点的“标题”和“描述”，为 B 站（Bilibili）视频搜索生成一个最聚焦、最精准的中文检索关键词。
-
-生成准则：
-1. 关键词必须聚焦于该节点当前需要学习的具体代码或技术点（例如将“Python网络编程”优化为“Python Socket 编程教程”）。
-2. 检索词应该能搜到 10-25 分钟左右的具体实例讲解或代码实操视频，避免搜出数小时的宽泛合集。
-3. 只能输出一个简短 of 搜索关键词（通常为 3-5 个中文词/英文词的组合，以空格分隔），绝对不能有任何前言、解释、标点符号或换行。"""
-
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"节点标题: {node_title}\n节点描述: {node_description}\n请输出优化后的 B 站搜索关键词："}
-        ],
-        "temperature": 0.2,
-        "max_tokens": 30
-    }
-    
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=5)
-        if response.status_code == 200:
-            res_data = response.json()
-            query = res_data["choices"][0]["message"]["content"].strip()
-            query = re.sub(r'["\'\-\[\]【】\r\n]', '', query)
-            if query:
-                return query
-    except Exception as e:
-        print(f"Failed to generate optimized search query via LLM: {e}")
-        
-    return default_query
+    return optimize_video_search_query(node_title, node_description, username)
 
 def select_and_recommend_videos(videos: List[dict], node_title: str, node_description: str, profile: UserProfile, username: str = "default_user") -> List[dict]:
     """
@@ -121,8 +80,6 @@ def select_and_recommend_videos(videos: List[dict], node_title: str, node_descri
     if not videos:
         return []
         
-    api_base, api_key, model = get_route_llm_params(username, "resources")
-    
     candidates = [
         {
             "index": idx,
@@ -134,85 +91,9 @@ def select_and_recommend_videos(videos: List[dict], node_title: str, node_descri
         for idx, v in enumerate(videos)
     ]
     
-    if api_key:
-        url = f"{api_base.rstrip('/')}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        schema = {
-            "type": "object",
-            "properties": {
-                "selected_indices": {
-                    "type": "array",
-                    "items": {"type": "integer"},
-                    "description": "筛选出最合适的视频索引列表（最多4个，严格对应传入的候选视频 index，按推荐度从高到低排序）。"
-                },
-                "reasons": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "针对选中的每个视频生成的专属中文推荐理由，必须与 selected_indices 顺序完全一致。"
-                }
-            },
-            "required": ["selected_indices", "reasons"]
-        }
-        
-        system_prompt = f"""你是一个多智能体协同自适应教学系统中的视频推荐智能体（Video Recommendation Agent）。
-你的任务是从给定的 B 站视频候选列表中，筛选出最契合当前节点教学目标，且最适合当前学生画像的最多 4 个视频，并生成一句话中文推荐理由。
-
-当前节点信息：
-- 标题: {node_title}
-- 描述: {node_description}
-
-学生画像特征：
-- 认知风格 (Cognitive Style): {profile.cognitive_style}
-- 易错模式 (Error Patterns): {json.dumps(profile.error_patterns, ensure_ascii=False)}
-
-筛选准则：
-1. 优先选择具体代码演示、案例实操的视频（时长通常在 5-30 分钟）。
-2. 尽量排除与 node_description 毫不相关的视频，或数小时以上的纯大部头课程合集（如果确实没有更好的，可以选长视频但绝不能选无关视频）。
-3. 排除小于 5 分钟的课程推广、短宣传片。
-4. 推荐理由应针对该学生的认知风格定制，控制在 40-60 字之间，语气专业且鼓励。
-
-你必须仅返回一个符合指定 Schema 要求的 JSON 对象，绝对不能包含任何解释、```json 标记等多余文本。"""
-
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"候选视频列表: {json.dumps(candidates, ensure_ascii=False)}\n请输出符合格式的筛选与推荐 JSON：{json.dumps(schema, ensure_ascii=False)}"}
-            ],
-            "temperature": 0.2
-        }
-        
-        model_lower = model.lower()
-        base_lower = api_base.lower()
-        if "gpt" in model_lower or "deepseek" in model_lower or "openrouter" in base_lower or "siliconflow" in base_lower:
-            payload["response_format"] = {"type": "json_object"}
-            
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=8)
-            if response.status_code == 200:
-                res_data = response.json()
-                content = res_data["choices"][0]["message"]["content"]
-                content = extract_json_block(content)
-                parsed = json.loads(content)
-                
-                selected_indices = parsed.get("selected_indices", [])
-                reasons = parsed.get("reasons", [])
-                
-                selected_videos = []
-                for idx, selected_idx in enumerate(selected_indices):
-                    if selected_idx < len(videos) and idx < len(reasons):
-                        video = videos[selected_idx].copy()
-                        video["recommend_reason"] = reasons[idx]
-                        selected_videos.append(video)
-                        
-                if selected_videos:
-                    return selected_videos[:4]
-        except Exception as e:
-            print(f"LLM Video selection and recommendation failed: {e}. Falling back to rule templates.")
+    selected_videos = rerank_videos_for_learning(videos, node_title, node_description, profile, username)
+    if selected_videos:
+        return selected_videos
 
     # 规则过滤兜底逻辑：如果大模型出错或网络超时，退回至原有 Python 规则过滤
     matching_keywords = []
@@ -259,11 +140,56 @@ def select_and_recommend_videos(videos: List[dict], node_title: str, node_descri
         
     return final_videos
 
-def search_bilibili_videos(node_title: str) -> List[dict]:
+def determine_search_keyword(query: str, profile: Optional[UserProfile] = None) -> str:
+    query_lower = query.lower()
+    
+    try:
+        from app.db import db_get_all_registered_courses
+        all_courses = db_get_all_registered_courses()
+    except Exception:
+        all_courses = []
+        
+    matched_course = None
+    for course in all_courses:
+        c_display = course["display_name"].lower()
+        c_id = course["course_id"].lower()
+        kws = [k.lower() for k in course.get("keywords", [])]
+        
+        if (query_lower in c_display or query_lower in c_id or 
+            c_display in query_lower or c_id in query_lower or 
+            any(kw in query_lower for kw in kws)):
+            matched_course = course
+            break
+            
+    if matched_course:
+        course_name = matched_course["display_name"]
+        core_name = course_name.replace(" 基础", "").replace("基础", "").replace(" 入门", "").replace("入门", "").strip()
+        core_name_lower = core_name.lower()
+        
+        if core_name_lower in query_lower or query_lower in core_name_lower:
+            return query
+        else:
+            return f"{core_name} {query}"
+            
+    if profile:
+        subj = profile.learning_goals[0] if (profile.learning_goals and len(profile.learning_goals) > 0) else "Python"
+        core_name = subj.replace(" 基础", "").replace("基础", "").replace(" 入门", "").replace("入门", "").strip()
+        core_name_lower = core_name.lower()
+        
+        if core_name_lower in query_lower:
+            return query
+        else:
+            return f"{core_name} {query}"
+            
+    if "python" not in query_lower:
+        return f"Python {query}"
+    return query
+
+def search_bilibili_videos(node_title: str, profile: Optional[UserProfile] = None) -> List[dict]:
     """
     通过 Bilibili 公开搜索接口，检索并进行相关性与时长过滤，保持向前兼容。
     """
-    keyword = f"Python {node_title}" if "python" not in node_title.lower() else node_title
+    keyword = determine_search_keyword(node_title, profile)
     url = f"https://api.bilibili.com/x/web-interface/search/all/v2?keyword={encode_keyword(keyword)}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -340,7 +266,7 @@ def get_video_recommendations_for_node(node_title: str, node_description: str, p
         
     print(f"[Video Agent] Optimized search query for '{node_title}': '{query}'")
     
-    keyword = f"Python {query}" if "python" not in query.lower() else query
+    keyword = determine_search_keyword(query, profile)
     url = f"https://api.bilibili.com/x/web-interface/search/all/v2?keyword={encode_keyword(keyword)}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -378,7 +304,7 @@ def get_video_recommendations_for_node(node_title: str, node_description: str, p
         
     if not candidates:
         # 降级：直接通过原始 search_bilibili_videos 爬取候选（包含自带过滤）
-        return search_bilibili_videos(node_title)
+        return search_bilibili_videos(node_title, profile)
 
     # 步骤 3：AI 筛选及推荐理由生成
     return select_and_recommend_videos(candidates, node_title, node_description, profile, username)

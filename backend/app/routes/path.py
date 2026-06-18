@@ -20,7 +20,7 @@ from app.db import (
     db_cleanup_reinforcement_nodes
 )
 from app.limiter import rate_limit_resource
-from app.llm_client import call_llm_path_planner
+from app.ai.scenes import generate_path_nodes
 
 router = APIRouter()
 
@@ -36,7 +36,7 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
     goals = profile.learning_goals
     
     # Try calling the AI path planner
-    ai_nodes = call_llm_path_planner(goals, profile.cognitive_style, target_user)
+    ai_nodes = generate_path_nodes(goals, profile.cognitive_style, target_user)
     
     new_nodes = []
     if ai_nodes and len(ai_nodes) == 8:

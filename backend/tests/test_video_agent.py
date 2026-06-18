@@ -181,7 +181,8 @@ class TestVideoAgent(unittest.TestCase):
         self.assertIn("BV_RELAXED_GOOD", bvids)
         self.assertNotIn("BV_TOO_SHORT", bvids)
 
-    def test_generate_video_recommendations_fallback(self):
+    @patch('app.video_agent.rerank_videos_for_learning', return_value=None)
+    def test_generate_video_recommendations_fallback(self, _mock_rerank):
         # Test fallback rule engine when no API key is set
         profile = UserProfile(cognitive_style="Practical Coding")
         videos = [
@@ -194,68 +195,44 @@ class TestVideoAgent(unittest.TestCase):
                 "description": "描述"
             }
         ]
-        
-        with patch('app.video_agent.get_route_llm_params') as mock_llm_params:
-            mock_llm_params.return_value = ("http://api.com", "", "model") # empty key
-            
-            result = generate_video_recommendations(videos, profile)
-            self.assertEqual(len(result), 1)
-            self.assertIn("实操编码风格", result[0]["recommend_reason"])
+        result = generate_video_recommendations(videos, profile)
+        self.assertEqual(len(result), 1)
+        self.assertIn("实操编码风格", result[0]["recommend_reason"])
 
-    @patch('app.video_agent.requests.post')
-    def test_generate_optimized_search_query(self, mock_post):
-        # Mock LLM API parameters
-        with patch('app.video_agent.get_route_llm_params') as mock_llm_params:
-            mock_llm_params.return_value = ("http://api.com", "fake_key", "model")
-            
-            # Mock successful response
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
-                "choices": [{"message": {"content": "Python Socket 教程"}}]
+    @patch('app.video_agent.optimize_video_search_query', return_value="Python Socket 教程")
+    def test_generate_optimized_search_query(self, _mock_query):
+        query = generate_optimized_search_query("Python网络编程", "套接字TCP连接说明")
+        self.assertEqual(query, "Python Socket 教程")
+
+    @patch(
+        'app.video_agent.rerank_videos_for_learning',
+        return_value=[{
+            "bvid": "BV_TEST",
+            "title": "Socket编程讲解",
+            "author": "UP主",
+            "play": "1万",
+            "duration": "12:30",
+            "description": "介绍",
+            "recommend_reason": "这视频很好，适合你的视觉风格。"
+        }]
+    )
+    def test_select_and_recommend_videos_llm(self, _mock_rerank):
+        profile = UserProfile(cognitive_style="Visual Guided")
+        videos = [
+            {
+                "bvid": "BV_TEST",
+                "title": "Socket编程讲解",
+                "author": "UP主",
+                "play": "1万",
+                "duration": "12:30",
+                "description": "介绍"
             }
-            mock_post.return_value = mock_response
+        ]
 
-            query = generate_optimized_search_query("Python网络编程", "套接字TCP连接说明")
-            self.assertEqual(query, "Python Socket 教程")
-
-    @patch('app.video_agent.requests.post')
-    def test_select_and_recommend_videos_llm(self, mock_post):
-        # Mock LLM API parameters
-        with patch('app.video_agent.get_route_llm_params') as mock_llm_params:
-            mock_llm_params.return_value = ("http://api.com", "fake_key", "model")
-            
-            # Mock LLM JSON output response
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
-                "choices": [{
-                    "message": {
-                        "content": json.dumps({
-                            "selected_indices": [0],
-                            "reasons": ["这视频很好，适合你的视觉风格。"]
-                        })
-                    }
-                }]
-            }
-            mock_post.return_value = mock_response
-
-            profile = UserProfile(cognitive_style="Visual Guided")
-            videos = [
-                {
-                    "bvid": "BV_TEST",
-                    "title": "Socket编程讲解",
-                    "author": "UP主",
-                    "play": "1万",
-                    "duration": "12:30",
-                    "description": "介绍"
-                }
-            ]
-
-            selected = select_and_recommend_videos(videos, "标题", "描述", profile)
-            self.assertEqual(len(selected), 1)
-            self.assertEqual(selected[0]["bvid"], "BV_TEST")
-            self.assertEqual(selected[0]["recommend_reason"], "这视频很好，适合你的视觉风格。")
+        selected = select_and_recommend_videos(videos, "标题", "描述", profile)
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["bvid"], "BV_TEST")
+        self.assertEqual(selected[0]["recommend_reason"], "这视频很好，适合你的视觉风格。")
 
 if __name__ == "__main__":
     unittest.main()

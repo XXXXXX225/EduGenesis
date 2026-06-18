@@ -1,25 +1,27 @@
-# Feedforward Neural Networks
+# 前馈深度神经网络前向传播架构
 
-Neural networks learn hierarchical representations from data.
+前馈神经网络（Feedforward Neural Network, FNN）是现代深度学习的基石。不同于浅层线性模型，它通过堆叠多个网络层以及引入非线性激活函数，能够逼近任意复杂的非线性边界。
 
-## Architecture
-- Input layer -> Hidden layers -> Output layer
-- Each neuron: activation(W*x + b)
-- Universal approximation theorem
+## 1. 从感知机到多层感知机 (MLP)
+* **单层感知机**：仅能解决线性可分问题。对于简单的非线性逻辑门（如异或门 XOR），单层感知机在数学上是无法拟合的。
+* **多层感知机**：通过在输入层与输出层之间插入一至多个**隐藏层（Hidden Layer）**，实现了特征空间的扭曲与非线性映射，从而完美解决高维度、非线性建模挑战。
 
-## Activation Functions
-- ReLU: max(0, z) — most common
-- Sigmoid: 1/(1+e^(-z)) — for binary output
-- Tanh: (e^z - e^(-z))/(e^z + e^(-z)) — zero-centered
-- Leaky ReLU, ELU, Swish
+## 2. 常用激活函数的非线性作用
+如果隐藏层不加入激活函数，那么无论堆叠多少层网络，其输出依然是输入的线性组合（因为多重线性映射等价于单重映射）。激活函数的核心作用就是**引入非线性特征**。
+* **ReLU (Rectified Linear Unit)**：
+  $$f(x) = \max(0, x)$$
+  * **优势**：当前深度学习中最常用的激活函数。在 $x>0$ 时其导数恒为 1，能有效缓解深层神经网络梯度消失（Vanishing Gradient）问题，计算速度极快。
+* **Sigmoid**：
+  $$f(x) = \frac{1}{1 + e^{-x}}$$
+  * **局限**：在两端极其平缓，导数趋于 0，容易导致深层网络在反向传播时发生梯度消失。通常仅在输出层（进行二分类）使用。
+* **Tanh (双曲正切函数)**：
+  $$f(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}}$$
+  * **特点**：输出均值为零（Zero-centered），收敛速度一般快于 Sigmoid，但在饱和区同样存在梯度消失风险。
 
-## Forward Propagation
-- Layer by layer: a^(l) = activation(W^(l)*a^(l-1) + b^(l))
-
-## Training Loop
-1. Forward pass: compute predictions
-2. Compute loss
-3. Backward pass: compute gradients
-4. Update weights: w -= lr * grad
-
-**Key Takeaway**: Start with ReLU + Adam optimizer for most tasks.
+## 3. 层与权重矩阵的前向传播
+神经网络的前向传播（Forward Propagation）即是数据从输入层通过各层权重矩阵变换，逐级向前传递计算预测值的过程。
+* **单层公式**：设第 $l-1$ 层的激活输出为 $a^{(l-1)}$，该层与第 $l$ 层之间的权重矩阵为 $W^{(l)}$，偏置向量为 $b^{(l)}$。
+  则第 $l$ 层的净输入 $z^{(l)}$ 和最终激活输出 $a^{(l)}$ 可以表示为：
+  $$z^{(l)} = W^{(l)} a^{(l-1)} + b^{(l)}$$
+  $$a^{(l)} = g(z^{(l)})$$
+  其中 $g(\cdot)$ 是本层选用的非线性激活函数。对于第一层，$a^{(0)} = x$（输入特征）。

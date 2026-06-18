@@ -1,22 +1,37 @@
-# Linear Algebra Foundations for ML
+# 线性代数与机器学习底层数学表征 (Linear Algebra Foundations)
 
-Linear algebra is the mathematical backbone of machine learning.
+线性代数（Linear Algebra）是机器学习与深度学习的核心数学底座。从图像的多维像素阵列，到神经网络中海量的权重矩阵和特征向量（vectors）运算，所有的数据表示与变换均基于线性代数的概念。
 
-## Vectors
-- Definition: ordered list of numbers, e.g. v = [1, 2, 3]
-- Operations: addition, scalar multiplication
-- Dot product: v.w = v1w1 + v2w2 + ... + vnwn
-- Norm: ||v|| = sqrt(v.v)
+## 1. 向量基础与几何表征
+向量（vectors）是线性代数最基本的构建单元，在线性空间中代表一个方向和长度。
+* **定义与运算**：一个 $n$ 维向量 $v \in \mathbb{R}^n$ 可以表示为：
+  $$v = [v_1, v_2, \dots, v_n]^T$$
+  基础运算包括向量的逐元素加法与标量乘法。
+* **点积（Dot Product）**：
+  两个向量 $u, v \in \mathbb{R}^n$ 的点积是一个标量：
+  $$u \cdot v = \sum_{i=1}^n u_i v_i = u^T v$$
+  * **几何意义**：点积反映了两个向量的夹角余弦值。在 RAG（检索增强生成）中，余弦相似度（Cosine Similarity）正是通过点积与向量范数（Norm）计算得出，用于评估文本特征向量之间的语义贴近度：
+    $$\text{Similarity}(u, v) = \frac{u \cdot v}{\|u\| \|v\|}$$
+* **向量范数**：$L_2$ 范数表示向量的欧氏长度：
+  $$\|v\|_2 = \sqrt{\sum_{i=1}^n v_i^2}$$
 
-## Matrices
-- m x n grid of numbers
-- Matrix multiplication: C = AB
-- Transpose: A^T
-- Identity matrix: I
+## 2. 矩阵乘法与线性变换
+矩阵是一个二维数值网格，代表了空间中的一种线性变换。
+* **矩阵乘法**：设 $A \in \mathbb{R}^{m \times n}$，$B \in \mathbb{R}^{n \times p}$，其乘积 $C = AB \in \mathbb{R}^{m \times p}$ 的各元素定义为：
+  $$C_{ij} = \sum_{k=1}^n A_{ik} B_{kj}$$
+  * **注意**：矩阵乘法不满足交换律（即 $AB \neq BA$），但满足结合律。在神经网络前向传播中，全连接层的计算通常表示为：
+    $$Y = XW + b$$
+* **转置（Transpose）**：将矩阵的行与列互换，记作 $A^T$。其性质包括：$(AB)^T = B^T A^T$。
+* **逆矩阵（Inverse）**：若方阵 $A$ 满足 $AC = CA = I$（$I$ 为单位矩阵），则称 $C$ 为 $A$ 的逆矩阵，记作 $A^{-1}$。
 
-## Eigenvalues and Eigenvectors
-- Av = lambda*v
-- PCA dimensionality reduction uses eigenvectors
-- SVD: A = U*Sigma*V^T
-
-**Key Takeaway**: Dot products measure similarity; eigenvalues reveal structure.
+## 3. 特征值、特征向量与 SVD
+矩阵的分解能揭示其底层的空间几何特征。
+* **特征值分解（Eigenvalue Decomposition）**：
+  若非零向量 $v$ 和标量 $\lambda$ 满足：
+  $$Av = \lambda v$$
+  则称 $v$ 是矩阵 $A$ 的特征向量，$\lambda$ 是对应的特征值。它意味着矩阵 $A$ 作用在向量 $v$ 上仅对其进行了拉伸，而未改变方向。
+  * **应用：主成分分析 (PCA)**：PCA 通过对数据协方差矩阵进行特征值分解，提取特征值最大的前 $k$ 个特征向量（主成分），从而在尽可能保留数据方差（信息）的前提下实现降维。
+* **奇异值分解（SVD）**：
+  对于任意形状的矩阵 $A \in \mathbb{R}^{m \times n}$，均可以分解为：
+  $$A = U \Sigma V^T$$
+  其中 $U$ 和 $V$ 是正交矩阵，$\Sigma$ 是对角矩阵，对角线上的元素称为奇异值。SVD 在推荐系统、图像压缩及文本主题关联度分析中具有极其广泛的应用。

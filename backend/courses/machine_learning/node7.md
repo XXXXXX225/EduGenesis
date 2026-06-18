@@ -1,22 +1,30 @@
-# Backpropagation Deep Dive
+# 反向传播算法求导推演
 
-Backpropagation is the algorithm that makes deep learning possible.
+在多层神经网络前向传播计算出损失值后，我们需要更新各层的权重与偏置。反向传播算法（Backpropagation）利用微积分的链式法则，极其高效地计算出损失函数关于所有权重和偏置的梯度。
 
-## Chain Rule in Networks
-- dL/dw^(l) = dL/da^(L) * da^(L)/dz^(L) * ... * da^(l)/dz^(l) * dz^(l)/dw^(l)
+## 1. 计算图与链式法则
+* **计算图（Computation Graph）**：
+  将复杂的复合函数拆解为由基本算子构成的有向无环图。通过将正向数值存储，反向时可以沿着边回溯梯度。
+* **链式法则（Chain Rule）**：
+  若变量 $y$ 依赖于 $u$，而 $u$ 又依赖于 $x$（即 $y = f(g(x))$），则 $y$ 关于 $x$ 的导数为：
+  $$\frac{\partial y}{\partial x} = \frac{\partial y}{\partial u} \cdot \frac{\partial u}{\partial x}$$
+  在神经网络中，每一层的权重参数都通过前向传播影响下一层的激活值，最终影响总损失。因此，利用链式法则可以从输出层向输入层反向逐层传递偏导数。
 
-## Computational Graph
-- Nodes: operations (+, *, activation)
-- Edges: data flow (tensors)
-- Forward: compute values top-down
-- Backward: compute gradients bottom-up
+## 2. 反向传播误差求导推导
+以最简单的多层网络为例。设损失函数为 $L$，对于第 $l$ 层：
+* **定义本层误差项**（梯度传播的中间桥梁）：
+  $$\delta^{(l)} = \frac{\partial L}{\partial z^{(l)}}$$
+  误差项衡量了该层净输入 $z^{(l)}$ 的变化对总损失的影响。
+* **输出层误差计算**：设最后一层为第 $L$ 层，根据定义和链式法则可得：
+  $$\delta^{(L)} = \frac{\partial L}{\partial a^{(L)}} \odot g'(z^{(L)})$$
+  其中 $\odot$ 表示哈达玛积（Hadamard Product，逐元素乘法）。
+* **隐藏层误差逆推**：
+  通过第 $l+1$ 层的误差项 $\delta^{(l+1)}$ 逆推第 $l$ 层的误差：
+  $$\delta^{(l)} = \left( (W^{(l+1)})^T \delta^{(l+1)} \right) \odot g'(z^{(l)})$$
+  这个公式体现了**误差如何沿权重矩阵的转置反向流回前一层**。
 
-## Gradient Flow
-- dL/dw = sum over paths of product of local gradients
-- Autograd systems (PyTorch, TensorFlow) handle this automatically
-
-## Vanishing Gradient Problem
-- Deep sigmoid networks: gradients multiply to near zero
-- Solution: ReLU, BatchNorm, Residual connections
-
-**Key Takeaway**: Understand backprop intuitively, but let autograd do the computation.
+## 3. 权重与偏置梯度的最终求解
+有了各层的误差项 $\delta^{(l)}$，计算损失函数关于这一层参数 $W^{(l)}$ 和 $b^{(l)}$ 的梯度就非常简单：
+$$\frac{\partial L}{\partial W^{(l)}} = \delta^{(l)} (a^{(l-1)})^T$$
+$$\frac{\partial L}{\partial b^{(l)}} = \delta^{(l)}$$
+* **总结意义**：反向传播算法将整网权重的梯度计算复杂度降到了与一次前向传播相同的数量级（$O(n)$），是深度学习得以实用化并高效训练的奠基性算法。

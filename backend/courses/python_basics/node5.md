@@ -1,26 +1,49 @@
-# Core Data Structures
+# 内置核心数据结构
 
-Mastering built-in data structures enables efficient data manipulation.
+内置数据结构是管理和组织程序状态的容器。根据对可变性、无序性及唯一性的要求，Python 提供了四种最核心的内置数据结构。
 
-## Lists
-- Mutable, ordered: items = [1, 2, 3]
-- Methods: .append(), .extend(), .insert(), .remove(), .pop(), .sort()
-- Slicing: items[1:3], items[::-1] (reverse)
-- Comprehension: [x*2 for x in range(5)]
+## 1. 列表（List）与元组（Tuple）
+列表与元组是两种最基础的有索引序列。
+* **列表 (List)**：用中括号 `[]` 表示，是**有序且可变**的。可以存放任意类型的元素。
+  * **核心操作**：
+    * `append(x)`：在末尾追加元素（平均时间复杂度 $O(1)$）。
+    * `pop(i)`：移除并返回指定索引位置的元素（移除末尾是 $O(1)$，移除开头/中间是 $O(n)$）。
+    * `insert(i, x)`：在指定索引位置插入元素（$O(n)$）。
+  ```python
+  fruits = ["apple", "banana"]
+  fruits.append("orange")
+  ```
+* **元组 (Tuple)**：用小括号 `()` 表示，是**有序但不可变**的。
+  * **重要作用**：由于不可变性，元组的内存分配更加紧凑，且可以作为字典的键（Key）使用，常用于存放结构化、不易改变的只读记录（如数据库连接配置 `(host, port)`）。
+  ```python
+  connection_info = ("127.0.0.1", 3306)
+  ```
 
-## Tuples
-- Immutable, ordered: point = (3, 4)
-- Unpacking: x, y = point
-- Used as dict keys and return values
+## 2. 字典（Dict）与集合（Set）
+字典与集合是基于哈希表（Hash Table）实现的，因此其核心查找的时间复杂度为 $O(1)$。
+* **字典 (Dict)**：用大括号 `{}` 和键值对形式表示，是**无序（Python 3.7+ 维持插入顺序）且可变**的。
+  * **限制**：字典的键（Key）必须是**可哈希的不可变对象**（如字符串、数字或元组），而值（Value）可以是任意类型。
+  * **安全读取**：使用 `dict[key]` 读取不存在的键会抛出 `KeyError`。建议使用 `get(key, default)` 避免报错：
+    ```python
+    user_scores = {"alice": 95}
+    score = user_scores.get("bob", 0)  # 获取不到 bob 则返回默认值 0
+    ```
+* **集合 (Set)**：用大括号 `{}` 表示，是**无序且元素唯一**的容器。
+  * **常用操作**：集合运算（并集 `|`、交集 `&`、差集 `-`）。
+  * **应用场景**：极速去重。
+  ```python
+  numbers = [1, 2, 2, 3]
+  unique_nums = set(numbers)  # {1, 2, 3}
+  ```
 
-## Dictionaries
-- Key-value: user = {'name': 'Alice', 'age': 25}
-- .get(), .keys(), .values(), .items()
-- Dict comprehension: {k: v**2 for k, v in pairs}
-
-## Sets
-- Unordered, unique: tags = {'python', 'coding'}
-- Set ops: union, intersection, difference
-- Dedup: list(set(duplicates))
-
-**Key Takeaway**: Lists for order, dicts for lookup, sets for uniqueness.
+## 3. 列表推导式的高效应用
+列表推导式（List Comprehension）是 Python 独有的语法糖，可以用更紧凑、执行效率更高的方式创建列表。
+* **基本语法**：
+  ```python
+  # 基础写法
+  squares = [x**2 for x in range(10)]
+  
+  # 带过滤条件写法
+  even_squares = [x**2 for x in range(10) if x % 2 == 0]
+  ```
+* **注意**：不要过度滥用。如果推导式里面嵌套了多层循环或过于复杂的条件判定，请拆写回传统的 `for` 循环以保证代码的可读性。

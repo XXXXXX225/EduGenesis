@@ -1,24 +1,28 @@
-# Linear Regression
+# 经典线性回归算法与收敛验证
 
-Linear regression is the simplest yet most interpretable ML model.
+线性回归是机器学习中最基础、最直观的监督学习回归算法。它的目标是寻找特征与连续型连续目标变量之间的线性映射关系。
 
-## Model
-- y_pred = w0 + w1*x1 + w2*x2 + ... + wn*xn
-- Vector form: y_pred = X * w
+## 1. 监督学习与线性假设函数
+监督学习是指从标注好的训练数据中学习一个模型，从而预测新样本的属性。
+* **假设函数（Hypothesis）**：
+  设输入特征向量为 $x = [x_1, x_2, \dots, x_d]^T \in \mathbb{R}^d$，线性回归模型假设目标变量 $y$ 可以用特征的线性组合表示：
+  $$h_\theta(x) = \theta_0 + \theta_1 x_1 + \theta_2 x_2 + \dots + \theta_d x_d = \theta^T x$$
+  其中 $\theta = [\theta_0, \theta_1, \dots, \theta_d]^T$ 为模型参数，$\theta_0$ 为偏置项（Bias，通常令 $x_0=1$ 将其纳入参数矩阵）。
 
-## Loss Function
-- MSE: L = (1/n) * sum((y_pred - y_true)^2)
-- RMSE = sqrt(MSE)
-- MAE: mean absolute error
+## 2. 均方误差损失函数（MSE）
+为了量化模型当前的预测误差，需要定义损失函数。
+* **均方误差（Mean Squared Error）**：
+  在包含 $m$ 个样本的训练集上，我们使用均方误差来衡量预测值 $h_\theta(x^{(i)})$ 与真实标签 $y^{(i)}$ 之间的偏差：
+  $$J(\theta) = \frac{1}{2m} \sum_{i=1}^m \left( h_\theta(x^{(i)}) - y^{(i)} \right)^2$$
+  * **几何解释**：MSE 对应于点到超平面的欧氏距离平方的平均值。系数 $\frac{1}{2}$ 是为了求导时能与平方项约简，不影响最优化求解。
 
-## Solution Methods
-- Normal equation: w = (X^T*X)^(-1)*X^T*y
-- Gradient descent: iterative optimization
-- sklearn: LinearRegression()
-
-## Evaluation Metrics
-- R-squared: proportion of variance explained
-- Adjusted R-squared for multiple features
-- Residual plots for diagnostics
-
-**Key Takeaway**: Always check residual plots for patterns before trusting your model.
+## 3. 闭式解与迭代求解对比
+求解最优参数 $\theta^*$ 使 $J(\theta)$ 最小化，有两种主要途径：
+* **最小二乘法闭式解（Ordinary Least Squares, OLS）**：
+  将数据表示为设计矩阵 $X \in \mathbb{R}^{m \times (d+1)}$，标签表示为向量 $Y \in \mathbb{R}^m$。通过矩阵求导令梯度为零，可得闭式解：
+  $$\theta^* = (X^T X)^{-1} X^T Y$$
+  * **限制**：如果矩阵 $X^T X$ 不可逆（奇异矩阵），或特征数 $d$ 极高（计算矩阵求逆复杂度为 $O(d^3)$），求逆过程将异常缓慢且不稳定。
+* **梯度下降迭代求解**：
+  对于极高维数据，我们通过计算损失函数关于 $\theta_j$ 的偏导数，逐步调整参数：
+  $$\theta_j \leftarrow \theta_j - \alpha \frac{1}{m} \sum_{i=1}^m \left( h_\theta(x^{(i)}) - y^{(i)} \right) x_j^{(i)}$$
+  * **优势**：算法复杂度低，适用于超大规模数据集，可通过调整学习率平滑收敛。

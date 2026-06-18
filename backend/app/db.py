@@ -571,6 +571,101 @@ def db_save_path_nodes(username: str, nodes: List[PathNode]):
     conn.commit()
     conn.close()
 
+def db_get_all_registered_courses() -> List[dict]:
+    """Return all registered courses with their course_id, display_name, and keywords."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT course_id, display_name, keywords FROM registered_courses")
+    rows = cursor.fetchall()
+    conn.close()
+    result = []
+    for row in rows:
+        try:
+            kws = json.loads(row[2]) if row[2] else []
+        except Exception:
+            kws = []
+        result.append({
+            "course_id": row[0],
+            "display_name": row[1],
+            "keywords": kws
+        })
+    return result
+
+def db_auto_register_course(display_name: str, username: str = "default_user") -> bool:
+    """
+    Automatically register a new course by calling the LLM syllabus generator.
+    Returns True if successfully registered, False otherwise.
+    This allows the chat agent to create courses on-the-fly when a student
+    expresses intent to study a subject that isn't registered yet.
+    """
+    import re as _re
+    
+    # Build a safe course_id from the display_name
+    course_id = _re.sub(r'[^a-zA-Z0-9_]', '_', display_name.lower().strip())
+    course_id = _re.sub(r'_+', '_', course_id).strip('_')
+    if not course_id:
+        return False
+    
+    # Check if already registered (race condition guard)
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT course_id FROM registered_courses WHERE course_id = ?", (course_id,))
+    if cursor.fetchone():
+        conn.close()
+        return True  # Already exists
+    conn.close()
+    
+    from app.ai.scenes import generate_course_syllabus
+    
+    # Generate syllabus via LLM
+    description = f"高等教育课程：{display_name}"
+    nodes = generate_course_syllabus(display_name, description, username)
+    if not nodes or len(nodes) < 8:
+        print(f"[AutoRegister] LLM failed to generate syllabus for '{display_name}', got {len(nodes)} nodes")
+        return False
+    
+    # Ensure exactly 8 nodes with proper ids
+    nodes = nodes[:8]
+    for i, n in enumerate(nodes):
+        n["id"] = f"node{i+1}"
+        n.setdefault("status", "locked")
+        if i == 0:
+            n["status"] = "active"
+    
+    # Extract keywords from node titles for future matching
+    keywords = [display_name]
+    for n in nodes[:3]:
+        title = n.get("title", "")
+        if title:
+            keywords.append(title)
+    
+    # Create courses directory
+    courses_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "courses")
+    course_dir = os.path.join(courses_dir, course_id)
+    os.makedirs(course_dir, exist_ok=True)
+    
+    # Register in database
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO registered_courses (course_id, display_name, keywords, description, nodes) VALUES (?, ?, ?, ?, ?)",
+            (
+                course_id,
+                display_name,
+                json.dumps(keywords, ensure_ascii=False),
+                description,
+                json.dumps(nodes, ensure_ascii=False)
+            )
+        )
+        conn.commit()
+        conn.close()
+        print(f"[AutoRegister] Successfully registered course '{display_name}' (id={course_id})")
+        return True
+    except Exception as e:
+        print(f"[AutoRegister] DB error registering '{display_name}': {e}")
+        return False
+
 def db_sync_path_nodes_by_goals(username: str, goals: List[str]):
     from app.knowledge_base import clean_subject_name
     
@@ -614,6 +709,12 @@ def db_sync_path_nodes_by_goals(username: str, goals: List[str]):
             
     if should_sync:
         db_save_path_nodes(username, nodes_to_seed)
+        # Clear old generated resources when switching to a new course
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM user_resources WHERE username = ?", (username,))
+        conn.commit()
+        conn.close()
 
 
 
@@ -994,9 +1095,19 @@ def init_db():
         diagnostics_provider_id TEXT,
         diagnostics_model TEXT,
         resources_provider_id TEXT,
-        resources_model TEXT
+        resources_model TEXT,
+        embedding_provider_id TEXT NOT NULL DEFAULT 'chat_fallback',
+        embedding_model TEXT NOT NULL DEFAULT 'text-embedding-3-small'
     )
     """)
+    
+    # Check for missing columns in user_model_routing and apply migrations
+    cursor.execute("PRAGMA table_info(user_model_routing)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "embedding_provider_id" not in columns:
+        cursor.execute("ALTER TABLE user_model_routing ADD COLUMN embedding_provider_id TEXT NOT NULL DEFAULT 'chat_fallback'")
+    if "embedding_model" not in columns:
+        cursor.execute("ALTER TABLE user_model_routing ADD COLUMN embedding_model TEXT NOT NULL DEFAULT 'text-embedding-3-small'")
     
     # Chat Sessions Table
     cursor.execute("""
@@ -1134,8 +1245,9 @@ def init_db():
                (username, chat_provider_id, chat_model, 
                 planner_provider_id, planner_model, 
                 diagnostics_provider_id, diagnostics_model, 
-                resources_provider_id, resources_model) 
-               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5')""",
+                resources_provider_id, resources_model,
+                embedding_provider_id, embedding_model) 
+               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'chat_fallback', 'text-embedding-3-small')""",
             ("default_user",)
         )
 
@@ -1237,7 +1349,8 @@ def db_get_model_routing(username: str) -> dict:
         """SELECT chat_provider_id, chat_model, 
                   planner_provider_id, planner_model, 
                   diagnostics_provider_id, diagnostics_model, 
-                  resources_provider_id, resources_model 
+                  resources_provider_id, resources_model,
+                  embedding_provider_id, embedding_model 
            FROM user_model_routing WHERE username = ?""",
         (username,)
     )
@@ -1253,7 +1366,9 @@ def db_get_model_routing(username: str) -> dict:
             "diagnostics_provider_id": "xunfei",
             "diagnostics_model": "generalv3.5",
             "resources_provider_id": "xunfei",
-            "resources_model": "generalv3.5"
+            "resources_model": "generalv3.5",
+            "embedding_provider_id": "chat_fallback",
+            "embedding_model": "text-embedding-3-small",
         }
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -1262,8 +1377,9 @@ def db_get_model_routing(username: str) -> dict:
                (username, chat_provider_id, chat_model, 
                 planner_provider_id, planner_model, 
                 diagnostics_provider_id, diagnostics_model, 
-                resources_provider_id, resources_model) 
-               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5')""",
+                resources_provider_id, resources_model,
+                embedding_provider_id, embedding_model) 
+               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'chat_fallback', 'text-embedding-3-small')""",
             (username,)
         )
         conn.commit()
@@ -1278,7 +1394,9 @@ def db_get_model_routing(username: str) -> dict:
         "diagnostics_provider_id": row[4],
         "diagnostics_model": row[5],
         "resources_provider_id": row[6],
-        "resources_model": row[7]
+        "resources_model": row[7],
+        "embedding_provider_id": row[8] if row[8] is not None else "chat_fallback",
+        "embedding_model": row[9] if row[9] is not None else "text-embedding-3-small",
     }
 
 def db_save_model_routing(username: str, routing_data: dict):
@@ -1289,8 +1407,9 @@ def db_save_model_routing(username: str, routing_data: dict):
            (username, chat_provider_id, chat_model, 
             planner_provider_id, planner_model, 
             diagnostics_provider_id, diagnostics_model, 
-            resources_provider_id, resources_model) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            resources_provider_id, resources_model,
+            embedding_provider_id, embedding_model) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             username,
             routing_data.get("chat_provider_id", "xunfei"),
@@ -1300,7 +1419,9 @@ def db_save_model_routing(username: str, routing_data: dict):
             routing_data.get("diagnostics_provider_id", "xunfei"),
             routing_data.get("diagnostics_model", "generalv3.5"),
             routing_data.get("resources_provider_id", "xunfei"),
-            routing_data.get("resources_model", "generalv3.5")
+            routing_data.get("resources_model", "generalv3.5"),
+            routing_data.get("embedding_provider_id", "chat_fallback"),
+            routing_data.get("embedding_model", "text-embedding-3-small"),
         )
     )
     conn.commit()

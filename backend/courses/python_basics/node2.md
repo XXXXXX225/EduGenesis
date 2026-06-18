@@ -1,25 +1,44 @@
-# Variables and Basic Data Types
+# 变量与数据类型
 
-Python dynamic type system is powerful but requires discipline.
+掌握变量定义与基本数据类型是理解程序如何存储和处理数据的核心。Python 是一门动态类型语言，其变量机制与底层数据存储有其独特性。
 
-## Core Types
-- int: arbitrary-precision, e.g. x = 42
-- float: IEEE 754 double, e.g. pi = 3.14159
-- str: immutable sequence, e.g. name = Alice
-- bool: True / False
-- None: represents absence of value
+## 1. 动态类型绑定与内存引用
+在 Python 中，变量不需要声明类型即可直接赋值。
+* **动态绑定**：变量只是一个指向内存中对象的指针（标签）。例如，你可以让同一个变量名先指向整数，再指向字符串：
+  ```python
+  x = 100       # x 指向一个整型对象
+  x = "Hello"   # x 重新指向一个字符串对象，原整型对象将被垃圾回收
+  ```
+* **内存检测工具**：
+  * `type(obj)`：返回对象所属的类型。
+  * `id(obj)`：返回对象在内存中的唯一身份标识（地址）。
+  ```python
+  a = [1, 2]
+  b = a
+  print(id(a) == id(b))  # True，指向同一个列表对象
+  ```
 
-## Type Conversion
-int('5') -> 5 | float(3) -> 3.0 | str(42) -> '42'
+## 2. 核心基本数据类型
+Python 内置了多种基础数据类型，主要包括以下几类：
+* **整型 (int)**：用于表示任意大小的整数，Python 3 的整型是高精度的，不会出现溢出。
+* **浮点型 (float)**：表示实数，底层基于双精度 C 双精度浮点数实现。
+* **布尔型 (bool)**：仅有 `True` 和 `False` 两个值，属于整型的子类（True 相当于 1，False 相当于 0）。
+* **字符串 (str)**：表示文本字符序列，是用单引号或双引号包裹的**不可变**序列。
 
-## String Operations
-- f-strings: f'Hello {name}'
-- Methods: .upper(), .lower(), .strip(), .split(), .join()
-- Indexing and slicing: s[0], s[1:3]
-
-## Variable Rules
-- Dynamic typing: variables can be reassigned to different types
-- Naming: snake_case, start with letter or underscore
-- Multiple assignment: a, b = 1, 2
-
-**Key Takeaway**: Validate types at function boundaries.
+## 3. 类型显式转换与安全防御
+在实际开发中，需要处理不同数据类型之间的相互转换，特别是在接收外部输入时。
+* **显式转换**：
+  ```python
+  num_str = "45"
+  num_int = int(num_str)  # 转换为整型
+  val_float = float(10)   # 10 -> 10.0
+  ```
+* **防御性校验**：如果不加校验地直接进行强制转换，极易在运行时抛出 `ValueError`。在转换前，通常使用类型断言或异常捕获进行防御：
+  ```python
+  input_val = "abc"
+  if input_val.isdigit():
+      num = int(input_val)
+  else:
+      # 安全处理逻辑
+      num = 0
+  ```

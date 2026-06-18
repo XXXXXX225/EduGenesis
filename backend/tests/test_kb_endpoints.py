@@ -169,7 +169,7 @@ def test_generate_syllabus_api(monkeypatch):
         {"id": f"node{i}", "title": f"Mock Node {i}", "description": "Mock description", "resources": ["pdf"]}
         for i in range(1, 9)
     ]
-    monkeypatch.setattr("app.routes.kb.call_llm_syllabus_generator", lambda course_name, description, username: dummy_nodes)
+    monkeypatch.setattr("app.routes.kb.generate_course_syllabus", lambda course_name, description, username: dummy_nodes)
     
     payload = {
         "course_name": "Test Syllabus Course",

@@ -1,24 +1,30 @@
-# Calculus and Gradient Descent
+# 微积分与梯度下降优化机制
 
-Optimization via gradients is the engine of neural network training.
+在机器学习中，模型的训练本质上是一个寻找最优参数以最小化损失函数的过程。微积分提供了计算变化率的工具，而梯度下降则是沿着变化率最快的反方向进行参数逼近的最经典算法。
 
-## Derivatives
-- df/dx: instantaneous rate of change
-- Partial derivatives for multivariate functions
-- Gradient: vector of all partial derivatives
+## 1. 导数、偏导数与梯度向量
+导数用于衡量单变量函数在某一点的变化率，而对于包含海量权重参数的机器学习模型，我们需要多变量微积分。
+* **偏导数（Partial Derivative）**：
+  若函数 $f(x_1, x_2, \dots, x_n)$ 包含多个自变量，偏导数 $\frac{\partial f}{\partial x_i}$ 衡量的是仅当 $x_i$ 发生改变而其他自变量保持不变时，函数值 $f$ 的瞬时变化率。
+* **梯度向量（Gradient Vector）**：
+  梯度是函数所有偏导数构成的向量，记作 $\nabla f$（读作 nabla f）：
+  $$\nabla f(x) = \left[ \frac{\partial f}{\partial x_1}, \frac{\partial f}{\partial x_2}, \dots, \frac{\partial f}{\partial x_n} \right]^T$$
+  * **物理意义**：梯度向量指向的是函数在当前位置**增长最快**的几何方向。
 
-## Gradient Descent
-- Update rule: w = w - lr * dL/dw
-- Learning rate (lr): controls step size
-- Batch vs Stochastic vs Mini-batch
+## 2. 梯度下降算法原理与更新步长
+既然梯度指向增长最快的方向，那么梯度的反方向（$-\nabla f$）就是函数**下降最快**的方向。
+* **参数更新公式**：
+  在每一次迭代中，我们沿梯度的负方向调整参数 $w$：
+  $$w \leftarrow w - \alpha \nabla L(w)$$
+  其中 $L(w)$ 是损失函数（Loss Function），$\alpha$ 是**学习率（Learning Rate）**或更新步长。
+* **学习率的选择与调优**：
+  学习率 $\alpha$ 是机器学习中最核心的超参数之一：
+  * **过大**：单步更新跨度过大，可能导致越过最低点，从而在最低点两侧来回震荡，甚至导致损失值发散（Diverge）。
+  * **过小**：每次更新幅度极小，导致模型收敛速度极慢，耗费海量算力。
+  * **策略**：实践中常用学习率衰减策略（如余弦退火）或自适应学习率算法（如 Adam、Adagrad）。
 
-## Chain Rule
-- dL/dw = dL/dy * dy/dw
-- Backpropagation applies chain rule through layers
-
-## Common Pitfalls
-- Vanishing gradients (sigmoid saturation)
-- Exploding gradients
-- Local minima vs saddle points
-
-**Key Takeaway**: Gradient descent is remarkably effective when the learning rate is properly tuned.
+## 3. 局部最优解与全局最优解
+梯度下降法在寻找极值时，会面临目标函数地形特征的挑战：
+* **全局最优解（Global Minimum）**：函数在定义域内的绝对最低点。
+* **局部最优解（Local Minimum）**：局部区域内的最低点。如果函数是非凸的（Non-convex，如深度神经网络的损失表面），传统的梯度下降很容易陷入局部最优解或鞍点（Saddle Point，各偏导数为0但非极值点）。
+* **应对机制**：通过引入冲量项（Momentum）、使用随机梯度下降（SGD）引入噪声扰动、或采用较好的参数初始化方法，可以帮助模型跳出局部最优点，向全局最优解逼近。

@@ -227,69 +227,15 @@ def load_all_course_chunks(subject: str) -> list:
     return all_chunks
 
 # ─── Retrieval ───
-import hashlib
-import math
-
 def generate_embedding(text: str, username: str = "default_user") -> list:
-    """
-    Generate an embedding vector for the text using the configured provider's embedding API.
-    If the API call fails or is not supported/configured, falls back to a local hash-based keyword vector.
-    """
-    try:
-        from app.llm_client import get_route_llm_params
-        api_base, api_key, model_name = get_route_llm_params(username, "chat")
-    except Exception:
-        api_base, api_key, model_name = None, None, None
-    
-    if api_base and api_key:
-        url = f"{api_base.rstrip('/')}/embeddings"
-        emb_model = "text-embedding-3-small"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": emb_model,
-            "input": text
-        }
-        try:
-            import requests
-            response = requests.post(url, headers=headers, json=payload, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                embedding = data["data"][0]["embedding"]
-                if isinstance(embedding, list) and len(embedding) > 0:
-                    return embedding
-        except Exception:
-            pass
+    from app.ai.platform import generate_embedding_vector
 
-    # Local fallback: Hash-based feature vector (128 dimensions)
-    keywords = extract_keywords(text)
-    if not keywords:
-        keywords = re.findall(r'[\u4e00-\u9fff]|[a-zA-Z0-9]+', text)
-        
-    vec = [0.0] * 128
-    if keywords:
-        for kw in keywords:
-            h = int(hashlib.md5(kw.encode('utf-8')).hexdigest(), 16)
-            idx = h % 128
-            vec[idx] += 1.0
-            
-    mag = math.sqrt(sum(x * x for x in vec))
-    if mag > 0:
-        vec = [x / mag for x in vec]
-    else:
-        vec[0] = 1.0
-        
-    return vec
+    return generate_embedding_vector(text, username)
 
 def cosine_similarity(v1, v2):
-    dot_product = sum(x * y for x, y in zip(v1, v2))
-    mag1 = math.sqrt(sum(x * x for x in v1))
-    mag2 = math.sqrt(sum(x * x for x in v2))
-    if not mag1 or not mag2:
-        return 0.0
-    return dot_product / (mag1 * mag2)
+    from app.ai.rag import cosine_similarity as ai_cosine_similarity
+
+    return ai_cosine_similarity(v1, v2)
 
 def seed_default_course_chunks():
     """
@@ -328,114 +274,14 @@ def seed_default_course_chunks():
             conn.close()
 
 def rag_search(query: str, subject: str, top_k: int = 5, username: str = "default_user") -> list:
-    """
-    Search course chunks for the given query using vector embeddings and hybrid scoring.
-    """
-    course_folder = clean_subject_name(subject)
-    query_keywords = set(extract_keywords(query))
-    query_vector = generate_embedding(query, username)
-    
-    conn = None
-    rows = []
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT chunk_id, title, content, keywords, embedding FROM course_chunks WHERE course_id = ?",
-            (course_folder,)
-        )
-        rows = cursor.fetchall()
-    except Exception as e:
-        print(f"Database error during rag_search: {e}")
-    finally:
-        if conn:
-            conn.close()
-            
-    # If database yields nothing, fall back to directory loading and real-time computation
-    if not rows:
-        chunks = load_all_course_chunks(subject)
-        scored = []
-        for chunk in chunks:
-            chunk_content = chunk.get("content", "")
-            chunk_emb = generate_embedding(chunk_content, username)
-            score = cosine_similarity(query_vector, chunk_emb)
-            
-            # Hybrid search bonus
-            chunk_kws = set(chunk.get("keywords", []))
-            intersection = query_keywords & chunk_kws
-            union = query_keywords | chunk_kws
-            jaccard = len(intersection) / len(union) if union else 0
-            score += jaccard * 0.3
-            
-            title_words = set(re.findall(r'[\u4e00-\u9fff]+|[a-zA-Z]+', chunk.get("title", "")))
-            title_overlap = query_keywords & title_words
-            score += len(title_overlap) * 0.1
-            
-            scored.append((score, chunk))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [{"score": round(s, 3), **c} for s, c in scored[:top_k]]
+    from app.ai.rag import rag_search as ai_rag_search
 
-    scored = []
-    for r in rows:
-        chunk_id = r[0]
-        title = r[1]
-        content = r[2]
-        try:
-            chunk_kws = json.loads(r[3])
-        except Exception:
-            chunk_kws = []
-        try:
-            chunk_emb = json.loads(r[4])
-        except Exception:
-            chunk_emb = []
-            
-        if not chunk_emb:
-            chunk_emb = generate_embedding(content, username)
-            
-        score = cosine_similarity(query_vector, chunk_emb)
-        
-        # Hybrid search bonus: Jaccard overlap of keywords
-        chunk_kws_set = set(chunk_kws)
-        intersection = query_keywords & chunk_kws_set
-        union = query_keywords | chunk_kws_set
-        jaccard = len(intersection) / len(union) if union else 0
-        score += jaccard * 0.3
-        
-        title_words = set(re.findall(r'[\u4e00-\u9fff]+|[a-zA-Z]+', title))
-        title_overlap = query_keywords & title_words
-        score += len(title_overlap) * 0.1
-        
-        # Extract node_id if possible
-        node_id_match = re.search(r'node\d+', chunk_id)
-        node_id = node_id_match.group(0) if node_id_match else chunk_id
-        
-        chunk = {
-            "node_id": node_id,
-            "title": title,
-            "content": content,
-            "keywords": chunk_kws
-        }
-        scored.append((score, chunk))
-        
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [{"score": round(s, 3), **c} for s, c in scored[:top_k]]
+    return ai_rag_search(query, subject, top_k=top_k, username=username)
 
 def rag_retrieve_context(query: str, subject: str, max_tokens: int = 2000, username: str = "default_user") -> str:
-    """
-    Retrieve and concatenate relevant chunks as context for LLM prompts.
-    """
-    results = rag_search(query, subject, top_k=3, username=username)
-    if not results:
-        return ""
-    context_parts = []
-    total_chars = 0
-    for r in results:
-        chunk_text = f"[{r['title']}] ({r.get('node_id', 'chunk')})\n{r['content']}"
-        if total_chars + len(chunk_text) > max_tokens * 4:
-            break
-        context_parts.append(chunk_text)
-        total_chars += len(chunk_text)
-    return "\n\n---\n\n".join(context_parts)
+    from app.ai.rag import rag_retrieve_context as ai_rag_retrieve_context
+
+    return ai_rag_retrieve_context(query, subject, max_tokens=max_tokens, username=username)
 
 # ─── Knowledge base statistics (for admin/console) ───
 def get_kb_stats() -> dict:

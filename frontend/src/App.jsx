@@ -24,7 +24,8 @@ import {
   FolderUp,
   ChevronDown,
   Settings2,
-  Pencil
+  Pencil,
+  X
 } from 'lucide-react';
 import { clearSession } from './utils/session';
 import MobileTabBar from './components/shared/MobileTabBar';
@@ -180,7 +181,9 @@ function AppContent() {
     setCustomDialog,
     showCustomAlert,
     showCustomConfirm,
-    showCustomPrompt
+    showCustomPrompt,
+    selectedErrorExp,
+    setSelectedErrorExp
   } = useAppContext();
 
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
@@ -355,7 +358,7 @@ function AppContent() {
     }
   }, [activeTab, isLoggedIn]);
 
-  // 4. Chat Bubble Entrance Animation
+  // 4. Chat Bubble Entrance Animation (runs once when a bubble is added)
   useEffect(() => {
     const ctx = gsap.context(() => {
       const bubbles = document.querySelectorAll('.chat-bubble-anim');
@@ -367,9 +370,13 @@ function AppContent() {
         );
       }
     });
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
 
     return () => ctx.revert();
+  }, [chat.chatHistory.length]);
+
+  // Scroll to bottom when message content or status updates
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chat.chatHistory, chat.tutorStatus]);
 
   // Slide content typing text effect
@@ -1116,6 +1123,50 @@ function AppContent() {
         nodeTitle={selectedNode?.title}
       />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
+      {/* Error explanation details modal */}
+      {selectedErrorExp && (
+        <div className="modal-backdrop" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '600px', borderRadius: '16px' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: '1px solid var(--border-neon)',
+              paddingBottom: '14px',
+              marginBottom: '20px'
+            }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '800' }}>智能体错题诊断报告</h3>
+              <button type="button" onClick={() => setSelectedErrorExp(null)} style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: '4px'
+              }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', color: 'var(--text-main)', fontSize: '14px', lineHeight: '1.6' }}>
+              <h4 style={{ fontWeight: '800', color: 'var(--danger)' }}>错误类型：{selectedErrorExp.title}</h4>
+              <p style={{ background: 'rgba(15, 118, 110, 0.04)', padding: '14px', borderRadius: '12px', borderLeft: '4px solid var(--primary-neon)', fontSize: '13px' }}>
+                {selectedErrorExp.ai_explanation}
+              </p>
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>推荐修复后的标准源码：</span>
+                <div style={{ background: '#1e1e24', padding: '14px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#f8f8f2', border: '1px solid rgba(255,255,255,0.05)', whiteSpace: 'pre' }}>
+                  {selectedErrorExp.solution}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-neon)', paddingTop: '12px' }}>
+              <button type="button" className="cyber-btn" onClick={() => setSelectedErrorExp(null)}>
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 🎨 Custom Glassmorphic Dialog Overlay */}
       {customDialog && (

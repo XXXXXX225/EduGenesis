@@ -4,6 +4,7 @@ import requests
 from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
+from app.ai.platform import probe_provider_connection
 from app.auth_utils import get_current_username
 from app.db import (
     db_get_user_providers,
@@ -119,23 +120,10 @@ def test_provider_connection(provider_id: str, current_username: str = Depends(g
     if not enabled_model:
         # Fallback to the first model in list if none is explicitly checked
         enabled_model = models_list[0]["name"] if models_list else "gpt-3.5-turbo"
-        
+
     try:
-        url = f"{api_base.rstrip('/')}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": enabled_model,
-            "messages": [{"role": "user", "content": "hello"}],
-            "max_tokens": 5
-        }
-        res = requests.post(url, headers=headers, json=payload, timeout=15)
-        if res.status_code == 200:
-            return {"success": True, "message": "连接测试成功！"}
-        else:
-            return {"success": False, "message": f"连接失败 (HTTP {res.status_code}): {res.text[:150]}"}
+        success, message = probe_provider_connection(api_base, api_key, enabled_model)
+        return {"success": success, "message": message}
     except Exception as e:
         return {"success": False, "message": f"请求异常: {str(e)}"}
 

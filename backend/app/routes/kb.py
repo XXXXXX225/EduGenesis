@@ -4,13 +4,13 @@ import json
 import sqlite3
 import logging
 from typing import List
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel, Field
 from app.models import PathNode
 from app.db import DB_PATH
 from app.knowledge_base import COURSES_DIR, generate_embedding, extract_keywords
 from app.auth_utils import get_current_username
-from app.llm_client import call_llm_syllabus_generator
+from app.ai.scenes import generate_course_syllabus
 import io
 import uuid
 
@@ -161,10 +161,43 @@ class SyllabusGenerateRequest(BaseModel):
 
 @router.post("/courses/generate_syllabus")
 def generate_syllabus(request: SyllabusGenerateRequest, current_username: str = Depends(get_current_username)):
-    nodes = call_llm_syllabus_generator(request.course_name, request.description, current_username)
+    nodes = generate_course_syllabus(request.course_name, request.description, current_username)
     if not nodes:
         raise HTTPException(status_code=500, detail="Failed to generate syllabus via AI.")
     return {"nodes": nodes}
+
+@router.post("/courses/{course_id}/generate_material")
+def trigger_material_generation(
+    course_id: str,
+    background_tasks: BackgroundTasks,
+    current_username: str = Depends(get_current_username)
+):
+    if not re.match(r"^[a-zA-Z0-9_]+$", course_id):
+        raise HTTPException(status_code=400, detail="Invalid course_id. Must match ^[a-zA-Z0-9_]+$")
+        
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM registered_courses WHERE course_id = ?", (course_id,))
+        exists = cursor.fetchone()[0] > 0
+        if not exists:
+            raise HTTPException(status_code=404, detail="Course not found.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Database error in generation check: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Database check failed.")
+    finally:
+        if conn:
+            conn.close()
+
+    from app.course_synthesizer import async_generate_course_materials
+    background_tasks.add_task(async_generate_course_materials, course_id, current_username)
+    return {
+        "status": "success",
+        "message": f"Successfully triggered background AI textbook generation and indexing for course '{course_id}'."
+    }
 
 @router.post("/courses/{course_id}/upload")
 async def upload_course_file(
