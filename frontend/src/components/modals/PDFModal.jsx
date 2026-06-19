@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, FileText, MessageSquare, Send, Sparkles, BookOpen } from 'lucide-react';
 import { apiSSEStream } from '../../utils/api';
 import { useAppContext } from '../../context/AppContext';
+import QuizCard from '../chat/QuizCard';
+import MermaidRenderer from '../chat/MermaidRenderer';
+import CodeSandboxCard from '../chat/CodeSandboxCard';
 
 const modalHeaderStyle = {
   display: 'flex',
@@ -48,6 +51,161 @@ const parseMarkdownToReact = (text) => {
     return <p key={idx} style={{ fontSize: '13.5px', color: 'var(--text-muted)', lineHeight: '1.7', marginBottom: '10px' }}>{line}</p>;
   });
 };
+
+const parseIncompleteTags = (text) => {
+  if (!text) return { cleanText: '', pendingTag: null };
+  const tagKeywords = ['QUIZ', 'MINDMAP', 'CODE', 'SLIDES', 'PDF', 'VIDEO_RECOMMEND', 'VIDEO', 'DIAGRAM'];
+  for (const kw of tagKeywords) {
+    const pattern = `[${kw}:`;
+    const idx = text.lastIndexOf(pattern);
+    if (idx !== -1) {
+      const cleanText = text.substring(0, idx);
+      const rawTag = text.substring(idx);
+      
+      let label = "智能体分析中...";
+      if (kw === 'QUIZ') label = "正在为您设计自适应测验...";
+      if (kw === 'MINDMAP') label = "正在为您绘制自适应概念脉络树...";
+      if (kw === 'CODE') label = "正在为您组装实操源码用例...";
+      if (kw === 'SLIDES') label = "正在为您制作音画对齐幻灯片...";
+      if (kw === 'PDF') label = "正在为您编写讲义课本章节...";
+      if (kw === 'VIDEO_RECOMMEND') label = "正在为您匹配检索精选视频...";
+      
+      return {
+        cleanText,
+        pendingTag: {
+          type: kw,
+          label: label,
+          raw: rawTag
+        }
+      };
+    }
+  }
+  return { cleanText: text, pendingTag: null };
+};
+
+const tagsRegex = /(\[QUIZ:\s*\{[\s\S]*?\}\s*\]|\[MINDMAP:\s*(?:[\s\S]*?\n\s*\]|[^\]]*?\])|\[CODE:\s*\w+\s*\|(?:[\s\S]*?\n\s*\]|[^\]]*?\]))/g;
+
+function TutorChatMessage({ content, isStreaming }) {
+  if (!content) return null;
+  const parts = content.split(tagsRegex);
+  
+  let lastVisibleTextIndex = -1;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i];
+    if (!part) continue;
+    const isTag = part.startsWith('[') && part.endsWith(']');
+    const isIncompleteTag = part.startsWith('[') && !part.endsWith(']');
+    if (!isTag && !isIncompleteTag) {
+      lastVisibleTextIndex = i;
+      break;
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <style>{`
+        @keyframes blinkCursor {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
+      {parts.map((part, index) => {
+        if (!part) return null;
+
+        if (part.startsWith('[QUIZ:') && part.endsWith(']')) {
+          try {
+            const jsonStr = part.substring(6, part.length - 1).trim();
+            const quizData = JSON.parse(jsonStr);
+            return <QuizCard key={index} quizData={quizData} />;
+          } catch (e) {
+            return null;
+          }
+        }
+
+        if (part.startsWith('[MINDMAP:') && part.endsWith(']')) {
+          const code = part.substring(9, part.length - 1).trim();
+          return <MermaidRenderer key={index} code={code} />;
+        }
+
+        if (part.startsWith('[CODE:') && part.endsWith(']')) {
+          const inner = part.substring(6, part.length - 1).trim();
+          const pipeIdx = inner.indexOf('|');
+          if (pipeIdx !== -1) {
+            const lang = inner.substring(0, pipeIdx).trim();
+            const codeContent = inner.substring(pipeIdx + 1).trim();
+            return <CodeSandboxCard key={index} code={codeContent} lang={lang} />;
+          }
+        }
+
+        if (part.startsWith('[') && !part.endsWith(']')) {
+          return null; // Skip rendering partial tag code while streaming
+        }
+
+        const { cleanText, pendingTag } = parseIncompleteTags(part);
+        const showCursorHere = isStreaming && index === lastVisibleTextIndex;
+
+        return (
+          <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {cleanText && (
+              <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', wordBreak: 'break-word' }}>
+                {cleanText}
+                {showCursorHere && !pendingTag && (
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: '6px',
+                      height: '12px',
+                      background: '#2dd4bf',
+                      marginLeft: '2px',
+                      verticalAlign: 'text-bottom',
+                      animation: 'blinkCursor 0.8s step-end infinite',
+                      borderRadius: '1px',
+                      boxShadow: '0 0 6px #2dd4bf',
+                    }}
+                  >
+                    &nbsp;
+                  </span>
+                )}
+              </div>
+            )}
+
+            {pendingTag && (
+              <div 
+                className="pulse-glow" 
+                style={{ 
+                  marginTop: '6px', 
+                  padding: '8px 12px', 
+                  background: 'rgba(45, 212, 191, 0.05)', 
+                  border: '1px dashed #2dd4bf', 
+                  borderRadius: '8px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px',
+                  fontSize: '11px',
+                  color: '#2dd4bf',
+                  animation: 'fadeIn 0.25s ease-out'
+                }}
+              >
+                <div 
+                  className="spinner-academic" 
+                  style={{ 
+                    width: '10px', 
+                    height: '10px', 
+                    borderWidth: '1.5px', 
+                    borderColor: '#2dd4bf transparent #2dd4bf transparent',
+                    marginBottom: 0,
+                    flexShrink: 0
+                  }}
+                ></div>
+                <strong style={{ fontWeight: '600' }}>{pendingTag.label}</strong>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function PDFModal({ isOpen, onClose, pdfContent, nodeTitle }) {
   const { showCustomAlert } = useAppContext();
@@ -145,6 +303,13 @@ Provide a friendly, encouraging, and academically accurate explanation to the st
     }
   };
 
+  const lastAssistantIdx = (() => {
+    for (let i = tutorMessages.length - 1; i >= 0; i--) {
+      if (tutorMessages[i].role !== 'user') return i;
+    }
+    return -1;
+  })();
+
   return (
     <div className="modal-backdrop">
       <div
@@ -202,7 +367,7 @@ Provide a friendly, encouraging, and academically accurate explanation to the st
           {/* Left Column: PDF Text Reader */}
           <div
             style={{
-              flex: showTutor ? '0 0 58%' : '1 1 100%',
+              flex: showTutor ? '0 0 calc(58% - 10px)' : '1 1 100%',
               overflowY: 'auto',
               paddingRight: '12px',
               background: 'var(--bg-pdf-reader)',
@@ -220,7 +385,7 @@ Provide a friendly, encouraging, and academically accurate explanation to the st
           {showTutor && (
             <div
               style={{
-                flex: '0 0 42%',
+                flex: '0 0 calc(42% - 10px)',
                 display: 'flex',
                 flexDirection: 'column',
                 border: '1px solid rgba(15, 118, 110, 0.2)',
@@ -272,10 +437,18 @@ Provide a friendly, encouraging, and academically accurate explanation to the st
                          fontSize: '12.5px',
                          lineHeight: '1.6',
                          color: isUser ? '#ffffff' : 'rgba(255,255,255,0.95)',
-                         whiteSpace: 'pre-wrap'
+                         whiteSpace: 'pre-wrap',
+                         wordBreak: 'break-word'
                        }}
                      >
-                       {msg.content}
+                       {isUser ? (
+                         msg.content
+                       ) : (
+                         <TutorChatMessage 
+                           content={msg.content} 
+                           isStreaming={index === lastAssistantIdx && isTutorStreaming} 
+                         />
+                       )}
                      </div>
                    );
                  })}

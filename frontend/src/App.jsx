@@ -667,10 +667,7 @@ function AppContent() {
             <button
               onClick={() => {
                 clearSession();
-                setIsLoggedIn(false);
-                setCurrentView('landing');
-                setRegUsername('');
-                setRegPassword('');
+                window.location.reload();
               }}
               className="cyber-btn"
               style={{

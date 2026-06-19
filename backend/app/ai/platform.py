@@ -149,6 +149,17 @@ def request_chat_completion_with_config(
     if not config.api_key:
         return None
 
+    processed_messages = [dict(m) for m in messages]
+    if config.provider_id == "xunfei" and processed_messages and processed_messages[0].get("role") == "system":
+        system_msg = processed_messages.pop(0)
+        system_content = system_msg.get("content", "")
+        user_idx = next((i for i, m in enumerate(processed_messages) if m.get("role") == "user"), None)
+        if user_idx is not None:
+            user_content = processed_messages[user_idx].get("content", "")
+            processed_messages[user_idx]["content"] = f"{system_content}\n\n{user_content}"
+        else:
+            processed_messages.insert(0, {"role": "user", "content": system_content})
+
     url = f"{config.api_base.rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {config.api_key}",
@@ -156,7 +167,7 @@ def request_chat_completion_with_config(
     }
     payload = build_chat_payload(
         config,
-        messages,
+        processed_messages,
         temperature=temperature,
         stream=stream,
         max_tokens=max_tokens,

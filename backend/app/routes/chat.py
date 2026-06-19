@@ -1,7 +1,7 @@
 import os
 import json
 import asyncio
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from app.auth_utils import get_current_username
 from fastapi.responses import StreamingResponse
 from app.models import ChatRequest
@@ -20,7 +20,8 @@ from app.db import (
     db_delete_chat_session,
     db_clear_chat_sessions,
     db_save_chat_message,
-    db_get_chat_messages
+    db_get_chat_messages,
+    db_verify_session_ownership
 )
 from app.limiter import rate_limit_chat
 from app.ai.platform import get_capability_config
@@ -42,12 +43,16 @@ async def create_session(request: dict, current_username: str = Depends(get_curr
 
 @router.put("/chat/sessions/{session_id}")
 async def update_session(session_id: str, request: dict, current_username: str = Depends(get_current_username)):
+    if not db_verify_session_ownership(session_id, current_username):
+        raise HTTPException(status_code=403, detail="Access denied. Session does not belong to the user.")
     title = request.get("title", "未命名会话")
     db_update_chat_session_title(session_id, title)
     return {"status": "success"}
 
 @router.delete("/chat/sessions/{session_id}")
 async def delete_session(session_id: str, current_username: str = Depends(get_current_username)):
+    if not db_verify_session_ownership(session_id, current_username):
+        raise HTTPException(status_code=403, detail="Access denied. Session does not belong to the user.")
     db_delete_chat_session(session_id)
     return {"status": "success"}
 
@@ -58,10 +63,14 @@ async def clear_sessions(current_username: str = Depends(get_current_username)):
 
 @router.get("/chat/sessions/{session_id}/messages")
 async def get_session_messages(session_id: str, current_username: str = Depends(get_current_username)):
+    if not db_verify_session_ownership(session_id, current_username):
+        raise HTTPException(status_code=403, detail="Access denied. Session does not belong to the user.")
     return db_get_chat_messages(session_id)
 
 @router.post("/chat", dependencies=[Depends(rate_limit_chat)])
 async def chat_interaction(request: ChatRequest, current_username: str = Depends(get_current_username)):
+    if request.session_id and not db_verify_session_ownership(request.session_id, current_username):
+        raise HTTPException(status_code=403, detail="Access denied. Session does not belong to the user.")
     target_user = current_username
     current_profile = db_get_profile(target_user)
     _chat_cfg = get_capability_config(target_user, 'chat')
@@ -232,7 +241,7 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                 
                 # If LLM stream produced no content (e.g. API authentication error), fallback to simulator
                 if not assistant_chunks:
-                    async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks):
+                    async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks, reason="empty_stream"):
                         yield chunk
                 else:
                     # Check if we should auto-append video recommendation cards
@@ -302,11 +311,11 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                         await asyncio.sleep(0.2)
             else:
                 # LLM API call failed, fallback to simulator
-                async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks):
+                async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks, reason="api_failed"):
                     yield chunk
         else:
             # No LLM API key provided, default to simulator fallback
-            async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks):
+            async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks, reason="no_api_key"):
                 yield chunk
             
         if request.session_id and assistant_chunks:
@@ -321,8 +330,13 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-    async def run_fallback_simulator(messages, profile, rec_videos_list=None, assistant_chunks=None):
-        yield f"data: {json.dumps({'type': 'status', 'status': '⚠️ 未检测到 API Key，已自动启用本地仿真模型。'})}\n\n"
+    async def run_fallback_simulator(messages, profile, rec_videos_list=None, assistant_chunks=None, reason="no_api_key"):
+        status_msg = "⚠️ 未检测到 API Key，已自动启用本地仿真模型。"
+        if reason == "api_failed":
+            status_msg = "⚠️ 大模型接口响应失败，已自动启用本地仿真模型。"
+        elif reason == "empty_stream":
+            status_msg = "⚠️ 大模型未返回有效内容，已自动启用本地仿真模型。"
+        yield f"data: {json.dumps({'type': 'status', 'status': status_msg})}\n\n"
         await asyncio.sleep(0.6)
         yield f"data: {json.dumps({'type': 'status', 'status': ''})}\n\n"
         

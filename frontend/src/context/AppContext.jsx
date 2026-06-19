@@ -140,14 +140,14 @@ export function AppProvider({ children }) {
   });
 
   const [pathNodes, setPathNodes] = useState([
-    { id: "node1", title: "Python 环境部署", status: "completed", description: "安装 Python 与 VS Code 软件配置", resources: ["pdf", "code"] },
-    { id: "node2", title: "变量与基础数据类型", status: "active", description: "探索整型、浮点型、字符串及变量绑定", resources: ["slide", "pdf", "quiz"] },
-    { id: "node3", title: "控制流与条件判断", status: "locked", description: "If 条件分支、逻辑运算与流程控制", resources: ["slide", "quiz", "code"] },
-    { id: "node4", title: "循环结构与迭代", status: "locked", description: "While 与 For 循环及 Break/Continue 控制", resources: ["slide", "quiz"] },
-    { id: "node5", title: "数据结构进阶", status: "locked", description: "列表、元组、字典与集合的增删改查", resources: ["slide", "pdf", "quiz", "code"] },
+    { id: "node1", title: "Python 环境部署", status: "completed", description: "安装 Python 与 VS Code 软件配置", resources: ["pdf", "mindmap", "code"] },
+    { id: "node2", title: "变量与基础数据类型", status: "active", description: "探索整型、浮点型、字符串及变量绑定", resources: ["slide", "pdf", "mindmap", "quiz"] },
+    { id: "node3", title: "控制流与条件判断", status: "locked", description: "If 条件分支、逻辑运算与流程控制", resources: ["slide", "mindmap", "quiz", "code"] },
+    { id: "node4", title: "循环结构与迭代", status: "locked", description: "While 与 For 循环及 Break/Continue 控制", resources: ["slide", "mindmap", "quiz"] },
+    { id: "node5", title: "数据结构进阶", status: "locked", description: "列表、元组、字典与集合的增删改查", resources: ["slide", "pdf", "mindmap", "quiz", "code"] },
     { id: "node6", title: "函数与模块化编程", status: "locked", description: "定义可重用函数、形参实参与作用域", resources: ["slide", "pdf", "mindmap", "code"] },
-    { id: "node7", title: "异常处理与文件操作", status: "locked", description: "Try-Except 错误捕获与本地文本文件读写", resources: ["code", "quiz"] },
-    { id: "node8", title: "综合项目：自适应计算器", status: "locked", description: "结合函数与异常处理实现计算器实践", resources: ["code", "quiz"] }
+    { id: "node7", title: "异常处理与文件操作", status: "locked", description: "Try-Except 错误捕获与本地文本文件读写", resources: ["mindmap", "code", "quiz"] },
+    { id: "node8", title: "综合项目：自适应计算器", status: "locked", description: "结合函数与异常处理实现计算器实践", resources: ["mindmap", "code", "quiz"] }
   ]);
 
   const [selectedNode, setSelectedNode] = useState(null);
@@ -296,19 +296,18 @@ export function AppProvider({ children }) {
   const deleteSession = async (sessionId) => {
     try {
       await apiDelete(`/chat/sessions/${sessionId}`);
-      setChatSessions(prev => {
-        const updated = prev.filter(s => s.session_id !== sessionId);
-        if (currentSessionId === sessionId) {
-          if (updated.length > 0) {
-            const nextSess = updated[0].session_id;
-            setCurrentSessionId(nextSess);
-            loadSessionMessages(nextSess);
-          } else {
-            setTimeout(() => startNewChat(), 100);
-          }
+      const updated = chatSessions.filter(s => s.session_id !== sessionId);
+      setChatSessions(updated);
+
+      if (currentSessionId === sessionId) {
+        if (updated.length > 0) {
+          const nextSess = updated[0].session_id;
+          setCurrentSessionId(nextSess);
+          loadSessionMessages(nextSess);
+        } else {
+          await startNewChat();
         }
-        return updated;
-      });
+      }
     } catch (err) {
       console.error(`Failed to delete session ${sessionId}:`, err);
     }

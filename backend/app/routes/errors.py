@@ -157,9 +157,10 @@ def download_certificate(current_username: str = Depends(get_current_username)):
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib import colors
         from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.cidfonts import CIDFont
-        
-        pdfmetrics.registerFont(CIDFont('STSong-Light'))
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        from reportlab.pdfbase.pdfmetrics import registerFontFamily
+        pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+        registerFontFamily('STSong-Light', normal='STSong-Light', bold='STSong-Light', italic='STSong-Light', boldItalic='STSong-Light')
         font_name = 'STSong-Light'
     except Exception as err:
         print(f"Reportlab setup error: {err}")
@@ -293,4 +294,5 @@ def download_certificate(current_username: str = Depends(get_current_username)):
         "Content-Disposition": f"attachment; filename=certificate_{target_user}.pdf",
         "Content-Type": "application/pdf"
     }
-    return StreamingResponse(io.BytesIO(pdf_bytes), headers=headers, media_type="application/pdf")
+    from fastapi import Response
+    return Response(content=pdf_bytes, headers=headers, media_type="application/pdf")

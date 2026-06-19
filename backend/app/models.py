@@ -75,3 +75,6 @@ class CompleteNodeRequest(BaseModel):
     username: Optional[str] = None
     score: Optional[int] = None
     total: Optional[int] = None
+
+class SandboxRunRawRequest(BaseModel):
+    code: str

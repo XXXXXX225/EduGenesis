@@ -4,11 +4,19 @@ import { apiGetRaw } from '../../utils/api';
 import { useAppContext } from '../../context/AppContext';
 
 export default function AchievementsView() {
+  const [downloading, setDownloading] = React.useState(false);
   const {
     profile,
     setProfileAlert,
     goDashboardHome
   } = useAppContext();
+
+  // Derive client-only cognitive dimension metrics dynamically from the actual knowledge_base score.
+  const kb = profile.knowledge_base || 0;
+  const debuggingVal = profile.debugging ?? Math.round(kb * 0.9);
+  const practicalVal = profile.practical ?? Math.round(kb * 0.95);
+  const reasoningVal = profile.reasoning ?? Math.round(kb * 0.85);
+
   return (
     <>
       <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px', marginBottom: '16px' }}>
@@ -23,10 +31,10 @@ export default function AchievementsView() {
       {/* Badges Grid (adapted to a vertical flex list of horizontal items) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
         {[
-          { name: "百科全书学霸", desc: "基础知识库得分 >= 70 解锁", rule: profile.knowledge_base >= 70, icon: <BookOpen size={18} /> },
-          { name: "虫洞终结者", desc: "调试能力得分 >= 70 解锁", rule: profile.debugging >= 70 || profile.debugging === undefined, icon: <Cpu size={18} /> },
-          { name: "代码实操狂魔", desc: "实践能力得分 >= 70 解锁", rule: profile.practical >= 70 || profile.practical === undefined, icon: <Code2 size={18} /> },
-          { name: "逻辑推导演绎家", desc: "推理分析得分 >= 70 解锁", rule: profile.reasoning >= 70 || profile.reasoning === undefined, icon: <TrendingUp size={18} /> }
+          { name: "百科全书学霸", desc: "基础知识库得分 >= 70 解锁", rule: kb >= 70, icon: <BookOpen size={18} /> },
+          { name: "虫洞终结者", desc: "调试能力得分 >= 70 解锁", rule: debuggingVal >= 70, icon: <Cpu size={18} /> },
+          { name: "代码实操狂魔", desc: "实践能力得分 >= 70 解锁", rule: practicalVal >= 70, icon: <Code2 size={18} /> },
+          { name: "逻辑推导演绎家", desc: "推理分析得分 >= 70 解锁", rule: reasoningVal >= 70, icon: <TrendingUp size={18} /> }
         ].map((badge, idx) => (
           <div key={idx} className={`badge-card ${badge.rule ? 'unlocked' : 'locked'}`} style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px', padding: '10px 12px', textAlign: 'left', borderRadius: '12px' }}>
             <div className="badge-icon-wrapper" style={{ margin: 0, padding: '6px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -84,7 +92,10 @@ export default function AchievementsView() {
 
           <button
             type="button"
+            disabled={downloading}
             onClick={async () => {
+              if (downloading) return;
+              setDownloading(true);
               setProfileAlert("🎓 正在为您签发PDF结业证书，请稍候...");
               try {
                 const response = await apiGetRaw('/achievements/certificate');
@@ -103,13 +114,21 @@ export default function AchievementsView() {
               } catch (err) {
                 setProfileAlert(`❌ ${err.message}`);
               } finally {
+                setDownloading(false);
                 setTimeout(() => setProfileAlert(''), 3000);
               }
             }}
             className="cyber-btn"
-            style={{ width: '100%', justifyContent: 'center', padding: '6px 10px', fontSize: '11px' }}
+            style={{ 
+              width: '100%', 
+              justifyContent: 'center', 
+              padding: '6px 10px', 
+              fontSize: '11px',
+              opacity: downloading ? 0.6 : 1,
+              cursor: downloading ? 'not-allowed' : 'pointer'
+            }}
           >
-            <Download size={14} /> 下载自适应结业证书
+            <Download size={14} /> {downloading ? '正在签发证书...' : '下载自适应结业证书'}
           </button>
         </div>
       </div>

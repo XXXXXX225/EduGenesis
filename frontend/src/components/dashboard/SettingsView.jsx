@@ -287,7 +287,7 @@ export default function SettingsView() {
         title: n.title.trim() || `关卡 ${nodeNum}`,
         status: nodeNum === 1 ? 'completed' : (nodeNum === 2 ? 'active' : 'locked'),
         description: n.description.trim() || `第 ${nodeNum} 阶段自适应学习大纲`,
-        resources: ["pdf", "code", "quiz", "video"]
+        resources: ["pdf", "mindmap", "code", "quiz", "video"]
       };
     });
 

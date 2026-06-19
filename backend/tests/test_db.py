@@ -165,10 +165,10 @@ def test_db_course_switch_clears_resources():
     # 3. Switch to Machine Learning (which has a different set of nodes/titles, triggering sync)
     db_sync_path_nodes_by_goals(TEST_USER, ["机器学习与深度学习"])
     
-    # 4. Verify resources are cleared
+    # 4. Verify old resources are cleared (e.g. the custom concept_map resource is gone)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM user_resources WHERE username = ?", (TEST_USER,))
+    cursor.execute("SELECT COUNT(*) FROM user_resources WHERE username = ? AND resource_type = 'concept_map'", (TEST_USER,))
     count = cursor.fetchone()[0]
     conn.close()
     

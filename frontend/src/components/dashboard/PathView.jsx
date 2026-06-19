@@ -9,6 +9,7 @@ const getResourceIcon = (type) => {
     case 'quiz': return <HelpCircle size={16} style={{ color: 'var(--success)' }} />;
     case 'code': return <FileCode size={16} style={{ color: 'var(--accent)' }} />;
     case 'mindmap': return <Map size={16} style={{ color: 'var(--warning)' }} />;
+    case 'video': return <PlayCircle size={16} style={{ color: '#fb7299' }} />;
     default: return <FileText size={16} />;
   }
 };
@@ -237,7 +238,7 @@ export default function PathView() {
                           </div>
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <h6 style={{ fontSize: '11.5px', fontWeight: '700', margin: 0, color: 'var(--text-main)' }}>
-                              {res === 'slide' ? '音画幻灯片' : res === 'quiz' ? '自适应测验' : res === 'code' ? '实操源码' : res === 'pdf' ? '讲解课本' : '思维脑图'}
+                              {res === 'slide' ? '音画幻灯片' : res === 'quiz' ? '自适应测验' : res === 'code' ? '实操源码' : res === 'pdf' ? '讲解课本' : res === 'video' ? '精选视频' : '思维脑图'}
                             </h6>
                           </div>
                         </div>

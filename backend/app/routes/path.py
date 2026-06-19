@@ -41,20 +41,25 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
     new_nodes = []
     if ai_nodes and len(ai_nodes) == 8:
         for idx, node in enumerate(ai_nodes):
-            # Maintain correct lock/unlock status for the nodes
-            status = "completed" if node["id"] == "node1" else ("active" if node["id"] == "node2" else "locked")
+            # Safely get node id or default to node{index}
+            node_id = node.get("id") or node.get("node_id") or f"node{idx+1}"
             
-            # Ensure "video" is always included in the node's resources
+            # Maintain correct lock/unlock status for the nodes
+            status = "completed" if node_id == "node1" else ("active" if node_id == "node2" else "locked")
+            
+            # Ensure "video" and "mindmap" are always included in the node's resources
             node_resources = list(node.get("resources", []))
             if "video" not in node_resources:
                 node_resources.append("video")
+            if "mindmap" not in node_resources:
+                node_resources.append("mindmap")
                 
             new_nodes.append(
                 PathNode(
-                    id=node["id"],
-                    title=node["title"],
+                    id=node_id,
+                    title=node.get("title", f"关卡{idx+1}"),
                     status=status,
-                    description=node["description"],
+                    description=node.get("description", ""),
                     resources=node_resources
                 )
             )
@@ -98,58 +103,21 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
     conn.commit()
     conn.close()
     
-    # 2. Pre-generate assets for node1 and node2 based on current profile
-    # Fetch fallback assets first (which is instant)
-    fallback_n1 = get_fallback_assets_for_topic(new_nodes[0].title, profile, new_nodes[0].id)
-    fallback_n2 = get_fallback_assets_for_topic(new_nodes[1].title, profile, new_nodes[1].id)
-    
-    # 3. Crawl live Bilibili videos dynamically in Python space (outside SQLite lock)
-    if "video" in new_nodes[0].resources:
-        try:
-            from app.video_agent import get_video_recommendations_for_node
-            videos_with_reasons = get_video_recommendations_for_node(
-                new_nodes[0].title, new_nodes[0].description, profile, target_user
-            )
-            if videos_with_reasons:
-                fallback_n1["video"] = videos_with_reasons
-        except Exception as e:
-            print(f"Failed to pre-crawl Bilibili videos for node1: {e}")
-            
-    if "video" in new_nodes[1].resources:
-        try:
-            from app.video_agent import get_video_recommendations_for_node
-            videos_with_reasons = get_video_recommendations_for_node(
-                new_nodes[1].title, new_nodes[1].description, profile, target_user
-            )
-            if videos_with_reasons:
-                fallback_n2["video"] = videos_with_reasons
-        except Exception as e:
-            print(f"Failed to pre-crawl Bilibili videos for node2: {e}")
-            
-    # 4. Write back all resources to SQLite
+    # 2. Pre-generate and write back resources for ALL nodes to SQLite to ensure instant loading for presentation
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # node1
-    for res_type in new_nodes[0].resources:
-        content_val = fallback_n1.get(res_type, "")
-        if not isinstance(content_val, str):
-            content_val = json.dumps(content_val, ensure_ascii=False)
-        cursor.execute(
-            "INSERT OR REPLACE INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
-            (target_user, new_nodes[0].id, res_type, content_val)
-        )
-        
-    # node2
-    for res_type in new_nodes[1].resources:
-        content_val = fallback_n2.get(res_type, "")
-        if not isinstance(content_val, str):
-            content_val = json.dumps(content_val, ensure_ascii=False)
-        cursor.execute(
-            "INSERT OR REPLACE INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
-            (target_user, new_nodes[1].id, res_type, content_val)
-        )
-        
+    for node in new_nodes:
+        node_assets = get_fallback_assets_for_topic(node.title, profile, node.id)
+        for res_type in node.resources:
+            content_val = node_assets.get(res_type, "")
+            if not isinstance(content_val, str):
+                content_val = json.dumps(content_val, ensure_ascii=False)
+            cursor.execute(
+                "INSERT OR REPLACE INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
+                (target_user, node.id, res_type, content_val)
+            )
+            
     conn.commit()
     conn.close()
     
@@ -261,17 +229,8 @@ def complete_node(request: CompleteNodeRequest, current_username: str = Depends(
     if next_node_to_unlock:
         fallback_assets = get_fallback_assets_for_topic(next_node_to_unlock.title, profile, next_node_to_unlock.id)
         
-        # Crawl Bilibili videos dynamically in Python space
-        if "video" in next_node_to_unlock.resources:
-            try:
-                from app.video_agent import get_video_recommendations_for_node
-                videos_with_reasons = get_video_recommendations_for_node(
-                    next_node_to_unlock.title, next_node_to_unlock.description, profile, target_user
-                )
-                if videos_with_reasons:
-                    fallback_assets["video"] = videos_with_reasons
-            except Exception as e:
-                print(f"Failed to crawl live Bilibili videos for unlocked node: {e}")
+        # Fetch fallback assets first (which is instant and contains fallback videos)
+        pass
                 
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()

@@ -7,7 +7,7 @@ import subprocess
 from fastapi import APIRouter, Depends, HTTPException
 from app.ai.scenes import diagnose_sandbox_submission
 from app.auth_utils import get_current_username
-from app.models import SandboxRunRequest, SandboxDiagnoseRequest
+from app.models import SandboxRunRequest, SandboxDiagnoseRequest, SandboxRunRawRequest
 from app.db import (
     DB_PATH,
     db_get_profile,
@@ -264,3 +264,77 @@ def diagnose_sandbox_code(request: SandboxDiagnoseRequest, current_username: str
     explanation = f"✨ **[自适应画像智能体诊断报告]**\n\n您的代码包含基本 Python 逻辑。建议检查：\n1. 函数缩进是否为标准的 4 个空格。\n2. 是否正确返回了题目要求的结果（而非直接打印）。\n3. 变量生命周期及作用域是否合规。\n\n学习特征提示：基于您的 **{profile.cognitive_style}** 认知风格，建议通过手写 debug 输出方式调试核心逻辑。"
     db_log_agent_action(target_user, "画像智能体", "完成本地规则适配诊断生成。", "consensus")
     return {"diagnostic": explanation, "advice": explanation}
+
+@router.post("/sandbox/run_raw", dependencies=[Depends(rate_limit_resource)])
+def run_raw_code(request: SandboxRunRawRequest, current_username: str = Depends(get_current_username)):
+    target_user = current_username
+    code = request.code
+    
+    is_safe, err_msg = is_code_safe(code)
+    if not is_safe:
+        db_log_agent_action(target_user, "安全校验智能体", f"在运行任意代码时拦截到不安全代码：{err_msg}", "danger")
+        return {
+            "status": "failed",
+            "error": f"安全检查未通过：{err_msg}请仅使用纯粹的 Python 逻辑进行解题！",
+            "console_output": "Security Violation: Access denied."
+        }
+        
+    with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as temp_file:
+        temp_file.write(code)
+        temp_file_path = temp_file.name
+        
+    try:
+        proc = subprocess.run(
+            [sys.executable, temp_file_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=2.0
+        )
+        stdout_output = proc.stdout
+        stderr_output = proc.stderr
+        
+        try:
+            os.remove(temp_file_path)
+        except Exception:
+            pass
+            
+        if proc.returncode == 0:
+            db_log_agent_action(target_user, "主管智能体", "用户在聊天代码沙箱中成功运行任意代码。", "info")
+            return {
+                "status": "success",
+                "error": "",
+                "console_output": stdout_output or "运行成功（无标准输出）。"
+            }
+        else:
+            error_msg = stderr_output.strip()
+            lines = error_msg.split("\n")
+            short_error = "\n".join(lines[-3:]) if len(lines) > 3 else error_msg
+            db_log_agent_action(target_user, "画像智能体", f"用户聊天代码沙箱运行报错：{short_error}", "warning")
+            return {
+                "status": "failed",
+                "error": short_error,
+                "console_output": stdout_output or ""
+            }
+            
+    except subprocess.TimeoutExpired:
+        try:
+            os.remove(temp_file_path)
+        except Exception:
+            pass
+        db_log_agent_action(target_user, "安全校验智能体", "检测到代码运行超时，可能包含无限循环。执行强行终止。", "danger")
+        return {
+            "status": "failed",
+            "error": "TimeLimitExceeded: 代码运行超时（限时2.0秒），可能存在死循环，请检查循环退出条件！",
+            "console_output": "Execution timed out."
+        }
+    except Exception as e:
+        try:
+            os.remove(temp_file_path)
+        except Exception:
+            pass
+        return {
+            "status": "failed",
+            "error": f"SystemError: 虚拟机沙盒内部异常: {str(e)}",
+            "console_output": ""
+        }

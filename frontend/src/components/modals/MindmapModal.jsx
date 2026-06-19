@@ -50,6 +50,36 @@ function preprocessMermaidText(text) {
   // Convert deprecated 'graph TD/LR/etc' to 'flowchart TD/LR/etc' for mermaid v11+
   processed = processed.replace(/^\s*graph\s+(TD|LR|RL|BT|TB)\b/m, 'flowchart $1');
 
+  // Wrap unquoted node labels containing special characters in double quotes
+  processed = processed.replace(
+    /(\b\w+)\s*(\[\(|\[\[|\[|\(|\{|\>)\s*([^\r\n]*?)\s*(\)\]|\]\]|\]|\)|\})/g,
+    (match, id, openBrackets, label, closeBrackets) => {
+      const reserved = ['flowchart', 'graph', 'subgraph', 'end', 'direction', 'click', 'style', 'classDef', 'class', 'linkStyle'];
+      if (reserved.includes(id.toLowerCase())) {
+        return match;
+      }
+
+      let trimmed = label.trim();
+      if (!trimmed) {
+        return match;
+      }
+
+      // If already quoted, return as is
+      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+        return match;
+      }
+
+      // Escape double quotes inside the label
+      const escaped = trimmed.replace(/"/g, '\\"');
+      return `${id}${openBrackets}"${escaped}"${closeBrackets}`;
+    }
+  );
+
+  // If the text does not contain 'flowchart' or 'graph', it's invalid
+  if (!processed.includes('flowchart') && !processed.includes('graph')) {
+    processed = `flowchart TD\n    A["概念脑图生成中..."]`;
+  }
+
   return processed;
 }
 

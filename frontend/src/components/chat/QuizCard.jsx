@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HelpCircle, Check, X } from 'lucide-react';
 
 export default function QuizCard({ quizData }) {
@@ -8,11 +8,24 @@ export default function QuizCard({ quizData }) {
   if (!quizData || !quizData.question) return null;
 
   const { question, options, answer, explanation } = quizData;
+  const storageKey = `edugenesis_chat_quiz_${question}`;
+
+  useEffect(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved !== null) {
+      setSelectedIdx(parseInt(saved, 10));
+      setSubmitted(true);
+    } else {
+      setSelectedIdx(null);
+      setSubmitted(false);
+    }
+  }, [question, storageKey]);
 
   const handleSelect = (idx) => {
     if (submitted) return;
     setSelectedIdx(idx);
     setSubmitted(true);
+    localStorage.setItem(storageKey, idx.toString());
   };
 
   return (

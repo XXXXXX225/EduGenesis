@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Play, Terminal, ArrowRight, Check, Copy } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
+import { apiPost } from '../../utils/api';
 
 export default function CodeSandboxCard({ code, lang }) {
   const { sandbox: sandboxHook, setActiveTab } = useAppContext();
+  const [editableCode, setEditableCode] = useState(code);
   const [isRunning, setIsRunning] = useState(false);
   const [runLogs, setRunLogs] = useState([]);
   const [copied, setCopied] = useState(false);
@@ -11,34 +13,51 @@ export default function CodeSandboxCard({ code, lang }) {
   if (!code) return null;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(code);
+    navigator.clipboard.writeText(editableCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleRun = () => {
+  const handleRun = async () => {
     if (isRunning) return;
     setIsRunning(true);
-    setRunLogs(['$ python main.py', '🤖 [校验智能体] 正在装载虚拟编译沙箱...', '⚡ 正在执行 PyTest 断言诊断...']);
+    setRunLogs(['$ python demo.py', '🤖 [安全校验智能体] 正在扫描代码特征与安全检测...', '⚡ 正在装载虚拟沙箱运行代码...']);
 
-    setTimeout(() => {
+    try {
+      const response = await apiPost('/sandbox/run_raw', { code: editableCode });
+      if (response.status === 'success') {
+        const consoleLines = (response.console_output || '').split('\n');
+        setRunLogs(prev => [
+          ...prev,
+          ...consoleLines,
+          '\n✅ 运行完毕。'
+        ]);
+      } else {
+        const consoleLines = (response.console_output || '').split('\n').filter(Boolean);
+        const errorLines = (response.error || '').split('\n').filter(Boolean);
+        setRunLogs(prev => [
+          ...prev,
+          ...consoleLines,
+          ...errorLines.map(line => `❌ ${line}`),
+          '\n❌ 运行失败。'
+        ]);
+      }
+    } catch (err) {
       setRunLogs(prev => [
         ...prev,
-        '============================= test session starts =============================',
-        'collected 2 items',
-        'test_main.py :: test_check_even PASSED                       [ 50%]',
-        'test_main.py :: test_check_even_failed PASSED                [100%]',
-        '============================= 2 passed in 0.04s ===============================',
-        '\n✅ 实操单元测试资产校验成功。未发现防御性安全漏洞。'
+        `❌ 网络异常或接口错误：${err.message}`
       ]);
+    } finally {
       setIsRunning(false);
-    }, 1500);
+    }
   };
 
   const handleImport = () => {
-    sandboxHook.setSandboxCode(code);
+    sandboxHook.setSandboxCode(editableCode);
     setActiveTab('sandbox');
   };
+
+  const lineCount = editableCode.split('\n').length;
 
   return (
     <div style={{
@@ -57,7 +76,7 @@ export default function CodeSandboxCard({ code, lang }) {
             <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ffbd2e' }} />
             <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#27c93f' }} />
           </div>
-          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginLeft: '10px', fontFamily: 'monospace' }}>demo.{lang === 'python' ? 'py' : lang}</span>
+          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginLeft: '10px', fontFamily: 'monospace' }}>demo.{lang === 'python' ? 'py' : lang} (可编辑)</span>
         </div>
         <button
           type="button"
@@ -69,18 +88,29 @@ export default function CodeSandboxCard({ code, lang }) {
         </button>
       </div>
 
-      {/* Code Content */}
-      <pre style={{
-        margin: 0,
-        padding: '16px',
-        overflowX: 'auto',
-        fontSize: '12px',
-        color: '#e2e8f0',
-        fontFamily: 'monospace',
-        lineHeight: '1.6',
-        textAlign: 'left',
-        background: '#09090b'
-      }}><code>{code}</code></pre>
+      {/* Code Content - Editable Textarea */}
+      <textarea
+        value={editableCode}
+        onChange={(e) => setEditableCode(e.target.value)}
+        rows={Math.max(5, Math.min(20, lineCount))}
+        spellCheck="false"
+        style={{
+          width: '100%',
+          display: 'block',
+          boxSizing: 'border-box',
+          margin: 0,
+          padding: '16px',
+          fontSize: '12px',
+          color: '#e2e8f0',
+          fontFamily: 'monospace',
+          lineHeight: '1.6',
+          textAlign: 'left',
+          background: '#09090b',
+          border: 'none',
+          resize: 'vertical',
+          outline: 'none'
+        }}
+      />
 
       {/* Buttons Bar */}
       <div style={{ padding: '10px 16px', background: '#121217', display: 'flex', justifyContent: 'space-between', gap: '12px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
