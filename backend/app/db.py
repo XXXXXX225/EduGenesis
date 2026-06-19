@@ -10,25 +10,25 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 # Default path nodes
 python_path_nodes = [
-    PathNode(id="node1", title="Python 环境部署", status="completed", description="安装 Python 与 VS Code 编译环境", resources=["pdf", "code", "video"]),
-    PathNode(id="node2", title="变量与数据类型", status="active", description="探索整型、浮点型、字符串及动态类型绑定", resources=["slide", "pdf", "quiz", "video"]),
-    PathNode(id="node3", title="控制流条件判断", status="locked", description="If-Else 条件分支控制逻辑", resources=["slide", "quiz", "code", "video"]),
-    PathNode(id="node4", title="循环控制结构", status="locked", description="While 与 For 迭代及中断控制", resources=["slide", "quiz", "video"]),
-    PathNode(id="node5", title="内置核心数据结构", status="locked", description="列表、元组、字典及集合的多场景增删改查", resources=["slide", "pdf", "quiz", "code", "video"]),
+    PathNode(id="node1", title="Python 环境部署", status="completed", description="安装 Python 与 VS Code 编译环境", resources=["pdf", "mindmap", "code", "video"]),
+    PathNode(id="node2", title="变量与数据类型", status="active", description="探索整型、浮点型、字符串及动态类型绑定", resources=["slide", "pdf", "mindmap", "quiz", "video"]),
+    PathNode(id="node3", title="控制流条件判断", status="locked", description="If-Else 条件分支控制逻辑", resources=["slide", "mindmap", "quiz", "code", "video"]),
+    PathNode(id="node4", title="循环控制结构", status="locked", description="While 与 For 迭代及中断控制", resources=["slide", "mindmap", "quiz", "video"]),
+    PathNode(id="node5", title="内置核心数据结构", status="locked", description="列表、元组、字典及集合的多场景增删改查", resources=["slide", "pdf", "mindmap", "quiz", "code", "video"]),
     PathNode(id="node6", title="函数与封装抽象", status="locked", description="自定义参数传递、返回值及标准库模块导入", resources=["slide", "pdf", "mindmap", "code", "video"]),
-    PathNode(id="node7", title="文件读写与异常处理", status="locked", description="文件系统流读写操作与 Try-Except 异常捕获", resources=["code", "quiz", "video"]),
-    PathNode(id="node8", title="综合项目实战应用", status="locked", description="多智能体协同编写带有健壮性校验的 CLI 工具", resources=["code", "quiz", "video"])
+    PathNode(id="node7", title="文件读写与异常处理", status="locked", description="文件系统流读写操作与 Try-Except 异常捕获", resources=["mindmap", "code", "quiz", "video"]),
+    PathNode(id="node8", title="综合项目实战应用", status="locked", description="多智能体协同编写带有健壮性校验的 CLI 工具", resources=["mindmap", "code", "quiz", "video"])
 ]
 
 ml_path_nodes = [
-    PathNode(id="node1", title="线性代数算力证明", status="completed", description="理解向量点积、矩阵乘法与特征值理论底座", resources=["pdf", "video"]),
-    PathNode(id="node2", title="微积分与梯度下降", status="active", description="偏导数求解与权重参数一步梯度更新步长", resources=["slide", "quiz", "code", "video"]),
-    PathNode(id="node3", title="经典线性回归算法", status="locked", description="最小二乘法与均方误差损失函数收敛验证", resources=["slide", "quiz", "code", "video"]),
-    PathNode(id="node4", title="逻辑回归与分类法则", status="locked", description="Sigmoid 激活函数映射与交叉熵损失定义", resources=["slide", "quiz", "video"]),
-    PathNode(id="node5", title="正则化防御过拟合", status="locked", description="添加 L1/L2 惩罚项以控制模型泛化能力", resources=["slide", "pdf", "quiz", "code", "video"]),
+    PathNode(id="node1", title="线性代数算力证明", status="completed", description="理解向量点积、矩阵乘法与特征值理论底座", resources=["pdf", "mindmap", "video"]),
+    PathNode(id="node2", title="微积分与梯度下降", status="active", description="偏导数求解与权重参数一步梯度更新步长", resources=["slide", "pdf", "mindmap", "quiz", "code", "video"]),
+    PathNode(id="node3", title="经典线性回归算法", status="locked", description="最小二乘法与均方误差损失函数收敛验证", resources=["slide", "mindmap", "quiz", "code", "video"]),
+    PathNode(id="node4", title="逻辑回归与分类法则", status="locked", description="Sigmoid 激活函数映射与交叉熵损失定义", resources=["slide", "mindmap", "quiz", "video"]),
+    PathNode(id="node5", title="正则化防御过拟合", status="locked", description="添加 L1/L2 惩罚项以控制模型泛化能力", resources=["slide", "pdf", "mindmap", "quiz", "code", "video"]),
     PathNode(id="node6", title="前馈深度神经网络", status="locked", description="层、权重与偏置的矩阵运算表示", resources=["slide", "pdf", "mindmap", "code", "video"]),
-    PathNode(id="node7", title="反向传播求导推演", status="locked", description="链式求导法则在计算图中的前向传播与反向求偏导", resources=["code", "quiz", "video"]),
-    PathNode(id="node8", title="经典回归场景实战部署", status="locked", description="完成房价回归预测模型搭建、调试及一键部署", resources=["code", "quiz", "video"])
+    PathNode(id="node7", title="反向传播求导推演", status="locked", description="链式求导法则在计算图中的前向传播与反向求偏导", resources=["mindmap", "code", "quiz", "video"]),
+    PathNode(id="node8", title="经典回归场景实战部署", status="locked", description="完成房价回归预测模型搭建、调试及一键部署", resources=["mindmap", "code", "quiz", "video"])
 ]
 
 # Password hashing helper function (PBKDF2-HMAC-SHA256 with user-specific salt)
@@ -45,6 +45,7 @@ def get_fallback_assets_for_topic(topic: str, profile: UserProfile, node_id: str
     subject = profile.learning_goals[0] if (profile.learning_goals and len(profile.learning_goals) > 0) else "Python Basics"
     material = load_course_material(subject, node_id) if node_id else ""
     topic_lower = topic.lower()
+    topic_escaped = topic.replace('"', '\\"')
     
     # Default assets
     pdf_content = f"""# {topic} 个性化自适应讲解课本
@@ -163,7 +164,7 @@ if __name__ == "__main__":
 """
     
     mindmap_content = f"""graph TD
-    A["{topic} 知识树"] --> B["基本定义"]
+    A["{topic_escaped} 知识树"] --> B["基本定义"]
     A --> C["进阶技术"]
     B --> B1["概念定义与环境要求"]
     B --> B2["常见易错点偏好分析"]
@@ -371,10 +372,12 @@ if __name__ == "__main__":
             slide_content = custom_slides
             
         if len(headings) >= 2:
-            mm_lines = [f"    A[\"{topic} 知识树\"]"]
+            topic_escaped = topic.replace('"', '\\"')
+            mm_lines = [f"    A[\"{topic_escaped} 知识树\"]"]
             for idx, h in enumerate(headings[:7]):
                 node_name = f"B{idx}"
-                mm_lines.append(f"    A --> {node_name}[\"{h}\"]")
+                h_escaped = h.replace('"', '\\"')
+                mm_lines.append(f"    A --> {node_name}[\"{h_escaped}\"]")
             mindmap_content = "graph TD\n" + "\n".join(mm_lines)
 
     # Curated video fallbacks
@@ -604,6 +607,18 @@ def db_auto_register_course(display_name: str, username: str = "default_user") -
     course_id = _re.sub(r'[^a-zA-Z0-9_]', '_', display_name.lower().strip())
     course_id = _re.sub(r'_+', '_', course_id).strip('_')
     if not course_id:
+        try:
+            from app.ai.platform import request_text_completion
+            prompt = f"Please translate the Chinese course name '{display_name}' into a clean, lower-case English snake_case identifier (e.g. 'linear_algebra' or 'higher_mathematics'). Output ONLY the identifier without any punctuation, code block, or explanation."
+            messages = [{"role": "user", "content": prompt}]
+            translated = request_text_completion(username, "planner", messages)
+            if translated:
+                course_id = _re.sub(r'[^a-zA-Z0-9_]', '_', translated.lower().strip())
+                course_id = _re.sub(r'_+', '_', course_id).strip('_')
+        except Exception as e:
+            print(f"[AutoRegister] Failed to translate Chinese course name '{display_name}': {e}")
+            
+    if not course_id:
         return False
     
     # Check if already registered (race condition guard)
@@ -713,6 +728,19 @@ def db_sync_path_nodes_by_goals(username: str, goals: List[str]):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM user_resources WHERE username = ?", (username,))
+        
+        # Pre-seed resources for ALL nodes of the new course to ensure instant loading for presentation
+        profile = db_get_profile(username)
+        for node in nodes_to_seed:
+            default_assets = get_fallback_assets_for_topic(node.title, profile, node.id)
+            for res_type in node.resources:
+                content_val = default_assets.get(res_type, "")
+                if not isinstance(content_val, str):
+                    content_val = json.dumps(content_val, ensure_ascii=False)
+                cursor.execute(
+                    "INSERT INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
+                    (username, node.id, res_type, content_val)
+                )
         conn.commit()
         conn.close()
 
@@ -1358,15 +1386,16 @@ def db_get_model_routing(username: str) -> dict:
     conn.close()
     
     if not row:
+        default_model = os.getenv("LLM_MODEL", "generalv3.5")
         default_routing = {
             "chat_provider_id": "xunfei",
-            "chat_model": "generalv3.5",
+            "chat_model": default_model,
             "planner_provider_id": "xunfei",
-            "planner_model": "generalv3.5",
+            "planner_model": default_model,
             "diagnostics_provider_id": "xunfei",
-            "diagnostics_model": "generalv3.5",
+            "diagnostics_model": default_model,
             "resources_provider_id": "xunfei",
-            "resources_model": "generalv3.5",
+            "resources_model": default_model,
             "embedding_provider_id": "chat_fallback",
             "embedding_model": "text-embedding-3-small",
         }
@@ -1379,8 +1408,8 @@ def db_get_model_routing(username: str) -> dict:
                 diagnostics_provider_id, diagnostics_model, 
                 resources_provider_id, resources_model,
                 embedding_provider_id, embedding_model) 
-               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'chat_fallback', 'text-embedding-3-small')""",
-            (username,)
+               VALUES (?, 'xunfei', ?, 'xunfei', ?, 'xunfei', ?, 'xunfei', ?, 'chat_fallback', 'text-embedding-3-small')""",
+            (username, default_model, default_model, default_model, default_model)
         )
         conn.commit()
         conn.close()
@@ -1523,3 +1552,17 @@ def db_get_chat_messages(session_id: str) -> list:
         }
         for r in rows
     ]
+
+def db_verify_session_ownership(session_id: str, username: str) -> bool:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT username FROM chat_sessions WHERE session_id = ?",
+        (session_id,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return True
+    return row[0] == username
+

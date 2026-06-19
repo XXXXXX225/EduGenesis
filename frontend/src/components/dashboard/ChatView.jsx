@@ -9,6 +9,37 @@ import CodeSandboxCard from '../chat/CodeSandboxCard';
 import SlidesCarouselCard from '../chat/SlidesCarouselCard';
 import PDFDownloadCard from '../chat/PDFDownloadCard';
 
+const parseIncompleteTags = (text) => {
+  if (!text) return { cleanText: '', pendingTag: null };
+  const tagKeywords = ['QUIZ', 'MINDMAP', 'CODE', 'SLIDES', 'PDF', 'VIDEO_RECOMMEND', 'VIDEO', 'DIAGRAM'];
+  for (const kw of tagKeywords) {
+    const pattern = `[${kw}:`;
+    const idx = text.lastIndexOf(pattern);
+    if (idx !== -1) {
+      const cleanText = text.substring(0, idx);
+      const rawTag = text.substring(idx);
+      
+      let label = "智能体分析中...";
+      if (kw === 'QUIZ') label = "正在为您设计自适应测验...";
+      if (kw === 'MINDMAP') label = "正在为您绘制自适应概念脉络树...";
+      if (kw === 'CODE') label = "正在为您组装实操源码用例...";
+      if (kw === 'SLIDES') label = "正在为您制作音画对齐幻灯片...";
+      if (kw === 'PDF') label = "正在为您编写讲义课本章节...";
+      if (kw === 'VIDEO_RECOMMEND') label = "正在为您匹配检索精选视频...";
+      
+      return {
+        cleanText,
+        pendingTag: {
+          type: kw,
+          label: label,
+          raw: rawTag
+        }
+      };
+    }
+  }
+  return { cleanText: text, pendingTag: null };
+};
+
 const InteractiveChatBubble = ({ msg, isStreaming }) => {
   const { speech: { handleSlideSpeech, stopSlideSpeech } } = useAppContext();
   const [selectedStep, setSelectedStep] = useState(0);
@@ -56,8 +87,8 @@ const InteractiveChatBubble = ({ msg, isStreaming }) => {
     return null;
   }
 
-  // Expand regex to capture all resource tags
-  const tagsRegex = /(\[QUIZ:\s*\{.*?\}\s*\]|\[VIDEO_RECOMMEND:\s*\{.*?\}\s*\]|\[MINDMAP:\s*[\s\S]*?\s*\]|\[CODE:\s*\w+\s*\|[\s\S]*?\s*\]|\[SLIDES:[\s\S]*?\]|\[PDF:\s*.*?\]|\[DIAGRAM:\s*[^\]|]+\s*\|\s*[^\]]+\]|\[VIDEO:\s*[^\]|]+\s*\|\s*[^\]]+\])/g;
+  // Expand regex to capture all resource tags robustly without splitting on internal brackets (like A[Node] or arr=[1,2,3] or markdown links)
+  const tagsRegex = /(\[QUIZ:\s*\{[\s\S]*?\}\s*\]|\[VIDEO_RECOMMEND:\s*\{[\s\S]*?\}\s*\]|\[MINDMAP:\s*(?:[\s\S]*?\n\s*\]|[^\]]*?\])|\[CODE:\s*\w+\s*\|(?:[\s\S]*?\n\s*\]|[^\]]*?\])|\[SLIDES:(?:[\s\S]*?\n\s*\]|[^\]]*?\])|\[PDF:\s*(?:[\s\S]*?\n\s*\]|[^\]]*?\])|\[DIAGRAM:\s*[^\]|]+\s*\|\s*[^\]]+\]|\[VIDEO:\s*[^\]|]+\s*\|\s*[^\]]+\])/g;
 
   const parts = content.split(tagsRegex);
 
@@ -222,27 +253,65 @@ const InteractiveChatBubble = ({ msg, isStreaming }) => {
           return null; // Skip rendering partial tag code while streaming
         }
 
+        // Parse and hide incomplete tags while streaming
+        const { cleanText, pendingTag } = parseIncompleteTags(part);
+
         // Otherwise render as regular text chunk
         const showCursorHere = isStreaming && index === lastVisibleTextIndex;
         return (
-          <div key={index} style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-            {part}
-            {showCursorHere && (
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: '8px',
-                  height: '16px',
-                  background: 'var(--primary-neon)',
-                  marginLeft: '2px',
-                  verticalAlign: 'text-bottom',
-                  animation: 'blinkCursor 0.8s step-end infinite',
-                  borderRadius: '1px',
-                  boxShadow: '0 0 6px var(--primary-neon)',
+          <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {cleanText && (
+              <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+                {cleanText}
+                {showCursorHere && !pendingTag && (
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: '8px',
+                      height: '16px',
+                      background: 'var(--primary-neon)',
+                      marginLeft: '2px',
+                      verticalAlign: 'text-bottom',
+                      animation: 'blinkCursor 0.8s step-end infinite',
+                      borderRadius: '1px',
+                      boxShadow: '0 0 6px var(--primary-neon)',
+                    }}
+                  >
+                    &nbsp;
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {pendingTag && (
+              <div 
+                className="pulse-glow" 
+                style={{ 
+                  marginTop: '6px', 
+                  padding: '10px 14px', 
+                  background: 'rgba(15, 118, 110, 0.05)', 
+                  border: '1.5px dashed var(--primary-neon)', 
+                  borderRadius: '10px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '10px',
+                  fontSize: '12px',
+                  color: 'var(--primary-neon)',
+                  animation: 'fadeIn 0.25s ease-out'
                 }}
               >
-                &nbsp;
-              </span>
+                <div 
+                  className="spinner-academic" 
+                  style={{ 
+                    width: '12px', 
+                    height: '12px', 
+                    borderWidth: '2px', 
+                    marginBottom: 0,
+                    flexShrink: 0
+                  }}
+                ></div>
+                <strong style={{ fontWeight: '600' }}>{pendingTag.label}</strong>
+              </div>
             )}
           </div>
         );
