@@ -1,33 +1,47 @@
-﻿const ACCESS_TOKEN_KEY = 'accessToken';
+const ACCESS_TOKEN_KEY = 'accessToken';
 const USERNAME_KEY = 'regUsername';
 const LOGGED_IN_KEY = 'isLoggedIn';
 
-// 使用 sessionStorage 而非 localStorage，降低 XSS 窃取 token 风险。
-// 如需进一步加固，可将 JWT 改为 httpOnly Cookie（需后端配合 Set-Cookie）。
-// 建议添加 Content-Security-Policy 头防止内联脚本注入。
-
-const storage = window.localStorage;
+// 使用 sessionStorage 或 localStorage，取决于是否记住凭证。
+// 默认情况下使用 sessionStorage 降低 XSS 窃取 token 风险。
+const session = window.sessionStorage;
+const local = window.localStorage;
 
 export function getAccessToken() {
-  return storage.getItem(ACCESS_TOKEN_KEY) || '';
+  return local.getItem(ACCESS_TOKEN_KEY) || session.getItem(ACCESS_TOKEN_KEY) || '';
 }
 
 export function getStoredUsername() {
-  return storage.getItem(USERNAME_KEY) || '';
+  return local.getItem(USERNAME_KEY) || session.getItem(USERNAME_KEY) || '';
 }
 
 export function isAuthenticated() {
-  return Boolean(getAccessToken()) && storage.getItem(LOGGED_IN_KEY) === 'true';
+  const token = getAccessToken();
+  const isLoggedIn = local.getItem(LOGGED_IN_KEY) === 'true' || session.getItem(LOGGED_IN_KEY) === 'true';
+  return Boolean(token) && isLoggedIn;
 }
 
-export function saveSession({ accessToken, username }) {
+export function saveSession({ accessToken, username }, remember = false) {
+  const storage = remember ? local : session;
+  const otherStorage = remember ? session : local;
+
+  // 清除另一个存储以避免状态不一致
+  otherStorage.removeItem(ACCESS_TOKEN_KEY);
+  otherStorage.removeItem(USERNAME_KEY);
+  otherStorage.removeItem(LOGGED_IN_KEY);
+
   storage.setItem(ACCESS_TOKEN_KEY, accessToken);
   storage.setItem(USERNAME_KEY, username);
   storage.setItem(LOGGED_IN_KEY, 'true');
 }
 
 export function clearSession() {
-  storage.removeItem(ACCESS_TOKEN_KEY);
-  storage.removeItem(USERNAME_KEY);
-  storage.removeItem(LOGGED_IN_KEY);
+  session.removeItem(ACCESS_TOKEN_KEY);
+  session.removeItem(USERNAME_KEY);
+  session.removeItem(LOGGED_IN_KEY);
+  
+  local.removeItem(ACCESS_TOKEN_KEY);
+  local.removeItem(USERNAME_KEY);
+  local.removeItem(LOGGED_IN_KEY);
 }
+

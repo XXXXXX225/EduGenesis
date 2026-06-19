@@ -50,6 +50,8 @@ const AuthView = () => {
   // Login inputs
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+
 
   // Authentication error state
   const [authError, setAuthError] = useState('');
@@ -103,7 +105,8 @@ const AuthView = () => {
         username: loginUsername.trim(),
         password: loginPassword
       });
-      saveSession({ accessToken: resData.access_token, username: resData.username });
+      saveSession({ accessToken: resData.access_token, username: resData.username }, rememberMe);
+
       setRegUsername(resData.username);
       setIsLoggedIn(true);
 
@@ -160,7 +163,8 @@ const AuthView = () => {
         cognitive_style: regCognitiveStyle,
         learning_goals: [regLearningGoal]
       });
-      saveSession({ accessToken: resData.access_token, username: resData.username });
+      saveSession({ accessToken: resData.access_token, username: resData.username }, rememberMe);
+
       setRegUsername(resData.username);
       setIsLoggedIn(true);
 
@@ -330,8 +334,14 @@ const AuthView = () => {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', fontSize: '12px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <input type="checkbox" style={{ accentColor: 'var(--primary)' }} /> 记住本设备凭证
+                <input 
+                  type="checkbox" 
+                  style={{ accentColor: 'var(--primary)' }} 
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                /> 记住本设备凭证
               </label>
+
               <span style={{ color: 'var(--secondary)', cursor: 'pointer', fontWeight: '600' }}>忘记密钥?</span>
             </div>
             <button type="submit" className="cyber-btn" style={{ justifyContent: 'center', padding: '14px', textTransform: 'none', letterSpacing: '0.05em' }}>
