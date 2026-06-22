@@ -12,6 +12,7 @@ const AppContext = createContext();
 
 export function AppProvider({ children }) {
   const [isLoggedIn, setIsLoggedIn] = useState(() => isAuthenticated());
+  const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || sessionStorage.getItem('userRole') || 'user');
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
 
   useEffect(() => {
@@ -80,6 +81,7 @@ export function AppProvider({ children }) {
   const [currentView, setCurrentView] = useState(() => {
     const loggedIn = isAuthenticated();
     const pathname = window.location.pathname;
+    if (pathname === '/verify') return 'verify';
     if (pathname === '/signup' || pathname === '/login') return 'auth';
     if (pathname === '/' || !loggedIn) return 'landing';
     return 'dashboard';
@@ -125,6 +127,7 @@ export function AppProvider({ children }) {
     authMode,
     activeTab,
     isLoggedIn,
+    userRole,
     setCurrentView,
     setAuthMode,
     setActiveTab,
@@ -132,12 +135,46 @@ export function AppProvider({ children }) {
   });
 
   // State to hold animated numerical profile values (for smooth SVG morphing)
-  const [displayProfile, setDisplayProfile] = useState({ ...profile });
-  const profileAnimRef = useRef({
-    knowledge_base: 40,
-    learning_pace: 50,
-    engagement: 80
+  const [displayProfile, setDisplayProfile] = useState({
+    ...profile,
+    reasoning: profile.reasoning !== undefined ? profile.reasoning : 40,
+    debugging: profile.debugging !== undefined ? profile.debugging : 45,
+    practical: profile.practical !== undefined ? profile.practical : 50
   });
+  const profileAnimRef = useRef({
+    knowledge_base: profile.knowledge_base !== undefined ? profile.knowledge_base : 40,
+    learning_pace: profile.learning_pace !== undefined ? profile.learning_pace : 50,
+    engagement: profile.engagement !== undefined ? profile.engagement : 80,
+    reasoning: profile.reasoning !== undefined ? profile.reasoning : 40,
+    debugging: profile.debugging !== undefined ? profile.debugging : 45,
+    practical: profile.practical !== undefined ? profile.practical : 50
+  });
+
+  useEffect(() => {
+    if (!profile) return;
+    const target = {
+      knowledge_base: profile.knowledge_base !== undefined ? profile.knowledge_base : 40,
+      learning_pace: profile.learning_pace !== undefined ? profile.learning_pace : 50,
+      engagement: profile.engagement !== undefined ? profile.engagement : 80,
+      reasoning: profile.reasoning !== undefined ? profile.reasoning : Math.round((profile.knowledge_base || 40) * 0.85),
+      debugging: profile.debugging !== undefined ? profile.debugging : Math.round((profile.knowledge_base || 40) * 0.9),
+      practical: profile.practical !== undefined ? profile.practical : Math.round((profile.knowledge_base || 40) * 0.95)
+    };
+
+    gsap.killTweensOf(profileAnimRef.current);
+    gsap.to(profileAnimRef.current, {
+      ...target,
+      duration: 0.8,
+      ease: "power2.out",
+      onUpdate: () => {
+        setDisplayProfile(prev => ({
+          ...prev,
+          ...profile,
+          ...profileAnimRef.current
+        }));
+      }
+    });
+  }, [profile]);
 
   const [pathNodes, setPathNodes] = useState([
     { id: "node1", title: "Python 环境部署", status: "completed", description: "安装 Python 与 VS Code 软件配置", resources: ["pdf", "mindmap", "code"] },
@@ -484,7 +521,7 @@ export function AppProvider({ children }) {
   const handleDiagnoseError = async (eq) => {
     setSelectedErrorExp({
       ...eq,
-      ai_explanation: "🧠 [画像与导师智能体] 正在进行深度多维学术特征提取与诊断中，请稍候..."
+      ai_explanation: "[画像与导师智能体] 正在进行深度多维学术特征提取与诊断中，请稍候..."
     });
     try {
       const result = await apiPost('/errors/diagnose', { error_id: eq.id });
@@ -495,13 +532,13 @@ export function AppProvider({ children }) {
     } catch (err) {
       setSelectedErrorExp({
         ...eq,
-        ai_explanation: `❌ 诊断异常：${err.message}`
+        ai_explanation: `[诊断异常]：${err.message}`
       });
     }
   };
 
   const handleRemedyPractice = async (eq) => {
-    setProfileAlert("🧠 [画像智能体] 正在为您生成自适应同类强化测试题...");
+    setProfileAlert("[画像智能体] 正在为您生成自适应同类强化测试题...");
     try {
       const quizData = await apiPost('/errors/generate-remedy', { error_id: eq.id });
       setSelectedNodeResources({
@@ -519,7 +556,7 @@ export function AppProvider({ children }) {
         setActiveModal('quiz');
       }, 800);
     } catch (err) {
-      setProfileAlert(`❌ 异常：${err.message}`);
+      setProfileAlert(`[异常]：${err.message}`);
       setTimeout(() => setProfileAlert(''), 2000);
     }
   };
@@ -551,6 +588,8 @@ export function AppProvider({ children }) {
       value={{
         isLoggedIn,
         setIsLoggedIn,
+        userRole,
+        setUserRole,
         theme,
         setTheme,
         currentView,

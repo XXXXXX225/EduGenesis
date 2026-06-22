@@ -462,7 +462,7 @@ def db_get_profile(username: str) -> UserProfile:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT knowledge_base, learning_pace, cognitive_style, error_patterns, learning_goals, engagement, learning_stats FROM user_profiles WHERE username = ?",
+        "SELECT knowledge_base, learning_pace, cognitive_style, error_patterns, learning_goals, engagement, learning_stats, debugging, practical, reasoning FROM user_profiles WHERE username = ?",
         (username,)
     )
     row = cursor.fetchone()
@@ -474,7 +474,10 @@ def db_get_profile(username: str) -> UserProfile:
             cognitive_style="Practical Coding",
             error_patterns=["Syntax Errors", "Indentation Issues"],
             learning_goals=["Python Basics"],
-            engagement=80
+            engagement=80,
+            debugging=45,
+            practical=50,
+            reasoning=40
         )
     
     stats_data = {
@@ -496,9 +499,12 @@ def db_get_profile(username: str) -> UserProfile:
         error_patterns=json.loads(row[3]),
         learning_goals=json.loads(row[4]),
         engagement=row[5],
-        learning_stats=stats_data
+        learning_stats=stats_data,
+        debugging=row[7] if (len(row) > 7 and row[7] is not None) else int(row[0] * 0.9),
+        practical=row[8] if (len(row) > 8 and row[8] is not None) else int(row[0] * 0.95),
+        reasoning=row[9] if (len(row) > 9 and row[9] is not None) else int(row[0] * 0.85)
     )
-
+ 
 def db_save_profile(username: str, profile: UserProfile):
     # Fetch old profile to calculate deltas
     old_profile = None
@@ -524,8 +530,8 @@ def db_save_profile(username: str, profile: UserProfile):
     cursor.execute(
         """
         INSERT OR REPLACE INTO user_profiles 
-        (username, knowledge_base, learning_pace, cognitive_style, error_patterns, learning_goals, engagement, learning_stats) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (username, knowledge_base, learning_pace, cognitive_style, error_patterns, learning_goals, engagement, learning_stats, debugging, practical, reasoning) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             username,
@@ -535,7 +541,10 @@ def db_save_profile(username: str, profile: UserProfile):
             json.dumps(profile.error_patterns),
             json.dumps(profile.learning_goals),
             profile.engagement,
-            json.dumps(profile.learning_stats)
+            json.dumps(profile.learning_stats),
+            profile.debugging,
+            profile.practical,
+            profile.reasoning
         )
     )
     conn.commit()
@@ -1030,9 +1039,23 @@ def init_db():
         username TEXT PRIMARY KEY,
         password_hash TEXT NOT NULL,
         cognitive_style TEXT NOT NULL,
-        learning_goals TEXT NOT NULL
+        learning_goals TEXT NOT NULL,
+        role TEXT DEFAULT 'user'
     )
     """)
+    
+    # Run migration in case role column doesn't exist
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+    except sqlite3.OperationalError:
+        pass
+        
+    # Run migrations for MFA / Reset fields
+    for col_name, col_type in [("totp_secret", "TEXT"), ("totp_recovery_code", "TEXT"), ("security_questions", "TEXT")]:
+        try:
+            cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+        except sqlite3.OperationalError:
+            pass
     
     # User Profiles Table
     cursor.execute("""
@@ -1044,7 +1067,34 @@ def init_db():
         error_patterns TEXT NOT NULL,
         learning_goals TEXT NOT NULL,
         engagement INTEGER NOT NULL,
-        learning_stats TEXT
+        learning_stats TEXT,
+        debugging INTEGER DEFAULT 45,
+        practical INTEGER DEFAULT 50,
+        reasoning INTEGER DEFAULT 40
+    )
+    """)
+    
+    # Alter table user_profiles for sub-metrics
+    try:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN debugging INTEGER DEFAULT 45")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN practical INTEGER DEFAULT 50")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN reasoning INTEGER DEFAULT 40")
+    except sqlite3.OperationalError:
+        pass
+
+    # Migrations & New Tables
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_contributions (
+        username TEXT,
+        date TEXT,
+        count INTEGER,
+        PRIMARY KEY (username, date)
     )
     """)
     
@@ -1184,6 +1234,30 @@ def init_db():
         FOREIGN KEY (course_id) REFERENCES registered_courses(course_id) ON DELETE CASCADE
     )
     """)
+
+    # User Search Settings Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_search_settings (
+        username TEXT PRIMARY KEY,
+        search_enabled INTEGER DEFAULT 0,
+        search_provider TEXT DEFAULT 'duckduckgo',
+        api_key TEXT DEFAULT '',
+        max_results INTEGER DEFAULT 3
+    )
+    """)
+
+    # User Prompt Templates Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_prompt_templates (
+        username TEXT,
+        template_id TEXT,
+        template_name TEXT,
+        system_prompt TEXT,
+        is_active INTEGER DEFAULT 0,
+        PRIMARY KEY (username, template_id)
+    )
+    """)
+    
     
     # Seed default courses if empty
     cursor.execute("SELECT COUNT(*) FROM registered_courses")
@@ -1211,13 +1285,13 @@ def init_db():
             ("default_user", pwd_hash, "Practical Coding", "Python Basics")
         )
         cursor.execute(
-            "INSERT INTO user_profiles (username, knowledge_base, learning_pace, cognitive_style, error_patterns, learning_goals, engagement, learning_stats) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO user_profiles (username, knowledge_base, learning_pace, cognitive_style, error_patterns, learning_goals, engagement, learning_stats, debugging, practical, reasoning) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             ("default_user", 40, 50, "Practical Coding", json.dumps(["Syntax Errors", "Indentation Issues"]), json.dumps(["Python Basics"]), 80, json.dumps({
                 "study_time": 45,
                 "quiz_accuracy": 85,
                 "mastered_nodes": 1,
                 "streak": [True, True, False, False, False, False, False]
-            }))
+            }), 45, 50, 40)
         )
 
         for node in python_path_nodes:
@@ -1279,10 +1353,103 @@ def init_db():
             ("default_user",)
         )
 
+    # Seed default admin
+    cursor.execute("SELECT username FROM users WHERE username = 'admin'")
+    if not cursor.fetchone():
+        admin_pwd_hash = get_password_hash("admin123", "admin")
+        cursor.execute(
+            "INSERT INTO users (username, password_hash, cognitive_style, learning_goals, role) VALUES (?, ?, ?, ?, ?)",
+            ("admin", admin_pwd_hash, "Practical Coding", "Python Basics", "admin")
+        )
+        cursor.execute(
+            "INSERT INTO user_profiles (username, knowledge_base, learning_pace, cognitive_style, error_patterns, learning_goals, engagement, learning_stats, debugging, practical, reasoning) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("admin", 100, 50, "Practical Coding", "[]", json.dumps(["Python Basics"]), 100, json.dumps({
+                "study_time": 120,
+                "quiz_accuracy": 95,
+                "mastered_nodes": 8,
+                "streak": [True, True, True, True, True, True, True]
+            }), 90, 95, 85)
+        )
+
+        for node in python_path_nodes:
+            cursor.execute(
+                "INSERT INTO user_path_nodes (username, node_id, title, status, description, resources) VALUES (?, ?, ?, ?, ?, ?)",
+                ("admin", node.id, node.title, node.status, node.description, json.dumps(node.resources))
+            )
+            admin_profile = UserProfile(
+                knowledge_base=100,
+                learning_pace=50,
+                cognitive_style="Practical Coding",
+                error_patterns=[],
+                learning_goals=["Python Basics"],
+                engagement=100
+            )
+            admin_assets = get_fallback_assets_for_topic(node.title, admin_profile, node.id)
+            for res_type in node.resources:
+                content_val = admin_assets.get(res_type, "")
+                if not isinstance(content_val, str):
+                    content_val = json.dumps(content_val, ensure_ascii=False)
+                cursor.execute(
+                    "INSERT INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
+                    ("admin", node.id, res_type, content_val)
+                )
+
+        # Seed default LLM providers and model routing for admin
+        cursor.execute(
+            """INSERT INTO user_llm_providers 
+               (username, provider_id, provider_name, api_base, api_key, is_enabled, models) 
+               VALUES (?, 'xunfei', '讯飞星火 Spark', 'https://spark-api-open.xf-yun.com/v1', 'env', 1, ?)""",
+            (
+                "admin",
+                json.dumps([
+                    {"name": "generalv3.5", "enabled": True, "tags": ["默认", "推荐", "上下文 8K"]},
+                    {"name": "lite", "enabled": False, "tags": ["轻量", "上下文 4K"]},
+                    {"name": "pro-128k", "enabled": False, "tags": ["推理", "高上下文 128K"]}
+                ], ensure_ascii=False)
+            )
+        )
+        cursor.execute(
+            """INSERT INTO user_model_routing 
+               (username, chat_provider_id, chat_model, 
+                planner_provider_id, planner_model, 
+                diagnostics_provider_id, diagnostics_model, 
+                resources_provider_id, resources_model,
+                embedding_provider_id, embedding_model) 
+               VALUES (?, 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'xunfei', 'generalv3.5', 'chat_fallback', 'text-embedding-3-small')""",
+            ("admin",)
+        )
+
+    # Seed default search settings & prompt templates for all existing users
+    cursor.execute("SELECT username FROM users")
+    users = [row[0] for row in cursor.fetchall()]
+    for u in users:
+        cursor.execute("SELECT COUNT(*) FROM user_search_settings WHERE username = ?", (u,))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute(
+                "INSERT INTO user_search_settings (username, search_enabled, search_provider, api_key, max_results) VALUES (?, 0, 'duckduckgo', '', 3)",
+                (u,)
+            )
+        cursor.execute("SELECT COUNT(*) FROM user_prompt_templates WHERE username = ?", (u,))
+        if cursor.fetchone()[0] == 0:
+            default_templates = [
+                ("academic", "严肃学术风", "你是一个极其专业、严谨的高校学者型AI导师。回答应侧重核心概念的严密剖析、严谨的推导逻辑以及规范的专业术语。", 1),
+                ("encouraging", "温暖鼓励风", "你是一个充满温暖、极具耐心的启发式AI导师。多用正面反馈与支持性语气，分解难点并一步步引导学生。", 0),
+                ("coder", "极客代码风", "你是一个追求极致效率、崇尚简洁干净代码的极客工程师型AI导师。回答中应尽量结合高质量Python代码，注重分析时间/空间复杂度、工程实践与代码美学。", 0),
+                ("socratic", "苏格拉底式提问", "你是一个不直接提供标准答案、而是采用苏格拉底式提问的思考启发型AI导师。你应该通过连续的、有层次的追问，引导学生自己发现错误和找到正确答案。", 0)
+            ]
+            for tid, tname, tprompt, active in default_templates:
+                cursor.execute(
+                    "INSERT INTO user_prompt_templates (username, template_id, template_name, system_prompt, is_active) VALUES (?, ?, ?, ?, ?)",
+                    (u, tid, tname, tprompt, active)
+                )
+
+    # Migrations & New Tables completed
+
     conn.commit()
     conn.close()
     
     seed_errors_and_logs_for_user("default_user")
+    seed_errors_and_logs_for_user("admin")
 
 def db_get_user_providers(username: str) -> list:
     conn = sqlite3.connect(DB_PATH)
@@ -1565,4 +1732,249 @@ def db_verify_session_ownership(session_id: str, username: str) -> bool:
     if not row:
         return True
     return row[0] == username
+
+def db_record_contribution(username: str, amount: int = 1):
+    import datetime
+    today = datetime.date.today().isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT OR IGNORE INTO user_contributions (username, date, count) VALUES (?, ?, 0)",
+            (username, today)
+        )
+        cursor.execute(
+            "UPDATE user_contributions SET count = count + ? WHERE username = ? AND date = ?",
+            (amount, username, today)
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"Error recording contribution for {username}: {e}")
+    finally:
+        conn.close()
+
+def db_set_security_questions(username: str, questions_json: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET security_questions = ? WHERE username = ?",
+        (questions_json, username)
+    )
+    conn.commit()
+    conn.close()
+
+def db_get_security_questions(username: str) -> str:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT security_questions FROM users WHERE username = ?",
+        (username,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row and row[0]:
+        return row[0]
+    return "[]"
+
+def db_bind_totp(username: str, secret: str, recovery_code: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET totp_secret = ?, totp_recovery_code = ? WHERE username = ?",
+        (secret, recovery_code, username)
+    )
+    conn.commit()
+    conn.close()
+
+def db_unbind_totp(username: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET totp_secret = NULL, totp_recovery_code = NULL WHERE username = ?",
+        (username,)
+    )
+    conn.commit()
+    conn.close()
+
+def db_get_totp_info(username: str) -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT totp_secret, totp_recovery_code FROM users WHERE username = ?",
+        (username,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {
+            "totp_secret": row[0],
+            "totp_recovery_code": row[1]
+        }
+    return {"totp_secret": None, "totp_recovery_code": None}
+
+def db_verify_recovery_code_and_invalidate(username: str, code: str) -> bool:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT totp_recovery_code FROM users WHERE username = ?",
+        (username,)
+    )
+    row = cursor.fetchone()
+    if row and row[0] and row[0] == code:
+        cursor.execute(
+            "UPDATE users SET totp_recovery_code = NULL WHERE username = ?",
+            (username,)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    conn.close()
+    return False
+
+def db_reset_password(username: str, new_password_hash: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET password_hash = ? WHERE username = ?",
+        (new_password_hash, username)
+    )
+    conn.commit()
+    conn.close()
+
+def db_get_search_settings(username: str) -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT search_enabled, search_provider, api_key, max_results FROM user_search_settings WHERE username = ?",
+        (username,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {
+            "search_enabled": bool(row[0]),
+            "search_provider": row[1],
+            "api_key": row[2] or "",
+            "max_results": row[3]
+        }
+    return {
+        "search_enabled": False,
+        "search_provider": "duckduckgo",
+        "api_key": "",
+        "max_results": 3
+    }
+
+def db_save_search_settings(username: str, settings: dict):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO user_search_settings (username, search_enabled, search_provider, api_key, max_results)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(username) DO UPDATE SET
+             search_enabled = excluded.search_enabled,
+             search_provider = excluded.search_provider,
+             api_key = excluded.api_key,
+             max_results = excluded.max_results""",
+        (
+            username,
+            1 if settings.get("search_enabled") else 0,
+            settings.get("search_provider", "duckduckgo"),
+            settings.get("api_key") or "",
+            settings.get("max_results", 3)
+        )
+    )
+    conn.commit()
+    conn.close()
+
+def db_get_prompt_templates(username: str) -> list:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT template_id, template_name, system_prompt, is_active FROM user_prompt_templates WHERE username = ?",
+        (username,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # If empty, auto-seed defaults for this user
+    if not rows:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        default_templates = [
+            ("academic", "严肃学术风", "你是一个极其专业、严谨的高校学者型AI导师。回答应侧重核心概念的严密剖析、严谨的推导逻辑以及规范的专业术语。", 1),
+            ("encouraging", "温暖鼓励风", "你是一个充满温暖、极具耐心的启发式AI导师。多用正面反馈与支持性语气，分解难点并一步步引导学生。", 0),
+            ("coder", "极客代码风", "你是一个追求极致效率、崇尚简洁干净代码的极客工程师型AI导师。回答中应尽量结合高质量Python代码，注重分析时间/空间复杂度、工程实践与代码美学。", 0),
+            ("socratic", "苏格拉底式提问", "你是一个不直接提供标准答案、而是采用苏格拉底式提问的思考启发型AI导师。你应该通过连续的、有层次的追问，引导学生自己发现错误和找到正确答案。", 0)
+        ]
+        for tid, tname, tprompt, active in default_templates:
+            cursor.execute(
+                "INSERT OR IGNORE INTO user_prompt_templates (username, template_id, template_name, system_prompt, is_active) VALUES (?, ?, ?, ?, ?)",
+                (username, tid, tname, tprompt, active)
+            )
+        conn.commit()
+        
+        cursor.execute(
+            "SELECT template_id, template_name, system_prompt, is_active FROM user_prompt_templates WHERE username = ?",
+            (username,)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+
+    res = []
+    for r in rows:
+        res.append({
+            "template_id": r[0],
+            "template_name": r[1],
+            "system_prompt": r[2],
+            "is_active": bool(r[3])
+        })
+    return res
+
+def db_save_prompt_template(username: str, template: dict):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO user_prompt_templates (username, template_id, template_name, system_prompt, is_active)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(username, template_id) DO UPDATE SET
+             template_name = excluded.template_name,
+             system_prompt = excluded.system_prompt,
+             is_active = excluded.is_active""",
+        (
+            username,
+            template["template_id"],
+            template["template_name"],
+            template["system_prompt"],
+            1 if template.get("is_active") else 0
+        )
+    )
+    conn.commit()
+    conn.close()
+
+def db_set_active_prompt_template(username: str, template_id: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    # First set all templates for this user to inactive
+    cursor.execute(
+        "UPDATE user_prompt_templates SET is_active = 0 WHERE username = ?",
+        (username,)
+    )
+    # Then set target template to active
+    cursor.execute(
+        "UPDATE user_prompt_templates SET is_active = 1 WHERE username = ? AND template_id = ?",
+        (username, template_id)
+    )
+    conn.commit()
+    conn.close()
+
+def db_delete_prompt_template(username: str, template_id: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM user_prompt_templates WHERE username = ? AND template_id = ?",
+        (username, template_id)
+    )
+    conn.commit()
+    conn.close()
+
 

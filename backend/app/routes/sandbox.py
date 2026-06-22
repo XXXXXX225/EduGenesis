@@ -13,7 +13,8 @@ from app.db import (
     db_get_profile,
     db_save_profile,
     db_get_path_nodes,
-    db_log_agent_action
+    db_log_agent_action,
+    db_record_contribution
 )
 from app.challenges import ML_CHALLENGES, PYTHON_CHALLENGES
 from app.security import is_code_safe
@@ -108,6 +109,22 @@ def run_sandbox_code(request: SandboxRunRequest, current_username: str = Depends
             stats["study_time"] = stats.get("study_time", 0) + 10
             profile.learning_stats = stats
             
+            practical_bump = 10 if first_time_pass else 5
+            debugging_bump = 8 if first_time_pass else 4
+            
+            old_practical = getattr(profile, 'practical', 50)
+            old_debugging = getattr(profile, 'debugging', 45)
+            
+            profile.practical = min(100, old_practical + practical_bump)
+            profile.debugging = min(100, old_debugging + debugging_bump)
+            
+            db_log_agent_action(
+                target_user, 
+                "画像智能体", 
+                f"代码测试通过！实践评分: {old_practical} -> {profile.practical}，调试评分: {old_debugging} -> {profile.debugging}。", 
+                "consensus"
+            )
+            
             if first_time_pass:
                 # 知识基础指数暴涨 (+15)
                 old_kb = profile.knowledge_base
@@ -115,6 +132,7 @@ def run_sandbox_code(request: SandboxRunRequest, current_username: str = Depends
                 db_log_agent_action(target_user, "画像智能体", f"代码挑战一次性通关！学情分析显示其基础极其扎实，知识基础暴涨：{old_kb}% -> {profile.knowledge_base}%。", "consensus")
                 
             db_save_profile(target_user, profile)
+            db_record_contribution(target_user, 1)
             db_log_agent_action(target_user, "主管智能体", f"代码提交成功：关卡 [{challenge['title']}] 单元测试通过！", "info")
             
             # 2. 快速剪枝机制：跳过下一个不含代码的简单概念关卡
@@ -261,7 +279,17 @@ def diagnose_sandbox_code(request: SandboxDiagnoseRequest, current_username: str
     except Exception as e:
         print(f"AI platform sandbox diagnosis failed: {e}")
             
-    explanation = f"✨ **[自适应画像智能体诊断报告]**\n\n您的代码包含基本 Python 逻辑。建议检查：\n1. 函数缩进是否为标准的 4 个空格。\n2. 是否正确返回了题目要求的结果（而非直接打印）。\n3. 变量生命周期及作用域是否合规。\n\n学习特征提示：基于您的 **{profile.cognitive_style}** 认知风格，建议通过手写 debug 输出方式调试核心逻辑。"
+    explanation = f"""[EXPLANATION]
+1. 缩进检查：请确保 Python 代码块缩进为标准的 4 个空格，避免混用空格和 Tab 键。
+2. 返回值确认：确认函数是使用 `return` 返回计算结果，而不是使用 `print()` 打印。
+3. 学习特征匹配：基于您的 **{profile.cognitive_style}** 认知风格，建议通过手工代入测试用例进行白盒调试。
+
+[CODE]
+```python
+# 请参考以下标准偶数判断逻辑：
+def check_even(num):
+    return num % 2 == 0
+```"""
     db_log_agent_action(target_user, "画像智能体", "完成本地规则适配诊断生成。", "consensus")
     return {"diagnostic": explanation, "advice": explanation}
 

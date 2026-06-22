@@ -25,7 +25,11 @@ import {
   ChevronDown,
   Settings2,
   Pencil,
-  X
+  X,
+  Shield,
+  Key,
+  BarChart2,
+  MapPin
 } from 'lucide-react';
 import { clearSession } from './utils/session';
 import MobileTabBar from './components/shared/MobileTabBar';
@@ -44,6 +48,8 @@ import ErrorsView from './components/dashboard/ErrorsView';
 import ConsoleView from './components/dashboard/ConsoleView';
 import AchievementsView from './components/dashboard/AchievementsView';
 import SettingsView from './components/dashboard/SettingsView';
+import AdminView from './components/dashboard/AdminView';
+import VerifyView from './components/verify/VerifyView';
 
 import PDFModal from './components/modals/PDFModal';
 import SlideModal from './components/modals/SlideModal';
@@ -126,6 +132,7 @@ function AppContent() {
   const {
     isLoggedIn,
     setIsLoggedIn,
+    userRole,
     theme,
     setTheme,
     currentView,
@@ -420,13 +427,18 @@ function AppContent() {
     const sides = 6;
     const angles = Array.from({ length: sides }, (_, i) => (i * 2 * Math.PI) / sides - Math.PI / 2);
 
+    const kb = profileData.knowledge_base || 50;
+    const reasoningVal = profileData.reasoning !== undefined ? profileData.reasoning : Math.round(kb * 0.85);
+    const debuggingVal = profileData.debugging !== undefined ? profileData.debugging : Math.round(kb * 0.9);
+    const practicalVal = profileData.practical !== undefined ? profileData.practical : Math.round(kb * 0.95);
+
     const dimensions = [
-      { name: "知识库", key: "knowledge_base" },
-      { name: "学习节奏", key: "learning_pace" },
-      { name: "活跃度", key: "engagement" },
-      { name: "逻辑推理", val: 70 },
-      { name: "查错纠偏", val: 80 },
-      { name: "代码实操", val: 65 }
+      { name: "知识库", val: kb },
+      { name: "学习节奏", val: profileData.learning_pace || 50 },
+      { name: "活跃度", val: profileData.engagement || 80 },
+      { name: "逻辑推理", val: reasoningVal },
+      { name: "查错纠偏", val: debuggingVal },
+      { name: "代码实操", val: practicalVal }
     ];
 
     const getCoord = (angle, radiusRatio) => {
@@ -440,8 +452,7 @@ function AppContent() {
 
     const valueCoords = angles.map((angle, index) => {
       const dim = dimensions[index];
-      const val = dim.key ? profileData[dim.key] : dim.val;
-      const ratio = val / 100;
+      const ratio = dim.val / 100;
       return getCoord(angle, ratio);
     });
 
@@ -453,18 +464,42 @@ function AppContent() {
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         className="radar-svg"
-        style={{ flexShrink: 0, display: 'block', margin: '0 auto' }}
+        style={{ flexShrink: 0, display: 'block', margin: '0 auto', overflow: 'visible', userSelect: 'none' }}
       >
+        <defs>
+          <radialGradient id="gradient-accent-radial" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="var(--primary-neon)" stopOpacity="0.1" />
+            <stop offset="100%" stopColor="var(--primary-neon)" stopOpacity="0.5" />
+          </radialGradient>
+          <linearGradient id="gradient-accent" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="var(--primary-neon)" />
+            <stop offset="100%" stopColor="var(--secondary)" />
+          </linearGradient>
+          <filter id="neon-glow-filter-sidebar" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* HUD Compass outer rotating rings */}
+        <circle cx={cx} cy={cy} r={r + 14} fill="none" stroke="rgba(13, 148, 136, 0.08)" strokeWidth="0.8" />
+        <circle cx={cx} cy={cy} r={r + 17} fill="none" stroke="rgba(13, 148, 136, 0.15)" strokeWidth="1" strokeDasharray="3 7" style={{ animation: 'spin-clockwise 25s linear infinite', transformOrigin: 'center' }} />
+        <circle cx={cx} cy={cy} r={r + 11} fill="none" stroke="rgba(234, 179, 8, 0.1)" strokeWidth="0.8" strokeDasharray="20 10" style={{ animation: 'spin-counterclockwise 35s linear infinite', transformOrigin: 'center' }} />
+
         {/* Background grids */}
         {hexagons.map((points, idx) => (
           <polygon
             key={idx}
             points={points.map(p => `${p.x},${p.y}`).join(' ')}
             fill="none"
-            stroke="rgba(15, 118, 110, 0.12)"
-            strokeWidth="1.5"
+            stroke="rgba(15, 118, 110, 0.15)"
+            strokeWidth="1.2"
           />
         ))}
+
         {/* Dimension axes */}
         {angles.map((angle, idx) => {
           const outerPoint = getCoord(angle, 1.0);
@@ -475,36 +510,40 @@ function AppContent() {
               y1={cy}
               x2={outerPoint.x}
               y2={outerPoint.y}
-              stroke="rgba(15, 118, 110, 0.12)"
-              strokeWidth="1.5"
+              stroke="rgba(15, 118, 110, 0.15)"
+              strokeWidth="1.2"
             />
           );
         })}
+
         {/* Glowing dynamic value polygon */}
         {valPath && (
-          <>
-            <polygon
-              points={valPath}
-              fill="none"
-              stroke="rgba(29, 78, 216, 0.25)"
-              strokeWidth="6"
-              filter="blur(4px)"
-            />
-            <polygon
-              points={valPath}
-              fill="rgba(15, 118, 110, 0.15)"
-              stroke="url(#gradient-accent)"
-              strokeWidth="2.5"
-            />
-          </>
+          <polygon
+            points={valPath}
+            fill="url(#gradient-accent-radial)"
+            stroke="url(#gradient-accent)"
+            strokeWidth="2.2"
+            filter="url(#neon-glow-filter-sidebar)"
+            style={{ transition: 'points 0.3s ease-out' }}
+          />
         )}
+
         {/* Dots on corners */}
         {valueCoords.map((c, idx) => (
-          <circle key={idx} cx={c.x} cy={c.y} r="4" fill="var(--accent)" />
+          <circle 
+            key={idx} 
+            cx={c.x} cy={c.y} 
+            r="3.5" 
+            fill="#eab308" 
+            stroke="#fff" 
+            strokeWidth="0.8" 
+            style={{ filter: 'drop-shadow(0 0 3px rgba(234, 179, 8, 0.5))' }}
+          />
         ))}
+
         {/* Dimension labels */}
         {angles.map((angle, idx) => {
-          const labelOffset = 1.28;
+          const labelOffset = 1.34;
           const coord = getCoord(angle, labelOffset);
           const name = dimensions[idx].name;
           let textAnchor = "middle";
@@ -517,23 +556,21 @@ function AppContent() {
               x={coord.x}
               y={coord.y + 4}
               fill="var(--text-muted)"
-              fontSize="11"
-              fontWeight="600"
+              fontSize="9.5"
+              fontWeight="bold"
               textAnchor={textAnchor}
             >
               {name}
             </text>
           );
         })}
-        <defs>
-          <linearGradient id="gradient-accent" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="var(--primary-neon)" />
-            <stop offset="100%" stopColor="var(--secondary)" />
-          </linearGradient>
-        </defs>
       </svg>
     );
   };
+
+  if (currentView === 'verify') {
+    return <VerifyView />;
+  }
 
   if (currentView === 'landing' || currentView === 'auth' || !isLoggedIn) {
     return (
@@ -549,11 +586,31 @@ function AppContent() {
               <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '14px', letterSpacing: '-0.02em' }} className="neon-text-gradient">
                 智能多维空间部署中
               </h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'monospace', lineHeight: '1.7', background: 'var(--bg-card-glass)', padding: '14px 20px', borderRadius: '12px', border: '1px solid var(--border-neon)' }}>
-                {orchestrationStep === 0 && "🔑 [主管智能体] 正在校对您的学术安全凭证并部署密匙通道..."}
-                {orchestrationStep === 1 && `📊 [画像智能体] 正在构建您的独立认知特征库：“${regCognitiveStyle}”...`}
-                {orchestrationStep === 2 && `📍 [路径智能体] 正在基于目标【${regLearningGoal === 'Python Basics' ? 'Python编程基础' : '机器学习与深度学习'}】生成初始学术路径...`}
-                {orchestrationStep === 3 && "✨ 协同网络就绪！正在加载动态画像主板与学术资源库..."}
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'monospace', lineHeight: '1.7', background: 'var(--bg-card-glass)', padding: '14px 20px', borderRadius: '12px', border: '1px solid var(--border-neon)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                {orchestrationStep === 0 && (
+                  <>
+                    <Key size={14} style={{ color: 'var(--secondary)' }} className="animate-pulse" />
+                    <span>[主管智能体] 正在校对您的学术安全凭证并部署密匙通道...</span>
+                  </>
+                )}
+                {orchestrationStep === 1 && (
+                  <>
+                    <BarChart2 size={14} style={{ color: 'var(--primary-neon)' }} className="animate-pulse" />
+                    <span>[画像智能体] 正在构建您的独立认知特征库：“{regCognitiveStyle}”...</span>
+                  </>
+                )}
+                {orchestrationStep === 2 && (
+                  <>
+                    <MapPin size={14} style={{ color: 'var(--primary-neon)' }} className="animate-pulse" />
+                    <span>[路径智能体] 正在基于目标【{regLearningGoal === 'Python Basics' ? 'Python编程基础' : '机器学习与深度学习'}】生成初始学术路径...</span>
+                  </>
+                )}
+                {orchestrationStep === 3 && (
+                  <>
+                    <Sparkles size={14} style={{ color: 'var(--secondary)' }} className="animate-pulse" />
+                    <span>协同网络就绪！正在加载动态画像主板与学术资源库...</span>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -570,6 +627,16 @@ function AppContent() {
 
   return (
     <>
+      <style>{`
+        @keyframes spin-clockwise {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes spin-counterclockwise {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(-360deg); }
+        }
+      `}</style>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', position: 'relative' }}>
         <div className="glow-orb-1" style={{ position: 'absolute', width: '250px', height: '250px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(15, 118, 110, 0.06) 0%, transparent 70%)', top: '10%', right: '15%', pointerEvents: 'none', zIndex: 0 }}></div>
         <div className="glow-orb-2" style={{ position: 'absolute', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(29, 78, 216, 0.04) 0%, transparent 70%)', bottom: '15%', left: '40%', pointerEvents: 'none', zIndex: 0 }}></div>
@@ -595,20 +662,20 @@ function AppContent() {
             >
               {isLeftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
             </button>
-            <div style={{ padding: '10px', background: 'linear-gradient(135deg, rgba(15, 118, 110, 0.15) 0%, rgba(29, 78, 216, 0.1) 100%)', borderRadius: '14px', border: '1px solid rgba(15, 118, 110, 0.25)', display: 'flex' }}>
+            <div className="desktop-only" style={{ padding: '10px', background: 'linear-gradient(135deg, rgba(15, 118, 110, 0.15) 0%, rgba(29, 78, 216, 0.1) 100%)', borderRadius: '14px', border: '1px solid rgba(15, 118, 110, 0.25)', display: 'flex' }}>
               <GraduationCap size={24} style={{ color: 'var(--primary-neon)' }} />
             </div>
             <div>
               <h1 style={{ fontSize: '20px', fontWeight: '900', letterSpacing: '-0.04em', margin: 0 }}>
                 Edu<span style={{ color: 'var(--secondary)' }}>Genesis</span>
               </h1>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: '700', display: 'block', marginTop: '-2px' }}>多智能体自适应学习空间</span>
+              <span className="desktop-only" style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: '700', display: 'block', marginTop: '-2px' }}>多智能体自适应学习空间</span>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {/* Active Model Indicator */}
-            <span className="neon-badge neon-badge-primary" style={{ padding: '4px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span className="neon-badge neon-badge-primary desktop-only" style={{ padding: '4px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Cpu size={12} /> {profile.cognitive_style || '自适应学习模式'}
             </span>
 
@@ -657,7 +724,7 @@ function AppContent() {
               <div style={{ padding: '6px', borderRadius: '10px', background: 'rgba(15, 118, 110, 0.06)', border: '1px solid rgba(15, 118, 110, 0.12)', display: 'flex' }}>
                 <User size={14} style={{ color: 'var(--primary)' }} />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="desktop-only" style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-main)' }}>{regUsername || '体验官'}</span>
                 <span style={{ fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '-1px' }}>已认证学术空间</span>
               </div>
@@ -678,10 +745,15 @@ function AppContent() {
                 padding: '6px 12px',
                 fontSize: '11px',
                 textTransform: 'none',
-                letterSpacing: 'normal'
+                letterSpacing: 'normal',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px'
               }}
             >
-              退出
+              <span className="desktop-only">退出</span>
+              <LogOut size={14} className="mobile-only" />
             </button>
           </div>
         </header>
@@ -690,17 +762,26 @@ function AppContent() {
         <div 
           className={`agent-body ${isResizing || isResizingLeft ? 'resizing' : ''}`}
           style={{ 
-            '--sidebar-width': `${sidebarWidth}px`,
-            '--left-sidebar-width': isLeftSidebarOpen ? `${leftSidebarWidth}px` : '0px',
-            '--left-handle-width': isLeftSidebarOpen ? '4px' : '0px'
+            gridTemplateColumns: activeTab === 'admin' ? '1fr 50px' : undefined,
+            '--sidebar-width': activeTab === 'admin' ? '50px' : `${sidebarWidth}px`,
+            '--left-sidebar-width': activeTab === 'admin' ? '0px' : (isLeftSidebarOpen ? `${leftSidebarWidth}px` : '0px'),
+            '--left-handle-width': activeTab === 'admin' ? '0px' : (isLeftSidebarOpen ? '4px' : '0px')
           }}
         >
+          {/* Mobile Sidebar backdrop */}
+          {isLeftSidebarOpen && (
+            <div 
+              className="mobile-sidebar-backdrop mobile-only" 
+              onClick={() => setIsLeftSidebarOpen(false)}
+            />
+          )}
           {/* Collapsible Left Sidebar */}
           <aside 
-            className="agent-panel-left-collapsible"
+            className={`agent-panel-left-collapsible ${isLeftSidebarOpen ? 'open' : ''}`}
             style={{
               borderRight: isLeftSidebarOpen ? undefined : 'none',
-              padding: isLeftSidebarOpen ? '20px 14px' : '0px'
+              padding: isLeftSidebarOpen ? '20px 14px' : '0px',
+              display: activeTab === 'admin' ? 'none' : undefined
             }}
           >
             {isLeftSidebarOpen && (
@@ -874,26 +955,50 @@ function AppContent() {
             style={{
               width: isLeftSidebarOpen ? undefined : '0px',
               opacity: isLeftSidebarOpen ? 1 : 0,
-              pointerEvents: isLeftSidebarOpen ? 'auto' : 'none'
+              pointerEvents: isLeftSidebarOpen ? 'auto' : 'none',
+              display: activeTab === 'admin' ? 'none' : undefined
             }}
           />
 
           {/* Left Column: Core chat (occupies 1fr) */}
           <main className="agent-panel-middle" ref={mainContentRef}>
-            <ChatView chatEndRef={chatEndRef} />
+            <div className="desktop-only-chat" style={{ height: '100%' }}>
+              {activeTab === 'admin' && userRole === 'admin' ? (
+                <AdminView />
+              ) : (
+                <ChatView chatEndRef={chatEndRef} />
+              )}
+            </div>
+            <div className="mobile-view-content mobile-only" style={{ height: '100%', overflowY: 'auto' }}>
+              {activeTab === 'chat' && <ChatView chatEndRef={chatEndRef} />}
+              {activeTab === 'home' && <HomeView />}
+              {activeTab === 'path' && <PathView />}
+              {activeTab === 'resources' && <ResourcesView />}
+              {activeTab === 'sandbox' && <SandboxView />}
+              {activeTab === 'errors' && <ErrorsView />}
+              {activeTab === 'agent-console' && <ConsoleView />}
+              {activeTab === 'achievements' && <AchievementsView />}
+              {activeTab === 'admin' && userRole === 'admin' && <AdminView />}
+            </div>
           </main>
 
           {/* Drag Resizer Divider */}
           <div
             className={`resize-handle ${isResizing ? 'active' : ''}`}
             onMouseDown={startResize}
+            style={{
+              display: activeTab === 'admin' ? 'none' : undefined
+            }}
           />
 
           {/* Right Column: Sidebar */}
           <aside className="agent-panel-right">
             {/* 1. Tab strip (right edge, 50px wide) */}
             {(() => {
-              const rightTabList = ['home', 'path', 'resources', 'errors', 'agent-console', 'achievements'];
+              const rightTabList = ['home', 'path', 'resources', 'sandbox', 'errors', 'agent-console', 'achievements'];
+              if (userRole === 'admin') {
+                rightTabList.push('admin');
+              }
               const sidebarTab = rightTabList.includes(activeTab) ? activeTab : 'resources';
 
               return (
@@ -920,6 +1025,13 @@ function AppContent() {
                     <FolderGit2 size={20} />
                   </div>
                   <div
+                    className={`right-sidebar-tab-icon ${sidebarTab === 'sandbox' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('sandbox')}
+                    title="自适应编程沙盒"
+                  >
+                    <Code2 size={20} />
+                  </div>
+                  <div
                     className={`right-sidebar-tab-icon ${sidebarTab === 'errors' ? 'active' : ''}`}
                     onClick={() => setActiveTab('errors')}
                     title="智能错题加固"
@@ -940,138 +1052,57 @@ function AppContent() {
                   >
                     <GraduationCap size={20} />
                   </div>
+                  {userRole === 'admin' && (
+                    <div
+                      className={`right-sidebar-tab-icon ${sidebarTab === 'admin' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('admin')}
+                      title="管理员控制台"
+                    >
+                      <Shield size={20} />
+                    </div>
+                  )}
                 </div>
               );
             })()}
 
             {/* 2. Content viewport (left edge, 290px wide) */}
-            <div className="right-sidebar-content-viewport" ref={sidebarViewportRef}>
+            <div 
+              className="right-sidebar-content-viewport" 
+              ref={sidebarViewportRef}
+              style={{
+                display: activeTab === 'admin' ? 'none' : undefined
+              }}
+            >
               {isLoadingDashboard ? (
                 <ContentSkeleton lines={4} />
               ) : (() => {
-                const rightTabList = ['home', 'path', 'resources', 'errors', 'agent-console', 'achievements'];
-                const sidebarTab = rightTabList.includes(activeTab) ? activeTab : 'resources';
+              const rightTabList = ['home', 'path', 'resources', 'sandbox', 'errors', 'agent-console', 'achievements'];
+              if (userRole === 'admin') {
+                rightTabList.push('admin');
+              }
+              const sidebarTab = rightTabList.includes(activeTab) ? activeTab : 'resources';
 
-                return (
-                  <div key={sidebarTab} className="tab-fade-in">
-                    {sidebarTab === 'home' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                        {/* Cognitive Radar Chart Card */}
-                        <div className="cyber-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--bg-card-glass)', flexShrink: 0 }}>
-                          <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                            <h3 style={{ fontSize: '12.5px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
-                              <Sparkles size={13} style={{ color: 'var(--accent-cyan)' }} /> 认知雷达画像
-                            </h3>
-                            <span className="neon-badge neon-badge-primary" style={{ padding: '2px 6px', fontSize: '9px' }}>实时更新</span>
-                          </div>
-                          {renderRadarChart(displayProfile)}
-                          <div style={{ width: '100%', borderTop: '1px solid rgba(255, 255, 255, 0.05)', marginTop: '8px', paddingTop: '10px', fontSize: '11.5px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ color: 'var(--text-muted)' }}>知识掌握度:</span>
-                              <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
-                                {profile.knowledge_base}%
-                                {profile.learning_stats?.knowledge_base_delta > 0 && (
-                                  <span style={{ color: '#10b981', marginLeft: '4px', fontWeight: 'bold' }} className="pulse-glow-green">
-                                    (↑ {profile.learning_stats.knowledge_base_delta}%)
-                                  </span>
-                                )}
-                                {profile.learning_stats?.knowledge_base_delta < 0 && (
-                                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>
-                                    (↓ {Math.abs(profile.learning_stats.knowledge_base_delta)}%)
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ color: 'var(--text-muted)' }}>自适应节奏:</span>
-                              <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
-                                {profile.learning_pace}%
-                                {profile.learning_stats?.learning_pace_delta > 0 && (
-                                  <span style={{ color: '#10b981', marginLeft: '4px', fontWeight: 'bold' }} className="pulse-glow-green">
-                                    (↑ {profile.learning_stats.learning_pace_delta}%)
-                                  </span>
-                                )}
-                                {profile.learning_stats?.learning_pace_delta < 0 && (
-                                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>
-                                    (↓ {Math.abs(profile.learning_stats.learning_pace_delta)}%)
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ color: 'var(--text-muted)' }}>自适应活跃度:</span>
-                              <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
-                                {profile.engagement}%
-                                {profile.learning_stats?.engagement_delta > 0 && (
-                                  <span style={{ color: '#10b981', marginLeft: '4px', fontWeight: 'bold' }} className="pulse-glow-green">
-                                    (↑ {profile.learning_stats.engagement_delta}%)
-                                  </span>
-                                )}
-                                {profile.learning_stats?.engagement_delta < 0 && (
-                                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>
-                                    (↓ {Math.abs(profile.learning_stats.engagement_delta)}%)
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ color: 'var(--text-muted)' }}>首选风格:</span>
-                              <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>{profile.cognitive_style}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span style={{ color: 'var(--text-muted)' }}>学习目标:</span>
-                              <span style={{ color: 'var(--text-main)', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '160px' }} title={profile.learning_goals.join(', ')}>{profile.learning_goals.join(', ')}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Quick stats board */}
-                        <div className="cyber-card" style={{ padding: '16px', background: 'var(--bg-card-glass)', flexShrink: 0 }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', textAlign: 'center' }}>
-                            <div style={{ padding: '8px 4px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                                <span style={{ fontSize: '16px', fontWeight: '900', color: 'var(--primary-neon)' }}>
-                                  {profile.learning_stats?.study_time || 0}
-                                </span>
-                                {deltas.study_time > 0 && (
-                                  <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#10b981' }}>+{deltas.study_time}</span>
-                                )}
-                              </div>
-                              <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>累计时长</span>
-                            </div>
-                            <div style={{ padding: '8px 4px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                                <span style={{ fontSize: '16px', fontWeight: '900', color: 'var(--secondary)' }}>
-                                  {profile.learning_stats?.quiz_accuracy || 0}%
-                                </span>
-                                {deltas.quiz_accuracy !== 0 && (
-                                  <span style={{ fontSize: '9px', fontWeight: 'bold', color: deltas.quiz_accuracy > 0 ? '#10b981' : '#ef4444' }}>
-                                    {deltas.quiz_accuracy > 0 ? `+${deltas.quiz_accuracy}` : `${deltas.quiz_accuracy}`}
-                                  </span>
-                                )}
-                              </div>
-                              <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>做题正确率</span>
-                            </div>
-                            <div style={{ padding: '8px 4px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                                <span style={{ fontSize: '16px', fontWeight: '900', color: 'var(--accent)' }}>
-                                  {profile.learning_stats?.mastered_nodes || 0}/8
-                                </span>
-                                {deltas.mastered_nodes > 0 && (
-                                  <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#10b981' }}>+{deltas.mastered_nodes}</span>
-                                )}
-                              </div>
-                              <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>掌握关卡</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+              return (
+                <div key={sidebarTab} className="tab-fade-in">
+                    {sidebarTab === 'home' && <HomeView />}
                     {sidebarTab === 'path' && <PathView />}
                     {sidebarTab === 'resources' && <ResourcesView />}
+                    {sidebarTab === 'sandbox' && <SandboxView />}
                     {sidebarTab === 'errors' && <ErrorsView />}
                     {sidebarTab === 'agent-console' && <ConsoleView />}
                     {sidebarTab === 'achievements' && <AchievementsView />}
+                    {sidebarTab === 'admin' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        <div className="cyber-card" style={{ padding: '16px', background: 'var(--bg-card-glass)' }}>
+                          <h3 style={{ fontSize: '13px', fontWeight: '800', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Shield size={14} style={{ color: 'var(--primary-neon)' }} /> 管理模式已激活
+                          </h3>
+                          <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            您当前正以系统管理员身份监控空间。可以在左侧宽屏区查看详细的用户情况统计与系统运行期操作日志流。
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -1170,10 +1201,30 @@ function AppContent() {
         <div className="modal-backdrop" style={{ zIndex: 1500 }}>
           <div className="cyber-card modal-content" style={{ maxWidth: '400px', width: '90%', padding: '24px', gap: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-neon)', paddingBottom: '10px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0 }}>
-                {customDialog.type === 'alert' && '⚠️ ' + (customDialog.title || '提示')}
-                {customDialog.type === 'confirm' && '❓ ' + (customDialog.title || '确认')}
-                {customDialog.type === 'prompt' && '✏️ ' + (customDialog.title || '输入')}
+              <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {customDialog.type === 'alert' && (
+                  <>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                      <circle cx="12" cy="12" r="10" fill="var(--primary-neon)" opacity="0.15"/>
+                      <circle cx="12" cy="12" r="10" stroke="var(--primary-neon)" strokeWidth="1.5"/>
+                      <line x1="12" y1="8" x2="12" y2="13" stroke="var(--primary-neon)" strokeWidth="2" strokeLinecap="round"/>
+                      <circle cx="12" cy="16.5" r="1" fill="var(--primary-neon)"/>
+                    </svg>
+                    <span>{customDialog.title || '提示'}</span>
+                  </>
+                )}
+                {customDialog.type === 'confirm' && (
+                  <>
+                    <HelpCircle size={16} style={{ color: 'var(--primary-neon)' }} />
+                    <span>{customDialog.title || '确认'}</span>
+                  </>
+                )}
+                {customDialog.type === 'prompt' && (
+                  <>
+                    <Pencil size={16} style={{ color: 'var(--secondary)' }} />
+                    <span>{customDialog.title || '输入'}</span>
+                  </>
+                )}
               </h3>
             </div>
             

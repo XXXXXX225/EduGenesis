@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Search, Trash2, Edit, ChevronDown, ChevronUp, Check, 
   RefreshCw, Key, Database, Cpu, Settings, Sliders, Globe, GraduationCap,
-  Upload, X
+  Upload, X, Sparkles, Shield
 } from 'lucide-react';
-import { apiGet, apiPost, apiDelete } from '../../utils/api';
+import { apiGet, apiPost, apiDelete, apiPut } from '../../utils/api';
 import { useAppContext } from '../../context/AppContext';
 
 const CustomSelect = ({ value, options, onChange }) => {
@@ -111,8 +111,81 @@ const CustomSelect = ({ value, options, onChange }) => {
 };
 
 export default function SettingsView() {
-  const { showCustomAlert, showCustomConfirm } = useAppContext();
-  const [activeSubTab, setActiveSubTab] = useState('providers'); // 'providers' | 'routing' | 'courses'
+  const { showCustomAlert, showCustomConfirm, regUsername } = useAppContext();
+  const [activeSubTab, setActiveSubTab] = useState('providers'); // 'providers' | 'routing' | 'courses' | 'security' | 'search' | 'prompts'
+  
+  // 联网搜索配置状态
+  const [searchSettings, setSearchSettings] = useState({
+    search_enabled: false,
+    search_provider: 'duckduckgo',
+    api_key: '',
+    max_results: 3
+  });
+  const [savingSearch, setSavingSearch] = useState(false);
+
+  // 提示词模板状态
+  const [promptTemplates, setPromptTemplates] = useState([]);
+  const [showPromptEditModal, setShowPromptEditModal] = useState(false);
+  const [promptFormData, setPromptFormData] = useState({
+    template_id: '',
+    template_name: '',
+    system_prompt: '',
+    is_active: false
+  });
+  const [savingPrompt, setSavingPrompt] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState(null);  // tracks the prompt template being edited
+
+  // 安全密码找回相关状态
+  const [securityStatus, setSecurityStatus] = useState({ has_totp: false, has_questions: false, questions: [] });
+  const [loadingSecurity, setLoadingSecurity] = useState(true);
+  
+  const [secQuestions, setSecQuestions] = useState([
+    { question: '你最喜欢的编程语言是？', answer: '' },
+    { question: '你写的第一行代码输出是什么？', answer: '' },
+    { question: '你心目中最伟大的程序员是？', answer: '' }
+  ]);
+  const [submittingQuestions, setSubmittingQuestions] = useState(false);
+  
+  const [totpSetupData, setTotpSetupData] = useState(null);
+  const [totpCode, setTotpCode] = useState('');
+  const [totpRecoveryCode, setTotpRecoveryCode] = useState('');
+  const [bindingTotp, setBindingTotp] = useState(false);
+
+  const loadSecurityStatus = async () => {
+    if (!regUsername) return;
+    setLoadingSecurity(true);
+    try {
+      const data = await apiPost('/auth/forgot-password/status', { username: regUsername });
+      setSecurityStatus(data);
+      if (data.questions && data.questions.length > 0) {
+        setSecQuestions(data.questions.map(q => ({ question: q, answer: '' })));
+      }
+    } catch (err) {
+      console.error("加载安全状态失败:", err);
+    } finally {
+      setLoadingSecurity(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubTab === 'security') {
+      loadSecurityStatus();
+    }
+  }, [activeSubTab, regUsername]);
+
+  const handleSaveQuestions = async (e) => {
+    e.preventDefault();
+    setSubmittingQuestions(true);
+    try {
+      await apiPost('/auth/security-questions', { questions: secQuestions });
+      showCustomAlert("密保问题设置成功！", "success");
+      loadSecurityStatus();
+    } catch (err) {
+      showCustomAlert("设置密保问题失败: " + err.message, "danger");
+    } finally {
+      setSubmittingQuestions(false);
+    }
+  };
   const [providers, setProviders] = useState([]);
   const [routing, setRouting] = useState({
     chat_provider_id: 'xunfei',
@@ -254,6 +327,12 @@ export default function SettingsView() {
       setProviders(provs);
       const rout = await apiGet('/settings/routing');
       setRouting(rout);
+      
+      // 加载联网搜索和提示词模板
+      const searchData = await apiGet('/settings/search');
+      setSearchSettings(searchData);
+      const promptData = await apiGet('/settings/prompt-templates');
+      setPromptTemplates(promptData);
     } catch (err) {
       console.error('Failed to load settings:', err);
       setErrorMessage('加载配置信息失败，请稍后重试。');
@@ -269,6 +348,65 @@ export default function SettingsView() {
       console.error('Failed to fetch registered courses:', err);
     } finally {
       setIsLoadingCourses(false);
+    }
+  };
+
+  const handleSaveSearchSettings = async (e) => {
+    e.preventDefault();
+    setSavingSearch(true);
+    try {
+      await apiPost('/settings/search', searchSettings);
+      await showCustomAlert('联网搜索配置保存成功！');
+      const searchData = await apiGet('/settings/search');
+      setSearchSettings(searchData);
+    } catch (err) {
+      await showCustomAlert('保存联网搜索配置失败: ' + err.message);
+    } finally {
+      setSavingSearch(false);
+    }
+  };
+
+  const handleSavePromptTemplate = async (e) => {
+    e.preventDefault();
+    setSavingPrompt(true);
+    try {
+      const payload = {
+        ...promptFormData,
+        template_id: promptFormData.template_id || `custom_${Date.now()}`
+      };
+      await apiPost('/settings/prompt-templates', payload);
+      await showCustomAlert('提示词模板保存成功！');
+      setShowPromptEditModal(false);
+      const promptData = await apiGet('/settings/prompt-templates');
+      setPromptTemplates(promptData);
+    } catch (err) {
+      await showCustomAlert('保存提示词模板失败: ' + err.message);
+    } finally {
+      setSavingPrompt(false);
+    }
+  };
+
+  const handleSetActivePrompt = async (templateId) => {
+    try {
+      await apiPut(`/settings/prompt-templates/${templateId}/active`, {});
+      await showCustomAlert('提示词模板已成功激活并应用到对话中！');
+      const promptData = await apiGet('/settings/prompt-templates');
+      setPromptTemplates(promptData);
+    } catch (err) {
+      await showCustomAlert('激活提示词模板失败: ' + err.message);
+    }
+  };
+
+  const handleDeletePromptTemplate = async (templateId) => {
+    const confirmed = await showCustomConfirm('您确定要删除此自定义提示词模板吗？');
+    if (!confirmed) return;
+    try {
+      await apiDelete(`/settings/prompt-templates/${templateId}`);
+      await showCustomAlert('提示词模板删除成功！');
+      const promptData = await apiGet('/settings/prompt-templates');
+      setPromptTemplates(promptData);
+    } catch (err) {
+      await showCustomAlert('删除提示词模板失败: ' + err.message);
     }
   };
 
@@ -537,7 +675,14 @@ export default function SettingsView() {
           <button
             onClick={() => setActiveSubTab('providers')}
             className={`cyber-nav-tab ${activeSubTab === 'providers' ? 'active' : ''}`}
-            style={{ width: '100%', textAlign: 'left', cursor: 'pointer', outline: 'none' }}
+            style={{ 
+              width: '100%', 
+              textAlign: 'left', 
+              cursor: 'pointer', 
+              outline: 'none',
+              background: activeSubTab === 'providers' ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'transparent',
+              border: 'none'
+            }}
           >
             <Database size={16} />
             <span style={{ fontSize: '13px' }}>模型供应商</span>
@@ -546,7 +691,14 @@ export default function SettingsView() {
           <button
             onClick={() => setActiveSubTab('routing')}
             className={`cyber-nav-tab ${activeSubTab === 'routing' ? 'active' : ''}`}
-            style={{ width: '100%', textAlign: 'left', cursor: 'pointer', outline: 'none' }}
+            style={{ 
+              width: '100%', 
+              textAlign: 'left', 
+              cursor: 'pointer', 
+              outline: 'none',
+              background: activeSubTab === 'routing' ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'transparent',
+              border: 'none'
+            }}
           >
             <Cpu size={16} />
             <span style={{ fontSize: '13px' }}>默认模型绑定</span>
@@ -555,21 +707,67 @@ export default function SettingsView() {
           <button
             onClick={() => setActiveSubTab('courses')}
             className={`cyber-nav-tab ${activeSubTab === 'courses' ? 'active' : ''}`}
-            style={{ width: '100%', textAlign: 'left', cursor: 'pointer', outline: 'none' }}
+            style={{ 
+              width: '100%', 
+              textAlign: 'left', 
+              cursor: 'pointer', 
+              outline: 'none',
+              background: activeSubTab === 'courses' ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'transparent',
+              border: 'none'
+            }}
           >
             <GraduationCap size={16} />
             <span style={{ fontSize: '13px' }}>课程管理</span>
           </button>
           
-          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 12px 6px' }}>系统功能(开发中)</span>
-          <div className="cyber-nav-tab" style={{ opacity: 0.45, cursor: 'not-allowed' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 12px 6px' }}>系统与安全</span>
+          <button
+            onClick={() => setActiveSubTab('security')}
+            className={`cyber-nav-tab ${activeSubTab === 'security' ? 'active' : ''}`}
+            style={{ 
+              width: '100%', 
+              textAlign: 'left', 
+              cursor: 'pointer', 
+              outline: 'none',
+              background: activeSubTab === 'security' ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'transparent',
+              border: 'none'
+            }}
+          >
+            <Shield size={16} />
+            <span style={{ fontSize: '13px' }}>账号安全管理</span>
+          </button>
+
+          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '16px 12px 6px' }}>智能协同扩展</span>
+          <button
+            onClick={() => setActiveSubTab('search')}
+            className={`cyber-nav-tab ${activeSubTab === 'search' ? 'active' : ''}`}
+            style={{ 
+              width: '100%', 
+              textAlign: 'left', 
+              cursor: 'pointer', 
+              outline: 'none',
+              background: activeSubTab === 'search' ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'transparent',
+              border: 'none'
+            }}
+          >
             <Globe size={16} />
             <span style={{ fontSize: '13px' }}>联网搜索</span>
-          </div>
-          <div className="cyber-nav-tab" style={{ opacity: 0.45, cursor: 'not-allowed' }}>
+          </button>
+          <button
+            onClick={() => setActiveSubTab('prompts')}
+            className={`cyber-nav-tab ${activeSubTab === 'prompts' ? 'active' : ''}`}
+            style={{ 
+              width: '100%', 
+              textAlign: 'left', 
+              cursor: 'pointer', 
+              outline: 'none',
+              background: activeSubTab === 'prompts' ? 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)' : 'transparent',
+              border: 'none'
+            }}
+          >
             <Sliders size={16} />
             <span style={{ fontSize: '13px' }}>提示词模板</span>
-          </div>
+          </button>
         </div>
 
         {/* Right Content Pane */}
@@ -796,25 +994,25 @@ export default function SettingsView() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                   {[
                     {
-                      label: '💬 AI 助教聊天 (Tutor Chat)',
+                      label: 'AI 助教聊天 (Tutor Chat)',
                       desc: '负责学生学习过程中的日常问答、答疑解析及情境画像修正。',
                       field: 'chat',
                       activeVal: `${routing.chat_provider_id}|${routing.chat_model}`
                     },
                     {
-                      label: '🗺️ 路径大纲规划 (Path Planner)',
+                      label: '路径大纲规划 (Path Planner)',
                       desc: '负责将学生的学习目标转化为 8 级自适应关卡，定制个性化大纲。',
                       field: 'planner',
                       activeVal: `${routing.planner_provider_id}|${routing.planner_model}`
                     },
                     {
-                      label: '💡 错题诊断归档 (Diagnostics)',
+                      label: '错题诊断归档 (Diagnostics)',
                       desc: '负责代码沙盒异常的编译报告提取以及错题强化测验题的逆向生成。',
                       field: 'diagnostics',
                       activeVal: `${routing.diagnostics_provider_id}|${routing.diagnostics_model}`
                     },
                     {
-                      label: '📂 学术资源生成 (Resource Generator)',
+                      label: '学术资源生成 (Resource Generator)',
                       desc: '负责生成 PDF 课件讲义、PPT 展示卡片及 Mermaid 结构脑图。',
                       field: 'resources',
                       activeVal: `${routing.resources_provider_id}|${routing.resources_model}`
@@ -849,6 +1047,287 @@ export default function SettingsView() {
                   })}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 4: SECURITY */}
+          {activeSubTab === 'security' && (
+            <div className="security-settings-pane" style={{ animation: 'fadeIn 0.4s ease-out', width: '100%' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '4px' }}>账户安全与凭证找回</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: 0 }}>
+                  配置您的密保问题与两步认证器。当您忘记密码时，可通过这些凭据自主重写并重设密码。
+                </p>
+              </div>
+
+              {loadingSecurity ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-dim)' }}>
+                  <RefreshCw className="spin-anim" size={24} style={{ marginBottom: '8px' }} />
+                  <div>加载安全凭证配置中...</div>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+                  
+                  {/* Card 1: 2FA TOTP */}
+                  <div className="cyber-card" style={{ padding: '24px', background: 'var(--bg-chat-form)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ padding: '8px', background: securityStatus.has_totp ? 'rgba(13, 148, 136, 0.1)' : 'rgba(239, 68, 68, 0.08)', borderRadius: '10px', display: 'flex' }}>
+                        <Shield size={20} style={{ color: securityStatus.has_totp ? 'var(--primary)' : '#ef4444' }} />
+                      </div>
+                      <div>
+                        <h4 style={{ fontSize: '14px', fontWeight: '700', margin: 0 }}>二次身份验证器 (2FA)</h4>
+                        <span style={{ fontSize: '11px', color: securityStatus.has_totp ? 'var(--primary)' : '#ef4444', fontWeight: '800', marginTop: '2px', display: 'block' }}>
+                          {securityStatus.has_totp ? '● 已启用安全防护' : '○ 未启用 (忘记密码时无法使用此通道)'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: '1.6' }}>
+                      使用 Google Authenticator 或 Microsoft Authenticator 扫描动态二维码绑定，生成 6 位安全验证码。完全本地算力加密计算，免除短信和外部网络依赖。
+                    </p>
+
+                    {totpRecoveryCode && (
+                      <div style={{ 
+                        background: 'rgba(245, 158, 11, 0.08)', 
+                        border: '1px solid rgba(245, 158, 11, 0.25)', 
+                        padding: '12px 16px', 
+                        borderRadius: '8px',
+                        fontSize: '12px' 
+                      }}>
+                        <div style={{ fontWeight: '700', color: '#f59e0b', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          ⚠️ 请妥善记录您的备份恢复密钥！
+                        </div>
+                        <p style={{ margin: '0 0 8px 0', color: 'var(--text-muted)', fontSize: '11px' }}>如果您的验证器设备丢失，输入该密钥仍可重设密码。该密钥仅显示一次：</p>
+                        <div style={{ 
+                          fontFamily: 'monospace', 
+                          fontSize: '13px', 
+                          color: '#ffffff', 
+                          background: 'rgba(0,0,0,0.2)', 
+                          padding: '6px 12px', 
+                          borderRadius: '4px', 
+                          letterSpacing: '1px', 
+                          fontWeight: '700',
+                          textAlign: 'center',
+                          border: '1px solid rgba(255,255,255,0.05)'
+                        }}>
+                          {totpRecoveryCode}
+                        </div>
+                      </div>
+                    )}
+
+                    {!securityStatus.has_totp && !totpSetupData && (
+                      <button 
+                        onClick={async () => {
+                          try {
+                            const data = await apiGet('/auth/totp/setup');
+                            setTotpSetupData(data);
+                            setTotpCode('');
+                            setTotpRecoveryCode('');
+                          } catch (err) {
+                            showCustomAlert("初始化验证器密钥失败: " + err.message, "danger");
+                          }
+                        }} 
+                        type="button"
+                        className="cyber-btn" 
+                        style={{ padding: '10px', justifyContent: 'center', marginTop: 'auto' }}
+                      >
+                        开启安全验证器
+                      </button>
+                    )}
+
+                    {totpSetupData && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', borderTop: '1px solid var(--border-neon)', paddingTop: '16px' }}>
+                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                          <img 
+                            src={totpSetupData.qr_code_data_url} 
+                            alt="TOTP Bind QR" 
+                            style={{ 
+                              width: '90px', 
+                              height: '90px', 
+                              background: '#ffffff', 
+                              padding: '4px', 
+                              borderRadius: '6px', 
+                              border: '1px solid var(--border-neon)' 
+                            }} 
+                          />
+                          <div style={{ flex: 1 }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>扫码绑定或输入密钥：</span>
+                            <div style={{ 
+                              fontSize: '11px', 
+                              fontFamily: 'monospace', 
+                              background: 'rgba(0,0,0,0.15)', 
+                              padding: '4px 8px', 
+                              borderRadius: '4px', 
+                              color: 'var(--text-main)', 
+                              marginTop: '4px',
+                              wordBreak: 'break-all',
+                              border: '1px solid var(--border-neon)'
+                            }}>
+                              {totpSetupData.secret}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label className="form-label" style={{ fontSize: '11px' }}>输入 6 位动态验证码确认绑定</label>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <input 
+                              type="text" 
+                              maxLength={6}
+                              value={totpCode}
+                              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                              placeholder="000000"
+                              className="cyber-input"
+                              style={{ textAlign: 'center', letterSpacing: '4px', fontSize: '14px', height: '36px', flex: 1 }}
+                            />
+                            <button 
+                              onClick={async () => {
+                                if (totpCode.length !== 6) return;
+                                setBindingTotp(true);
+                                try {
+                                  const res = await apiPost('/auth/totp/bind', {
+                                    secret: totpSetupData.secret,
+                                    code: totpCode
+                                  });
+                                  setTotpRecoveryCode(res.recovery_code);
+                                  setTotpSetupData(null);
+                                  showCustomAlert("身份验证器绑定成功！请务必妥善保存备份恢复密钥。", "success");
+                                  loadSecurityStatus();
+                                } catch (err) {
+                                  showCustomAlert(err.message, "danger");
+                                } finally {
+                                  setBindingTotp(false);
+                                }
+                              }}
+                              disabled={bindingTotp || totpCode.length !== 6}
+                              type="button"
+                              className="cyber-btn"
+                              style={{ padding: '0 16px', flexShrink: 0, height: '36px' }}
+                            >
+                              确认
+                            </button>
+                            <button 
+                              onClick={() => setTotpSetupData(null)}
+                              type="button"
+                              className="cyber-btn"
+                              style={{ padding: '0 12px', background: 'rgba(0,0,0,0.02)', borderColor: 'var(--border-neon)', color: 'var(--text-muted)', height: '36px' }}
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {securityStatus.has_totp && (
+                      <button 
+                        onClick={async () => {
+                          const confirm = await showCustomConfirm("确定要解绑两步验证器吗？解绑后将无法使用动态验证码找回密码。");
+                          if (!confirm) return;
+                          try {
+                            await apiPost('/auth/totp/unbind');
+                            setTotpRecoveryCode('');
+                            showCustomAlert("两步验证已成功解绑", "success");
+                            loadSecurityStatus();
+                          } catch (err) {
+                            showCustomAlert("解绑失败: " + err.message, "danger");
+                          }
+                        }} 
+                        type="button"
+                        className="cyber-btn" 
+                        style={{ padding: '10px', justifyContent: 'center', background: 'rgba(239, 68, 68, 0.05)', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#ef4444', marginTop: 'auto' }}
+                      >
+                        解绑身份验证器
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Card 2: Security Questions */}
+                  <form onSubmit={handleSaveQuestions} className="cyber-card" style={{ padding: '24px', background: 'var(--bg-chat-form)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ padding: '8px', background: securityStatus.has_questions ? 'rgba(13, 148, 136, 0.1)' : 'rgba(245, 158, 11, 0.08)', borderRadius: '10px', display: 'flex' }}>
+                        <Key size={20} style={{ color: securityStatus.has_questions ? 'var(--primary)' : '#f59e0b' }} />
+                      </div>
+                      <div>
+                        <h4 style={{ fontSize: '14px', fontWeight: '700', margin: 0 }}>安全密保问题找回</h4>
+                        <span style={{ fontSize: '11px', color: securityStatus.has_questions ? 'var(--primary)' : '#f59e0b', fontWeight: '800', marginTop: '2px', display: 'block' }}>
+                          {securityStatus.has_questions ? '● 已配置密保找回通道' : '○ 未配置密保 (忘记密码时无法使用此通道)'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: '1.6' }}>
+                      配置 3 个您所独占的私人密保问题及回答。答案在存入数据库前会自动加密哈希，确保无明文泄漏风险。
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '4px' }}>
+                      {secQuestions.map((item, index) => (
+                        <div key={index} className="form-group" style={{ margin: 0 }}>
+                          <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>安全密保问题 {index + 1}</span>
+                            {securityStatus.has_questions && <span style={{ color: 'var(--primary)', fontWeight: '600', fontSize: '9px' }}>已设置</span>}
+                          </label>
+                          <input 
+                            type="text"
+                            required
+                            value={item.question}
+                            onChange={(e) => {
+                              const copy = [...secQuestions];
+                              copy[index].question = e.target.value;
+                              setSecQuestions(copy);
+                            }}
+                            placeholder={`请输入自定义密保问题 ${index + 1}...`}
+                            className="cyber-input"
+                            style={{ height: '32px', fontSize: '12px', padding: '0 12px', width: '100%', outline: 'none' }}
+                          />
+                          <select 
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                const copy = [...secQuestions];
+                                copy[index].question = e.target.value;
+                                setSecQuestions(copy);
+                              }
+                            }}
+                            className="cyber-input"
+                            style={{ padding: '0 12px', height: '28px', fontSize: '11px', background: 'var(--bg-chat-form)', width: '100%', outline: 'none', marginTop: '4px', opacity: 0.8 }}
+                          >
+                            <option value="">-- 快速选择推荐密保问题 --</option>
+                            <option value="你最喜欢的编程语言是？">你最喜欢的编程语言是？</option>
+                            <option value="你写的第一行代码输出是什么？">你写的第一行代码输出是什么？</option>
+                            <option value="你心目中最伟大的程序员是？">你心目中最伟大的程序员是？</option>
+                            <option value="你第一台电脑的购买年份是？">你第一台电脑的购买年份是？</option>
+                            <option value="你最喜欢的研究课题/方向是？">你最喜欢的研究课题/方向是？</option>
+                          </select>
+                          <input 
+                            type="text"
+                            required
+                            value={item.answer}
+                            onChange={(e) => {
+                              const copy = [...secQuestions];
+                              copy[index].answer = e.target.value;
+                              setSecQuestions(copy);
+                            }}
+                            placeholder={securityStatus.has_questions ? "输入答案以重写此问题配置..." : "输入该密保问题的校验答案..."}
+                            className="cyber-input"
+                            style={{ height: '32px', fontSize: '12px', padding: '0 12px', marginTop: '6px' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    <button 
+                      type="submit" 
+                      disabled={submittingQuestions}
+                      className="cyber-btn" 
+                      style={{ padding: '10px', justifyContent: 'center', marginTop: 'auto' }}
+                    >
+                      {submittingQuestions ? '保存中...' : (securityStatus.has_questions ? '更新密保配置' : '开启密保通道')}
+                    </button>
+                  </form>
+
+                </div>
+              )}
             </div>
           )}
 
@@ -1050,6 +1529,245 @@ export default function SettingsView() {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB: SEARCH */}
+          {activeSubTab === 'search' && (
+            <div>
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '4px' }}>智能联网检索配置</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                  开启后，系统智能体在与您交流时，会根据对话上下文自动提取关键词进行实时网页检索，补充大模型的时效性知识。
+                </p>
+              </div>
+
+              <form onSubmit={handleSaveSearchSettings} className="cyber-card" style={{ background: 'var(--bg-card-glass)', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Switch row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '16px' }}>
+                  <div>
+                    <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '4px' }}>启用实时联网搜索</h4>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>允许 AI 导师在面对时效性或需要实时佐证的问题时进行联网查询。</p>
+                  </div>
+                  <label className="cyber-switch" style={{ position: 'relative', display: 'inline-block', width: '46px', height: '24px' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={searchSettings.search_enabled}
+                      onChange={(e) => setSearchSettings(prev => ({ ...prev, search_enabled: e.target.checked }))}
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span style={{
+                      position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                      backgroundColor: searchSettings.search_enabled ? 'var(--primary-neon)' : 'rgba(255,255,255,0.08)',
+                      transition: '0.4s', borderRadius: '34px',
+                      boxShadow: searchSettings.search_enabled ? '0 0 8px var(--primary-neon)' : 'none'
+                    }}>
+                      <span style={{
+                        position: 'absolute', content: '""', height: '16px', width: '16px', left: '4px', bottom: '4px',
+                        backgroundColor: 'white', transition: '0.4s', borderRadius: '50%',
+                        transform: searchSettings.search_enabled ? 'translateX(22px)' : 'none'
+                      }} />
+                    </span>
+                  </label>
+                </div>
+
+                {/* Search settings input parameters — always interactive; opacity only dims when disabled */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>搜索引擎提供商</label>
+                      <select
+                        value={searchSettings.search_provider}
+                        onChange={(e) => setSearchSettings(prev => ({ ...prev, search_provider: e.target.value }))}
+                        className="cyber-input"
+                        style={{ height: '36px', fontSize: '12px', padding: '0 12px', borderRadius: '8px', cursor: 'pointer', background: 'var(--bg-card-solid)', border: '1px solid var(--border-neon)' }}
+                      >
+                        <option value="duckduckgo">DuckDuckGo (免密内置，极速解析)</option>
+                        <option value="tavily">Tavily AI (学术及开发者搜索 API)</option>
+                        <option value="google">Google Custom Search (需要自定义 API 密钥)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>单次最大网页检索结果数量 (1-5)</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input
+                          type="range"
+                          min="1"
+                          max="5"
+                          value={searchSettings.max_results}
+                          onChange={(e) => setSearchSettings(prev => ({ ...prev, max_results: parseInt(e.target.value) }))}
+                          style={{ flex: 1, accentColor: 'var(--primary-neon)' }}
+                        />
+                        <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '24px', textAlign: 'center', color: 'var(--primary-neon)' }}>{searchSettings.max_results} 条</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {searchSettings.search_provider !== 'duckduckgo' && (
+                    <div style={{ animation: 'fadeIn 0.3s' }}>
+                      <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>API Key (接口校验密钥)</label>
+                      <input
+                        type="password"
+                        placeholder="输入对应服务商的 API Key 接口凭证..."
+                        value={searchSettings.api_key}
+                        onChange={(e) => setSearchSettings(prev => ({ ...prev, api_key: e.target.value }))}
+                        className="cyber-input"
+                        style={{ height: '36px', fontSize: '12px', padding: '0 12px', fontFamily: 'monospace' }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <button type="submit" disabled={savingSearch} className="cyber-btn" style={{ padding: '8px 24px', fontSize: '12px' }}>
+                    {savingSearch ? '保存配置中...' : '保存联网检索配置'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* TAB: PROMPTS */}
+          {activeSubTab === 'prompts' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '4px' }}>AI 导师提示词模板管理</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                    提示词模板控制 AI 导师对话的基本人设与逻辑。激活其中一个后将自动应用在智能体沟通流中。
+                  </p>
+                </div>
+                
+                <button onClick={() => {
+                  setPromptFormData({
+                    template_id: '',
+                    template_name: '',
+                    system_prompt: '',
+                    is_active: false
+                  });
+                  setEditingPrompt(null);
+                  setShowPromptEditModal(true);
+                }} className="cyber-btn" style={{ padding: '8px 16px', fontSize: '12px' }}>
+                  <Plus size={14} style={{ marginRight: '6px' }} /> 新增提示词模板
+                </button>
+              </div>
+
+              {/* Grid Layout of prompt templates */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+                {promptTemplates.map(t => {
+                  const isSystemDefault = ['academic', 'encouraging', 'coder', 'socratic'].includes(t.template_id);
+                  
+                  return (
+                    <div 
+                      key={t.template_id} 
+                      className="cyber-card" 
+                      style={{ 
+                        background: 'var(--bg-card-glass)', 
+                        padding: '20px',
+                        borderColor: t.is_active ? 'var(--border-neon)' : 'rgba(255,255,255,0.03)',
+                        boxShadow: t.is_active ? '0 4px 15px rgba(20, 184, 166, 0.15)' : 'none',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '14px',
+                        transition: 'all 0.3s'
+                      }}
+                    >
+                      <div>
+                        {/* Card Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-main)' }}>
+                              {t.template_name}
+                            </span>
+                            <span style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>
+                              [{t.template_id}]
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            {t.is_active ? (
+                              <span className="neon-badge neon-badge-primary" style={{ fontSize: '9px', padding: '1px 6px', background: 'rgba(20, 184, 166, 0.1)', borderColor: 'rgba(20, 184, 166, 0.3)', color: 'var(--primary-neon)' }}>
+                                启用中
+                              </span>
+                            ) : (
+                              <button 
+                                onClick={() => handleSetActivePrompt(t.template_id)}
+                                className="cyber-btn"
+                                style={{ padding: '2px 8px', fontSize: '9px', minHeight: '20px', background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.1)', color: 'var(--text-muted)' }}
+                              >
+                                启用该模板
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Prompt preview */}
+                        <p style={{ 
+                          fontSize: '12px', 
+                          color: 'var(--text-muted)', 
+                          lineHeight: '1.6', 
+                          margin: 0,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          height: '58px'
+                        }} title={t.system_prompt}>
+                          {t.system_prompt}
+                        </p>
+                      </div>
+
+                      {/* Card Footer Actions */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '12px', marginTop: '4px' }}>
+                        <span style={{ fontSize: '10px', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Sparkles size={10} />
+                          {isSystemDefault ? "系统预置核心模板" : "自定义专属模板"}
+                        </span>
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            onClick={() => {
+                              setEditingPrompt(t);
+                              setPromptFormData({
+                                template_id: t.template_id,
+                                template_name: t.template_name,
+                                system_prompt: t.system_prompt,
+                                is_active: t.is_active
+                              });
+                              setShowPromptEditModal(true);
+                            }}
+                            className="cyber-btn"
+                            style={{ padding: '4px 10px', fontSize: '11px', minHeight: '24px', background: 'rgba(20, 184, 166, 0.04)', borderColor: 'rgba(20, 184, 166, 0.15)', color: 'var(--primary-neon)' }}
+                          >
+                            <Edit size={10} style={{ marginRight: '4px' }} /> 编辑
+                          </button>
+                          
+                          <button 
+                            onClick={() => handleDeletePromptTemplate(t.template_id)}
+                            disabled={isSystemDefault || t.is_active}
+                            className="cyber-btn"
+                            style={{ 
+                              padding: '4px 10px', 
+                              fontSize: '11px', 
+                              minHeight: '24px', 
+                              background: 'rgba(190, 18, 60, 0.05)', 
+                              borderColor: 'rgba(190, 18, 60, 0.15)', 
+                              color: 'var(--danger)',
+                              cursor: (isSystemDefault || t.is_active) ? 'not-allowed' : 'pointer',
+                              opacity: (isSystemDefault || t.is_active) ? 0.35 : 1
+                            }}
+                            title={t.is_active ? "当前激活的模板不能删除" : (isSystemDefault ? "系统核心模板不能删除" : "删除模板")}
+                          >
+                            <Trash2 size={10} style={{ marginRight: '4px' }} /> 删除
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -1317,7 +2035,17 @@ export default function SettingsView() {
                         gap: '4px'
                       }}
                     >
-                      {isGeneratingSyllabus ? '⚡ 正在规划...' : '✨ AI一键生成'}
+                      {isGeneratingSyllabus ? (
+                        <>
+                          <RefreshCw size={11} className="animate-spin" />
+                          <span>正在规划...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={11} />
+                          <span>AI一键生成</span>
+                        </>
+                      )}
                     </button>
                   </div>
 
@@ -1396,6 +2124,109 @@ export default function SettingsView() {
                   style={{ padding: '8px 24px' }}
                 >
                   提交注册并建档
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Prompt Template Modal */}
+      {showPromptEditModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0, 0, 0, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999999
+        }}>
+          <div className="cyber-card" style={{ width: '560px', padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '900', margin: 0 }}>
+                {editingPrompt ? '编辑提示词模板' : '新增提示词模板'}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowPromptEditModal(false)}
+                className="close-btn"
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePromptTemplate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>模板标识 ID (唯一个性化 ID)</label>
+                <input
+                  type="text"
+                  placeholder="如: my_interviewer, academic_advanced"
+                  required
+                  disabled={!!editingPrompt}
+                  value={promptFormData.template_id}
+                  onChange={(e) => setPromptFormData(prev => ({ ...prev, template_id: e.target.value }))}
+                  className="cyber-input"
+                  style={{ height: '36px', fontSize: '12px', padding: '0 14px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>模板名称</label>
+                <input
+                  type="text"
+                  placeholder="如: 模拟面试官"
+                  required
+                  value={promptFormData.template_name}
+                  onChange={(e) => setPromptFormData(prev => ({ ...prev, template_name: e.target.value }))}
+                  className="cyber-input"
+                  style={{ height: '36px', fontSize: '12px', padding: '0 14px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>系统提示词 (System Prompt)</label>
+                <textarea
+                  placeholder="编写系统指令，以决定 AI 导师的人格特征、解答方式及重点..."
+                  required
+                  value={promptFormData.system_prompt}
+                  onChange={(e) => setPromptFormData(prev => ({ ...prev, system_prompt: e.target.value }))}
+                  className="cyber-input"
+                  style={{ minHeight: '160px', padding: '12px 14px', fontSize: '12px', lineHeight: '1.6', fontFamily: 'inherit', resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  id="prompt-active-checkbox"
+                  checked={promptFormData.is_active}
+                  onChange={(e) => setPromptFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                  style={{ cursor: 'pointer', accentColor: 'var(--primary-neon)' }}
+                />
+                <label htmlFor="prompt-active-checkbox" style={{ fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  保存后立即激活此模板
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '16px', marginTop: '6px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowPromptEditModal(false)}
+                  className="cyber-btn"
+                  style={{ padding: '8px 18px', background: 'rgba(0, 0, 0, 0.02)', borderColor: 'rgba(255,255,255,0.1)', color: 'var(--text-muted)' }}
+                >
+                  取消
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={savingPrompt}
+                  className="cyber-btn"
+                  style={{ padding: '8px 24px' }}
+                >
+                  {savingPrompt ? '保存中...' : '确认并保存'}
                 </button>
               </div>
             </form>

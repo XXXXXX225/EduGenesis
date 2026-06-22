@@ -17,7 +17,8 @@ from app.db import (
     db_get_error_tags,
     db_insert_reinforcement_node,
     db_delete_reinforcement_node,
-    db_cleanup_reinforcement_nodes
+    db_cleanup_reinforcement_nodes,
+    db_record_contribution
 )
 from app.limiter import rate_limit_resource
 from app.ai.scenes import generate_path_nodes
@@ -251,5 +252,6 @@ def complete_node(request: CompleteNodeRequest, current_username: str = Depends(
         conn.commit()
         conn.close()
         
+    db_record_contribution(target_user, 1)
     updated_nodes = db_get_path_nodes(target_user)
     return {"nodes": [n.model_dump() for n in updated_nodes]}

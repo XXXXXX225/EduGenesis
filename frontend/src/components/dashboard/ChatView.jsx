@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Cpu, User, Send, Sparkles, Video, FileText, HelpCircle, FileCode, Map } from 'lucide-react';
+import { MessageSquare, Cpu, User, Send, Sparkles, Video, FileText, HelpCircle, FileCode, Map, Play, Pause, Volume2, Home } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
+import { apiGet } from '../../utils/api';
 
 import QuizCard from '../chat/QuizCard';
 import VideoRecommendCard from '../chat/VideoRecommendCard';
@@ -8,6 +9,329 @@ import MermaidRenderer from '../chat/MermaidRenderer';
 import CodeSandboxCard from '../chat/CodeSandboxCard';
 import SlidesCarouselCard from '../chat/SlidesCarouselCard';
 import PDFDownloadCard from '../chat/PDFDownloadCard';
+
+const TutorAvatar = () => {
+  const { chat, agentLogs } = useAppContext();
+  const isStreaming = chat?.isStreaming;
+
+  const getAvatarStatus = () => {
+    if (!agentLogs || agentLogs.length === 0) return 'normal';
+    
+    // Check recent logs (last 5) for danger or warning
+    const hasDanger = agentLogs.slice(-5).some(l => 
+      (l.log_type === 'danger') || 
+      (l.log || '').includes('拦截') || 
+      (l.log || '').includes('异常') || 
+      (l.log || '').includes('超时') || 
+      (l.log || '').includes('强行终止')
+    );
+    
+    if (hasDanger) return 'danger';
+    
+    const hasWarning = agentLogs.slice(-5).some(l => 
+      (l.log_type === 'warning') || 
+      (l.log || '').includes('警告') || 
+      (l.log || '').includes('偏离') || 
+      (l.log || '').includes('未通过')
+    );
+    
+    if (hasWarning) return 'warning';
+
+    const latestLog = agentLogs[agentLogs.length - 1];
+    const logContent = (latestLog.log || '').toLowerCase();
+    const logType = (latestLog.log_type || '').toLowerCase();
+    
+    const isConsensus = logType === 'consensus' || 
+      logContent.includes('达成共识') || 
+      logContent.includes('对齐') || 
+      logContent.includes('通过') || 
+      logContent.includes('成功') || 
+      logContent.includes('完成') || 
+      logContent.includes('签发');
+      
+    if (isConsensus) return 'consensus';
+    if (isStreaming) return 'typing';
+    
+    return 'normal';
+  };
+
+  const status = getAvatarStatus();
+
+  // Color config based on status
+  let coreGradStops = { stop0: '#2dd4bf', stop70: '#0d9488', stop100: '#0f766e' };
+  let orbitColor = '#0ea5e9';
+  let innerOrbitColor = '#f59e0b';
+  let orbitDuration = '10s';
+  let innerOrbitDuration = '8s';
+  let onlineDotColor = '#10b981';
+  let borderNeon = 'rgba(13, 148, 136, 0.25)';
+  let glowColor = 'rgba(13, 148, 136, 0.18)';
+  let extraStyle = {};
+
+  if (status === 'danger') {
+    coreGradStops = { stop0: '#f87171', stop70: '#dc2626', stop100: '#7f1d1d' };
+    orbitColor = '#ef4444';
+    innerOrbitColor = '#991b1b';
+    orbitDuration = '15s';
+    innerOrbitDuration = '12s';
+    onlineDotColor = '#ef4444';
+    borderNeon = 'rgba(239, 68, 68, 0.5)';
+    glowColor = 'rgba(239, 68, 68, 0.3)';
+    extraStyle = { animation: 'tutorJitter 0.5s infinite' };
+  } else if (status === 'warning') {
+    coreGradStops = { stop0: '#fbbf24', stop70: '#d97706', stop100: '#78350f' };
+    orbitColor = '#fbbf24';
+    innerOrbitColor = '#b45309';
+    orbitDuration = '12s';
+    innerOrbitDuration = '10s';
+    onlineDotColor = '#f59e0b';
+    borderNeon = 'rgba(245, 158, 11, 0.4)';
+    glowColor = 'rgba(245, 158, 11, 0.2)';
+  } else if (status === 'consensus') {
+    coreGradStops = { stop0: '#34d399', stop70: '#059669', stop100: '#064e3b' };
+    orbitColor = '#34d399';
+    innerOrbitColor = '#065f46';
+    orbitDuration = '6s';
+    innerOrbitDuration = '5s';
+    onlineDotColor = '#10b981';
+    borderNeon = 'rgba(16, 185, 129, 0.35)';
+    glowColor = 'rgba(16, 185, 129, 0.2)';
+  } else if (status === 'typing') {
+    coreGradStops = { stop0: '#38bdf8', stop70: '#0284c7', stop100: '#1e3a8a' };
+    orbitColor = '#38bdf8';
+    innerOrbitColor = '#0ea5e9';
+    orbitDuration = '2s';
+    innerOrbitDuration = '1.5s';
+    onlineDotColor = '#38bdf8';
+    borderNeon = 'rgba(14, 165, 233, 0.4)';
+    glowColor = 'rgba(14, 165, 233, 0.35)';
+  }
+
+  return (
+    <div style={{ 
+      width: '42px', 
+      height: '42px', 
+      borderRadius: '14px', 
+      background: 'linear-gradient(135deg, rgba(13, 148, 136, 0.16) 0%, rgba(15, 118, 110, 0.05) 50%, rgba(2, 132, 199, 0.02) 100%)', 
+      border: `1.5px solid ${borderNeon}`, 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      boxShadow: `0 4px 14px ${glowColor}, inset 0 1px 2px rgba(255, 255, 255, 0.2)`,
+      position: 'relative',
+      flexShrink: 0,
+      transition: 'all 0.3s ease',
+      cursor: 'pointer',
+      ...extraStyle
+    }}
+    className="hover-scale-up-avatar"
+    >
+      <style>{`
+        @keyframes tutorRotate {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes tutorRotateRev {
+          from { transform: rotate(360deg); }
+          to { transform: rotate(0deg); }
+        }
+        @keyframes tutorPulse {
+          0%, 100% { transform: scale(1); opacity: 0.95; }
+          50% { transform: scale(1.15); opacity: 1; }
+        }
+        @keyframes onlinePulse {
+          0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 6px var(--online-color, rgba(16, 185, 129, 0.8)); }
+          50% { transform: scale(1.2); opacity: 0.8; box-shadow: 0 0 10px var(--online-color, rgba(16, 185, 129, 1)); }
+        }
+        @keyframes tutorJitter {
+          0%, 100% { transform: translate(0, 0); }
+          10%, 30%, 50%, 70%, 90% { transform: translate(-1.5px, -0.5px); }
+          20%, 40%, 60%, 80% { transform: translate(1.5px, 0.5px); }
+        }
+        .hover-scale-up-avatar:hover {
+          transform: translateY(-2px) scale(1.05);
+          box-shadow: 0 6px 18px rgba(13, 148, 136, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+        }
+        .hover-scale-up-avatar:hover .tutor-orbit-fast {
+          animation-duration: 2s !important;
+        }
+        .hover-scale-up-avatar:hover .tutor-orbit-rev-fast {
+          animation-duration: 1.5s !important;
+        }
+      `}</style>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="tutor-neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.2" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+          
+          <radialGradient id="tutor-core-grad" cx="50%" cy="50%" r="50%" fx="30%" fy="30%">
+            <stop offset="0%" stopColor={coreGradStops.stop0} />
+            <stop offset="70%" stopColor={coreGradStops.stop70} />
+            <stop offset="100%" stopColor={coreGradStops.stop100} />
+          </radialGradient>
+          
+          <linearGradient id="tutor-orbit-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={orbitColor} />
+            <stop offset="100%" stopColor={coreGradStops.stop70} />
+          </linearGradient>
+        </defs>
+
+        {/* Axis line grid */}
+        <path d="M12 3V21M3 12H21" stroke={orbitColor} strokeWidth="0.8" opacity="0.15" strokeDasharray="2 2" />
+
+        {/* Outer Orbit Ring */}
+        <g className="tutor-orbit-fast" style={{ transformOrigin: '12px 12px', animation: `tutorRotate ${orbitDuration} linear infinite` }}>
+          <circle cx="12" cy="12" r="10" stroke="url(#tutor-orbit-grad)" strokeWidth="1" strokeDasharray="3 3" opacity="0.5" />
+          <circle cx="12" cy="2" r="2" fill={orbitColor} filter="url(#tutor-neon-glow)" />
+        </g>
+        
+        {/* Inner Orbit Ring */}
+        <g className="tutor-orbit-rev-fast" style={{ transformOrigin: '12px 12px', animation: `tutorRotateRev ${innerOrbitDuration} linear infinite` }}>
+          <circle cx="12" cy="12" r="7.5" stroke={innerOrbitColor} strokeWidth="0.8" strokeDasharray="2 1" opacity="0.4" />
+          <circle cx="19.5" cy="12" r="1.5" fill={innerOrbitColor} />
+        </g>
+
+        {/* Geometrics */}
+        <path d="M12 5L19 12L12 19L5 12Z" stroke={orbitColor} strokeWidth="1.2" opacity="0.6" strokeLinejoin="round" />
+
+        {/* Pulsing Core */}
+        <circle className="tutor-core" cx="12" cy="12" r="3.5" fill="url(#tutor-core-grad)" filter="url(#tutor-neon-glow)" style={{ transformOrigin: '12px 12px', animation: 'tutorPulse 2s ease-in-out infinite' }} />
+      </svg>
+      <span style={{ 
+        position: 'absolute', 
+        bottom: '-1px', 
+        right: '-1px', 
+        width: '9px', 
+        height: '9px', 
+        borderRadius: '50%', 
+        background: onlineDotColor, 
+        border: '2px solid var(--bg-space)',
+        animation: 'onlinePulse 2s infinite ease-in-out',
+        '--online-color': onlineDotColor
+      }} />
+    </div>
+  );
+};
+
+const StudentAvatar = () => {
+  const { profile } = useAppContext();
+  const cognitiveStyle = profile?.cognitive_style || 'Practical Coding';
+  const kb = profile?.knowledge_base || 50;
+
+  // 1. Dynamic themes based on cognitive style
+  let baseGrad = 'linear-gradient(135deg, rgba(59, 130, 246, 0.14) 0%, rgba(29, 78, 216, 0.05) 50%, rgba(217, 119, 6, 0.02) 100%)';
+  let borderStyle = '1.5px solid rgba(59, 130, 246, 0.25)';
+  let glowStyle = 'rgba(29, 78, 216, 0.12)';
+  let bookGradStart = '#3b82f6', bookGradEnd = '#1d4ed8';
+  let dotColor = '#3b82f6';
+  
+  if (cognitiveStyle === 'Theoretical/Self-Paced') {
+    baseGrad = 'linear-gradient(135deg, rgba(139, 92, 246, 0.14) 0%, rgba(109, 40, 217, 0.05) 50%, rgba(99, 102, 241, 0.02) 100%)';
+    borderStyle = '1.5px solid rgba(139, 92, 246, 0.25)';
+    glowStyle = 'rgba(109, 40, 217, 0.12)';
+    bookGradStart = '#8b5cf6';
+    bookGradEnd = '#4f46e5';
+    dotColor = '#8b5cf6';
+  } else if (cognitiveStyle === 'Visual/Guided') {
+    baseGrad = 'linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(217, 119, 6, 0.05) 50%, rgba(251, 191, 36, 0.02) 100%)';
+    borderStyle = '1.5px solid rgba(245, 158, 11, 0.25)';
+    glowStyle = 'rgba(217, 119, 6, 0.12)';
+    bookGradStart = '#f59e0b';
+    bookGradEnd = '#d97706';
+    dotColor = '#f59e0b';
+  }
+
+  // 2. Dynamic growth parameters
+  const starScale = 0.85 + (kb / 100) * 0.35; // scales from 0.85 to 1.2
+  const glowDeviation = 1.0 + (kb / 100) * 1.5; // scales from 1.0 to 2.5
+
+  return (
+    <div style={{ 
+      width: '42px', 
+      height: '42px', 
+      borderRadius: '14px', 
+      background: baseGrad, 
+      border: borderStyle, 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      boxShadow: `0 4px 14px ${glowStyle}, inset 0 1px 2px rgba(255, 255, 255, 0.2)`,
+      position: 'relative',
+      flexShrink: 0,
+      transition: 'all 0.3s ease',
+      cursor: 'pointer'
+    }}
+    className="hover-scale-up-avatar-student"
+    >
+      <style>{`
+        @keyframes studentFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-2px); }
+        }
+        @keyframes studentSpark {
+          0%, 100% { opacity: 0.5; transform: scale(0.8); }
+          50% { opacity: 1; transform: scale(1.2); }
+        }
+        @keyframes studentPulse {
+          0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 6px var(--student-dot-color, rgba(59, 130, 246, 0.8)); }
+          50% { transform: scale(1.2); opacity: 0.8; box-shadow: 0 0 10px var(--student-dot-color, rgba(59, 130, 246, 1)); }
+        }
+        .hover-scale-up-avatar-student:hover {
+          transform: translateY(-2px) scale(1.05);
+          box-shadow: 0 6px 18px rgba(59, 130, 246, 0.25), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+        }
+      `}</style>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ animation: 'studentFloat 3s ease-in-out infinite' }}>
+        <defs>
+          <filter id="student-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation={glowDeviation} result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+          
+          <linearGradient id="student-book-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={bookGradStart} />
+            <stop offset="100%" stopColor={bookGradEnd} />
+          </linearGradient>
+          
+          <linearGradient id="student-gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#fbbf24" />
+            <stop offset="100%" stopColor="#d97706" />
+          </linearGradient>
+        </defs>
+
+        {/* Winged open book pages */}
+        <path d="M12 17.5C10.2 16.2 6.5 16.2 4 17.5V7C6.5 5.8 10.2 5.8 12 7.5V17.5Z" fill="rgba(59, 130, 246, 0.05)" stroke="url(#student-book-grad)" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M12 17.5C13.8 16.2 17.5 16.2 20 17.5V7C17.5 5.8 13.8 5.8 12 7.5V17.5Z" fill="rgba(59, 130, 246, 0.05)" stroke="url(#student-book-grad)" strokeWidth="1.5" strokeLinejoin="round" />
+        
+        {/* Spine */}
+        <path d="M12 7.5V17.5" stroke={bookGradEnd} strokeWidth="1.5" strokeLinecap="round" />
+
+        {/* Gold Diamond Growth Star with dynamic scale */}
+        <g style={{ transformOrigin: '12px 7px', transform: `scale(${starScale})` }}>
+          <path d="M12 2.5L14 5.5L17.5 7L14 8.5L12 11.5L10 8.5L6.5 7L10 5.5Z" fill="url(#student-gold-grad)" filter="url(#student-glow)" />
+        </g>
+
+        {/* Small ideas/sparkles */}
+        <circle cx="5" cy="4" r="0.8" fill="#fbbf24" style={{ animation: 'studentSpark 2s infinite ease-in-out' }} />
+        <circle cx="19" cy="4" r="0.8" fill="#fbbf24" style={{ animation: 'studentSpark 2s infinite ease-in-out', animationDelay: '0.7s' }} />
+      </svg>
+      <span style={{ 
+        position: 'absolute', 
+        bottom: '-1px', 
+        right: '-1px', 
+        width: '9px', 
+        height: '9px', 
+        borderRadius: '50%', 
+        background: dotColor, 
+        border: '2px solid var(--bg-space)',
+        animation: 'studentPulse 2s infinite ease-in-out',
+        '--student-dot-color': dotColor
+      }} />
+    </div>
+  );
+};
 
 const parseIncompleteTags = (text) => {
   if (!text) return { cleanText: '', pendingTag: null };
@@ -232,10 +556,11 @@ const InteractiveChatBubble = ({ msg, isStreaming }) => {
               <div key={index} style={{ marginTop: '8px', background: '#0a0a0c', borderRadius: '16px', border: '1.5px solid var(--border-neon)', overflow: 'hidden' }}>
                 <div style={{ position: 'relative', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(45deg, #111, #1e1e24)' }}>
                   <button type="button" onClick={toggleVideoPlay} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', border: '1px solid var(--primary-neon)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {isVideoPlaying ? '⏸' : '▶'}
+                    {isVideoPlaying ? <Pause size={16} /> : <Play size={16} style={{ marginLeft: '2px' }} />}
                   </button>
-                  <div style={{ position: 'absolute', bottom: '8px', background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', color: '#fff' }}>
-                    {isVideoPlaying ? `🔊 播音中...` : `🔊 播放微课: ${subTitle}`}
+                  <div style={{ position: 'absolute', bottom: '8px', background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', color: '#fff', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Volume2 size={12} className={isVideoPlaying ? "animate-pulse" : ""} />
+                    <span>{isVideoPlaying ? `播音中...` : `播放微课: ${subTitle}`}</span>
                   </div>
                 </div>
                 <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -342,8 +667,9 @@ export default function ChatView({ chatEndRef }) {
   const {
     profile,
     profileAlert,
-    goDashboardHome,
+    goPortalHome,
     diagnosticLogs,
+    currentSessionId,
     chat: {
       chatHistory,
       chatInput,
@@ -355,6 +681,33 @@ export default function ChatView({ chatEndRef }) {
     }
   } = useAppContext();
 
+  const [engineStatus, setEngineStatus] = useState({
+    model_name: '星火大模型 V3.0 Lite (自适应版)',
+    tokens_used: 0,
+    tokens_limit: 8192,
+    percentage: 0.0
+  });
+
+  const fetchEngineStatus = async () => {
+    if (!currentSessionId) return;
+    try {
+      const data = await apiGet(`/chat/sessions/${currentSessionId}/status`);
+      setEngineStatus(data);
+    } catch (err) {
+      console.warn("Failed to fetch engine status:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchEngineStatus();
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    if (!isStreaming && chatHistory.length > 1) {
+      fetchEngineStatus();
+    }
+  }, [isStreaming, chatHistory.length]);
+
   const lastAssistantIdx = (() => {
     for (let i = chatHistory.length - 1; i >= 0; i--) {
       if (chatHistory[i].role !== 'user') return i;
@@ -363,9 +716,9 @@ export default function ChatView({ chatEndRef }) {
   })();
 
   return (
-    <div style={{ display: 'flex', height: '100%', position: 'relative', width: '100%' }}>
+    <div className="chat-view-container" style={{ display: 'flex', height: '100%', position: 'relative', width: '100%' }}>
       {/* Left section: Chat area */}
-      <section className="cyber-card" style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, border: 'none', height: '100%', position: 'relative', background: 'transparent' }}>
+      <section className="cyber-card chat-view-section" style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, border: 'none', height: '100%', position: 'relative', background: 'transparent' }}>
 
         {/* Blink cursor keyframes */}
         <style>{`
@@ -401,21 +754,17 @@ export default function ChatView({ chatEndRef }) {
         )}
 
         {/* Header */}
-        <div style={{ padding: '20px 28px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="chat-view-header" style={{ padding: '20px 28px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h3 style={{ fontSize: '16px', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '700' }}>
               <MessageSquare size={18} style={{ color: 'var(--primary-neon)' }} /> 智能画像导师
-              <a
-                href="#"
-                role="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  goDashboardHome();
-                }}
-                style={{ fontSize: '11px', fontWeight: 'normal', color: 'var(--primary-neon)', cursor: 'pointer', marginLeft: '12px', opacity: 0.8, textDecoration: 'underline' }}
+              <button
+                className="btn-home-pill"
+                onClick={() => goPortalHome()}
               >
+                <Home size={11} />
                 返回首页
-              </a>
+              </button>
             </h3>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>与您的专属助教对话，动态更新左侧画像雷达数据</span>
           </div>
@@ -423,7 +772,7 @@ export default function ChatView({ chatEndRef }) {
         </div>
 
         {/* Dialog Area */}
-        <div style={{ flexGrow: '1', padding: '28px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="chat-view-dialog" style={{ flexGrow: '1', padding: '28px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {chatHistory.map((msg, index) => {
             const isLastAssistant = index === lastAssistantIdx && msg.role !== 'user';
             return (
@@ -436,11 +785,7 @@ export default function ChatView({ chatEndRef }) {
                   gap: '14px'
                 }}
               >
-                {msg.role !== 'user' && (
-                  <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(15, 118, 110, 0.06)', border: '1px solid rgba(15, 118, 110, 0.2)', flexShrink: 0 }}>
-                    <Cpu size={16} style={{ color: 'var(--primary-neon)' }} />
-                  </div>
-                )}
+                {msg.role !== 'user' && <TutorAvatar />}
                 <div
                   className="cyber-card chat-bubble-anim"
                   style={{
@@ -464,11 +809,7 @@ export default function ChatView({ chatEndRef }) {
                     />
                   )}
                 </div>
-                {msg.role === 'user' && (
-                  <div style={{ padding: '8px', borderRadius: '12px', background: 'rgba(0, 0, 0, 0.03)', border: '1px solid rgba(0, 0, 0, 0.06)', flexShrink: 0 }}>
-                    <User size={16} style={{ color: 'var(--text-muted)' }} />
-                  </div>
-                )}
+                {msg.role === 'user' && <StudentAvatar />}
               </div>
             );
           })}
@@ -485,7 +826,7 @@ export default function ChatView({ chatEndRef }) {
         </div>
 
         {/* Suggestion Chips */}
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', padding: '10px 24px', background: 'rgba(0,0,0,0.01)', borderTop: '1px solid var(--border-neon)' }}>
+        <div className="chat-view-chips" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', padding: '10px 24px', background: 'rgba(0,0,0,0.01)', borderTop: '1px solid var(--border-neon)' }}>
           {['我想学 Python 基础', '测试我的机器学习基础', '根据我的画像调整路线', '我觉得当前的学习节奏太快了'].map(chip => (
             <button
               key={chip}
@@ -513,7 +854,7 @@ export default function ChatView({ chatEndRef }) {
         </div>
 
         {/* Input form */}
-        <form onSubmit={handleSendMessage} style={{ padding: '20px 28px', borderTop: '1px solid var(--border-neon)', background: 'var(--bg-chat-form)' }}>
+        <form onSubmit={handleSendMessage} className="chat-view-form" style={{ padding: '20px 28px', borderTop: '1px solid var(--border-neon)', background: 'var(--bg-chat-form)' }}>
           <div style={{ display: 'flex', gap: '14px' }}>
             <input
               type="text"
@@ -536,6 +877,45 @@ export default function ChatView({ chatEndRef }) {
             >
               <Send size={16} />
             </button>
+          </div>
+          
+          {/* Cyber engine and context HUD status bar */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginTop: '12px', 
+            padding: '0 4px',
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+            opacity: 0.95
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Cpu size={12} style={{ color: 'var(--primary)' }} />
+              <span>智能体引擎：<span style={{ color: 'var(--text-main)', fontWeight: '600' }}>{engineStatus.model_name}</span></span>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ 
+                width: '80px', 
+                height: '6px', 
+                background: 'rgba(0, 0, 0, 0.05)', 
+                border: '1px solid var(--border-neon)',
+                borderRadius: '3px', 
+                overflow: 'hidden',
+                display: 'inline-block',
+                position: 'relative'
+              }}>
+                <div style={{ 
+                  width: `${engineStatus.percentage}%`, 
+                  height: '100%', 
+                  background: engineStatus.percentage > 80 ? '#ef4444' : 'var(--primary)', 
+                  borderRadius: '3px',
+                  transition: 'width 0.5s ease-out'
+                }} />
+              </div>
+              <span>上下文占用：<span style={{ color: engineStatus.percentage > 80 ? '#ef4444' : 'var(--primary)', fontWeight: '600' }}>{engineStatus.percentage}%</span> ({engineStatus.tokens_used} / {engineStatus.tokens_limit} Token)</span>
+            </div>
           </div>
         </form>
       </section>

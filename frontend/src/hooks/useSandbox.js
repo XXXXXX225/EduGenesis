@@ -77,14 +77,14 @@ export function useSandbox({
         }
       }
     } catch (err) {
-      setSandboxTerminal(prev => [...prev, `❌ 运行失败：${err.message}`]);
+      setSandboxTerminal(prev => [...prev, `[运行失败]：${err.message}`]);
     } finally {
       setIsSandboxRunning(false);
     }
   };
 
   const diagnoseSandboxCode = async () => {
-    setSandboxAIAdvice('🧠 [主管智能体] 正在扫描代码特征中...');
+    setSandboxAIAdvice('[主管智能体] 正在扫描代码特征中...');
     try {
       const result = await apiPost('/sandbox/diagnose', {
         code: sandboxCode,
@@ -92,7 +92,7 @@ export function useSandbox({
       });
       setSandboxAIAdvice(result.advice);
     } catch (err) {
-      setSandboxAIAdvice(`❌ 诊断异常：${err.message}`);
+      setSandboxAIAdvice(`[诊断异常]：${err.message}`);
     }
   };
 

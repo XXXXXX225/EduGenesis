@@ -78,7 +78,7 @@ export default function MermaidRenderer({ code }) {
         setSvgHtml(svg);
       } catch (err) {
         console.error("Mermaid Render Error:", err);
-        setSvgHtml(`<div style="color:red; font-size:11px;">⚠️ 脑图编译失败，语法存在分歧</div>`);
+        setSvgHtml(`<div style="color:red; font-size:11px;">[编译异常] 脑图编译失败，语法存在分歧</div>`);
       }
     };
     renderGraph();

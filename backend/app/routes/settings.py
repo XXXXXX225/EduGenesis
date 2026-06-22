@@ -12,10 +12,28 @@ from app.db import (
     db_delete_user_provider,
     db_get_model_routing,
     db_save_model_routing,
-    db_log_agent_action
+    db_log_agent_action,
+    db_get_search_settings,
+    db_save_search_settings,
+    db_get_prompt_templates,
+    db_save_prompt_template,
+    db_set_active_prompt_template,
+    db_delete_prompt_template
 )
 
 router = APIRouter()
+
+class SearchSettingsRequest(BaseModel):
+    search_enabled: bool
+    search_provider: str
+    api_key: Optional[str] = None
+    max_results: int
+
+class PromptTemplateSaveRequest(BaseModel):
+    template_id: str
+    template_name: str
+    system_prompt: str
+    is_active: Optional[bool] = False
 
 class ModelItem(BaseModel):
     name: str
@@ -137,3 +155,55 @@ def save_routing(request: ModelRoutingSaveRequest, current_username: str = Depen
     db_save_model_routing(current_username, routing_data)
     db_log_agent_action(current_username, "主管智能体", "系统智能体模型绑定路由规则已重置。", "info")
     return {"status": "success", "message": "Model routing saved successfully."}
+
+@router.get("/search")
+def get_search_settings_api(current_username: str = Depends(get_current_username)):
+    config = db_get_search_settings(current_username)
+    if config.get("api_key"):
+        config["api_key"] = "••••••••"
+    return config
+
+@router.post("/search")
+def save_search_settings_api(request: SearchSettingsRequest, current_username: str = Depends(get_current_username)):
+    api_key_to_save = request.api_key or ""
+    if api_key_to_save == "••••••••":
+        existing = db_get_search_settings(current_username)
+        api_key_to_save = existing.get("api_key", "")
+        
+    settings_data = request.model_dump()
+    settings_data["api_key"] = api_key_to_save
+    
+    db_save_search_settings(current_username, settings_data)
+    db_log_agent_action(current_username, "主管智能体", "联网搜索配置已更新。", "info")
+    return {"status": "success", "message": "Search settings saved."}
+
+@router.get("/prompt-templates")
+def get_prompt_templates_api(current_username: str = Depends(get_current_username)):
+    return db_get_prompt_templates(current_username)
+
+@router.post("/prompt-templates")
+def save_prompt_template_api(request: PromptTemplateSaveRequest, current_username: str = Depends(get_current_username)):
+    db_save_prompt_template(current_username, request.model_dump())
+    db_log_agent_action(current_username, "主管智能体", f"提示词模板「{request.template_name}」已保存。", "info")
+    return {"status": "success", "message": "Prompt template saved."}
+
+@router.put("/prompt-templates/{template_id}/active")
+def set_active_prompt_template_api(template_id: str, current_username: str = Depends(get_current_username)):
+    templates = db_get_prompt_templates(current_username)
+    match = next((t for t in templates if t["template_id"] == template_id), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="Template not found.")
+    
+    db_set_active_prompt_template(current_username, template_id)
+    db_log_agent_action(current_username, "主管智能体", f"已切换并启用提示词模板「{match['template_name']}」。", "info")
+    return {"status": "success", "message": f"Template {template_id} set as active."}
+
+@router.delete("/prompt-templates/{template_id}")
+def delete_prompt_template_api(template_id: str, current_username: str = Depends(get_current_username)):
+    if template_id in ["academic", "encouraging", "coder", "socratic"]:
+        raise HTTPException(status_code=400, detail="Cannot delete system default templates.")
+        
+    db_delete_prompt_template(current_username, template_id)
+    db_log_agent_action(current_username, "主管智能体", f"已删除提示词模板: {template_id}", "info")
+    return {"status": "success", "message": "Template deleted successfully."}
+

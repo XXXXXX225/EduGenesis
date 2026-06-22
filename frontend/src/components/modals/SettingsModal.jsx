@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Maximize2, Minimize2 } from 'lucide-react';
+import { X, Maximize2, Minimize2, Settings } from 'lucide-react';
 import SettingsView from '../dashboard/SettingsView';
 
 export default function SettingsModal({ isOpen, onClose }) {
@@ -87,7 +87,9 @@ export default function SettingsModal({ isOpen, onClose }) {
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--border-neon)', paddingBottom: '12px', flexShrink: 0 }}>
-          <h3 style={{ fontSize: '20px', fontWeight: '800' }}>⚙️ 模型服务及系统配置</h3>
+          <h3 style={{ fontSize: '20px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Settings size={20} style={{ color: 'var(--primary-neon)' }} /> 模型服务及系统配置
+          </h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <button 
               onClick={() => setIsMaximized(!isMaximized)} 

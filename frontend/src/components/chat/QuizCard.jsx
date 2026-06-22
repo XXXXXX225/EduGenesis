@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HelpCircle, Check, X } from 'lucide-react';
+import { HelpCircle, Check, X, Sparkles } from 'lucide-react';
 
 export default function QuizCard({ quizData }) {
   const [selectedIdx, setSelectedIdx] = useState(null);
@@ -106,7 +106,9 @@ export default function QuizCard({ quizData }) {
           lineHeight: '1.5',
           animation: 'fadeIn 0.3s ease-out'
         }}>
-          <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>🧠 导师学术解析：</strong>
+          <strong style={{ color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+            <Sparkles size={14} style={{ color: 'var(--secondary)' }} /> 导师学术解析：
+          </strong>
           {explanation}
         </div>
       )}

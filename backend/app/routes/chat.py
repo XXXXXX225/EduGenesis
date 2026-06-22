@@ -21,7 +21,12 @@ from app.db import (
     db_clear_chat_sessions,
     db_save_chat_message,
     db_get_chat_messages,
-    db_verify_session_ownership
+    db_verify_session_ownership,
+    db_record_contribution,
+    db_get_search_settings,
+    db_log_agent_action,
+    db_get_model_routing,
+    db_get_user_providers
 )
 from app.limiter import rate_limit_chat
 from app.ai.platform import get_capability_config
@@ -88,6 +93,7 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                 role="user",
                 content=user_msg.content
             )
+            db_record_contribution(target_user, 1)
             
             # Automatically rename the session title if it's currently "新对话" and this is the first user message
             sessions = db_get_chat_sessions(target_user)
@@ -202,6 +208,11 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             subject_id = clean_subject_name(subject)
             user_msg = request.messages[-1].content if request.messages else ""
             knowledge_context = ""
+            search_context = ""
+            
+            # Fetch search configuration
+            search_cfg = db_get_search_settings(target_user)
+            
             if user_msg:
                 if len(request.messages) > 1:
                     optimized_query = await asyncio.to_thread(optimize_rag_query, request.messages, target_user)
@@ -209,6 +220,27 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                 else:
                     optimized_query = user_msg
                 knowledge_context = rag_retrieve_context(optimized_query, subject_id, username=target_user)
+                
+                # Check if Web Search is enabled
+                if search_cfg.get("search_enabled"):
+                    yield f"data: {json.dumps({'type': 'status', 'status': f'🔍 [搜索智能体] 正在检索「{optimized_query}」的最新网络资讯...'})}\n\n"
+                    from app.search_agent import run_web_search
+                    search_results = await asyncio.to_thread(
+                        run_web_search,
+                        optimized_query,
+                        search_cfg.get("search_provider", "duckduckgo"),
+                        search_cfg.get("api_key", ""),
+                        search_cfg.get("max_results", 3)
+                    )
+                    
+                    yield f"data: {json.dumps({'type': 'status', 'status': f'✅ [搜索智能体] 成功检索到 {len(search_results)} 条相关网页内容。'})}\n\n"
+                    db_log_agent_action(target_user, "搜索智能体", f"执行联网搜索「{optimized_query}」，获取到 {len(search_results)} 条网页资讯。", "info")
+                    await asyncio.sleep(0.3)
+                    
+                    if search_results:
+                        search_context = "\n\n[以下是通过互联网实时检索到的最新资讯，你必须参考并结合这些最新事实来回答学生，以保证时效性和准确性]：\n"
+                        for idx, res in enumerate(search_results):
+                            search_context += f"{idx + 1}. 【{res['title']}】({res['link']})\n   内容: {res['snippet']}\n"
 
             stream_response = await asyncio.to_thread(
                 stream_tutor_reply,
@@ -217,7 +249,7 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                 target_user,
                 rec_videos,
                 request.tutor_personality,
-                knowledge_context
+                knowledge_context + search_context
             )
             
             if stream_response and stream_response.status_code == 200:
@@ -467,3 +499,60 @@ def test_check_even():
             await asyncio.sleep(0.2)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@router.get("/chat/sessions/{session_id}/status")
+async def get_chat_session_status(session_id: str, current_username: str = Depends(get_current_username)):
+    if session_id != "new" and session_id != "null" and session_id:
+        if not db_verify_session_ownership(session_id, current_username):
+            raise HTTPException(status_code=403, detail="Access denied. Session does not belong to the user.")
+        messages = db_get_chat_messages(session_id)
+    else:
+        messages = []
+
+    char_count = sum(len(m.get("content", "")) for m in messages)
+    estimated_tokens = int(char_count * 0.8)
+
+    # --- Resolve the actual model from the user's DB routing (not env var) ---
+    routing = db_get_model_routing(current_username)
+    chat_provider_id = routing.get("chat_provider_id", "xunfei")
+    chat_model = routing.get("chat_model", "generalv3.5")
+
+    # Look up provider display name
+    providers = db_get_user_providers(current_username)
+    provider_name = next(
+        (p["provider_name"] for p in providers if p["provider_id"] == chat_provider_id),
+        chat_provider_id
+    )
+
+    # Estimate token limit from provider model list if available
+    token_limit = 8192
+    for p in providers:
+        if p["provider_id"] == chat_provider_id:
+            try:
+                models_list = json.loads(p["models"]) if isinstance(p["models"], str) else p["models"]
+                for m in models_list:
+                    if m.get("name") == chat_model:
+                        tags = m.get("tags", [])
+                        for tag in tags:
+                            if "128K" in tag:
+                                token_limit = 131072
+                            elif "32K" in tag:
+                                token_limit = 32768
+                            elif "16K" in tag:
+                                token_limit = 16384
+            except Exception:
+                pass
+            break
+
+    model_display = f"{provider_name} / {chat_model}"
+
+    percentage = round((estimated_tokens / token_limit) * 100, 2)
+    if percentage > 100:
+        percentage = 100.0
+
+    return {
+        "model_name": model_display,
+        "tokens_used": estimated_tokens,
+        "tokens_limit": token_limit,
+        "percentage": percentage
+    }

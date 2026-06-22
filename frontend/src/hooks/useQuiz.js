@@ -28,10 +28,15 @@ export function useQuiz({
       quiz_accuracy: Math.round(((profile.learning_stats?.quiz_accuracy || 80) + accuracy) / 2)
     };
 
+    const oldReasoning = profile.reasoning !== undefined ? profile.reasoning : 40;
+    const reasoningBump = passed ? 5 : -3;
+    const newReasoning = Math.min(100, Math.max(10, oldReasoning + reasoningBump));
+
     const updatedProfile = {
       ...profile,
       knowledge_base: Math.max(10, profile.knowledge_base - (wrongCount > 0 ? wrongCount * 4 : -5)),
       engagement: Math.min(100, profile.engagement + 5),
+      reasoning: newReasoning,
       learning_stats: updatedStats
     };
 

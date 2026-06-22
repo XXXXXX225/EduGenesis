@@ -137,10 +137,24 @@ def generate_remedy(request: ErrorRemedyRequest, current_username: str = Depends
     db_log_agent_action(target_user, "路径智能体", f"基于错题 [{err_title}] 动态编排加练测试题推送成功。", "info")
     return quiz_data
 
+@router.get("/achievements/contributions")
+def get_user_contributions(current_username: str = Depends(get_current_username)):
+    target_user = current_username
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT date, count FROM user_contributions WHERE username = ? ORDER BY date ASC",
+        (target_user,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return {r[0]: r[1] for r in rows}
+
 @router.get("/achievements/certificate")
 def download_certificate(current_username: str = Depends(get_current_username)):
     target_user = current_username
     profile = db_get_profile(target_user)
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
     
     db_log_agent_action(target_user, "主管智能体", f"用户 [{target_user}] 提交结业证明签发申请。开始校验全部 8 个关卡探索状态...", "info")
     db_log_agent_action(target_user, "安全校验智能体", "学术资格合规审计通过：无违规越狱和作弊标记。", "consensus")
@@ -152,6 +166,8 @@ def download_certificate(current_username: str = Depends(get_current_username)):
         
     try:
         import io
+        import hashlib
+        import random
         from reportlab.lib.pagesizes import letter, landscape
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -159,6 +175,7 @@ def download_certificate(current_username: str = Depends(get_current_username)):
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.cidfonts import UnicodeCIDFont
         from reportlab.pdfbase.pdfmetrics import registerFontFamily
+        from reportlab.graphics.shapes import Drawing, Path
         pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
         registerFontFamily('STSong-Light', normal='STSong-Light', bold='STSong-Light', italic='STSong-Light', boldItalic='STSong-Light')
         font_name = 'STSong-Light'
@@ -166,12 +183,18 @@ def download_certificate(current_username: str = Depends(get_current_username)):
         print(f"Reportlab setup error: {err}")
         raise HTTPException(status_code=500, detail=f"PDF Generation failed due to libraries: {str(err)}")
         
+    hash_input = f"{target_user}:{course_title}"
+    cert_hash = hashlib.sha256(hash_input.encode()).hexdigest()
+    
+    mastered = profile.learning_stats.get("mastered_nodes", 0)
+    has_watermark = mastered < 8
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
         pagesize=landscape(letter),
-        rightMargin=40,
-        leftMargin=40,
+        rightMargin=45,
+        leftMargin=45,
         topMargin=40,
         bottomMargin=40
     )
@@ -195,28 +218,28 @@ def download_certificate(current_username: str = Depends(get_current_username)):
         'CertSub',
         parent=styles['Heading2'],
         fontName=font_name,
-        fontSize=18,
+        fontSize=17,
         textColor=cobalt_color,
         alignment=1,
-        spaceAfter=25
+        spaceAfter=20
     )
     
     text_style = ParagraphStyle(
         'CertText',
         parent=styles['Normal'],
         fontName=font_name,
-        fontSize=13,
+        fontSize=12,
         textColor=gray_color,
-        leading=22,
+        leading=20,
         alignment=1,
-        spaceAfter=20
+        spaceAfter=15
     )
     
     stats_style = ParagraphStyle(
         'CertStats',
         parent=styles['Normal'],
         fontName=font_name,
-        fontSize=11,
+        fontSize=10.5,
         textColor=colors.HexColor('#4b5563'),
         alignment=1,
         spaceAfter=20
@@ -228,14 +251,13 @@ def download_certificate(current_username: str = Depends(get_current_username)):
     story.append(Paragraph("结业证书 (Certificate of Graduation)", title_style))
     
     cert_body = f"兹证明学生 <b>{target_user}</b> 在本系统的自适应多智能体协同学习环境下，" \
-                f"成功通关了 <b>《{course_title}》</b> 个性化课程的全部关卡。<br/>" \
+                f"成功通关了 <b>《{course_title}》</b> 个性化课程 of 全部关卡。<br/>" \
                 f"经主管智能体、画像智能体、路径智能体及安全校验智能体多维度学术诊断与测试，" \
                 f"各项指标达到合格标准，特发此证，以兹鼓励。"
     
     story.append(Paragraph(cert_body, text_style))
     story.append(Spacer(1, 10))
     
-    mastered = profile.learning_stats.get("mastered_nodes", 8)
     accuracy = profile.learning_stats.get("quiz_accuracy", 85)
     study_time = profile.learning_stats.get("study_time", 45)
     
@@ -243,47 +265,171 @@ def download_certificate(current_username: str = Depends(get_current_username)):
                  f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 测验综合正确率: <b>{accuracy}%</b> " \
                  f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 实践时长: <b>{study_time} 分钟</b>"
     story.append(Paragraph(stats_text, stats_style))
-    story.append(Spacer(1, 25))
+    story.append(Spacer(1, 20))
+
+    sig_color = colors.Color(0.11, 0.38, 0.89, 0.2 if has_watermark else 0.9)
     
+    def make_sig(agent_type):
+        d = Drawing(120, 25)
+        p = Path(strokeColor=sig_color, strokeWidth=1.5, strokeLinecap=1, fill=None)
+        if agent_type == "coordinator":
+            p.moveTo(15, 10)
+            p.curveTo(30, 22, 40, 2, 55, 12)
+            p.curveTo(70, 20, 85, 5, 100, 10)
+            p.curveTo(104, 14, 107, 8, 110, 10)
+        elif agent_type == "profiler":
+            p.moveTo(17, 8)
+            p.curveTo(27, 22, 43, 4, 53, 14)
+            p.curveTo(67, 24, 77, 2, 93, 10)
+            p.curveTo(101, 14, 106, 6, 110, 8)
+        elif agent_type == "planner":
+            p.moveTo(18, 12)
+            p.curveTo(31, 2, 45, 22, 58, 10)
+            p.curveTo(71, 2, 85, 18, 98, 8)
+            p.curveTo(103, 4, 107, 12, 110, 10)
+        elif agent_type == "validator":
+            p.moveTo(15, 12)
+            p.curveTo(30, 2, 45, 22, 60, 8)
+            p.curveTo(73, 18, 90, 4, 103, 12)
+            p.curveTo(106, 16, 109, 8, 112, 10)
+        d.add(p)
+        return d
+
+    sig_text_style = ParagraphStyle(
+        'CertSigText',
+        parent=styles['Normal'],
+        fontName=font_name,
+        fontSize=9,
+        textColor=colors.HexColor('#1f2937'),
+        leading=13,
+        alignment=1,
+        spaceAfter=0
+    )
+
     sig_data = [
         [
-            Paragraph("<b>主管智能体</b><br/><font color='#5c6370'>调度委员会主席</font>", text_style),
-            Paragraph("<b>画像智能体</b><br/><font color='#5c6370'>认知指标诊断官</font>", text_style),
-            Paragraph("<b>路径智能体</b><br/><font color='#5c6370'>课程大纲规划师</font>", text_style),
-            Paragraph("<b>安全校验智能体</b><br/><font color='#5c6370'>学术护栏校验官</font>", text_style)
+            [make_sig("coordinator"), Paragraph("<b>主管智能体</b><br/><font color='#5c6370' size='8'>调度委员会主席</font>", sig_text_style)],
+            [make_sig("profiler"), Paragraph("<b>画像智能体</b><br/><font color='#5c6370' size='8'>认知指标诊断官</font>", sig_text_style)],
+            [make_sig("planner"), Paragraph("<b>路径智能体</b><br/><font color='#5c6370' size='8'>课程大纲规划师</font>", sig_text_style)],
+            [make_sig("validator"), Paragraph("<b>安全校验智能体</b><br/><font color='#5c6370' size='8'>学术护栏校验官</font>", sig_text_style)]
         ]
     ]
-    t = Table(sig_data, colWidths=[170, 170, 170, 170])
+    t = Table(sig_data, colWidths=[165, 165, 165, 165])
     t.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('LINEABOVE', (0,0), (-1,-1), 0.5, colors.HexColor('#e5e7eb')),
+        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+        ('LINEABOVE', (0,0), (-1,-1), 0.5, colors.HexColor('#d1d5db')),
     ]))
     story.append(t)
     
     def add_background_border(canvas, doc):
         canvas.saveState()
+        # Outer border
         canvas.setStrokeColor(colors.HexColor('#0d9488'))
         canvas.setLineWidth(3)
         canvas.rect(20, 20, doc.pagesize[0]-40, doc.pagesize[1]-40)
-        canvas.setStrokeColor(colors.HexColor('#1e3a8a'))
+        # Inner border
+        canvas.setStrokeColor(colors.HexColor('#eab308'))
         canvas.setLineWidth(1)
         canvas.rect(25, 25, doc.pagesize[0]-50, doc.pagesize[1]-50)
         
-        canvas.setFillColor(colors.HexColor('#eab308'))
-        p = canvas.beginPath()
-        p.moveTo(80, 50)
-        p.lineTo(100, 70)
-        p.lineTo(90, 100)
-        p.lineTo(70, 100)
-        p.lineTo(60, 70)
-        p.close()
-        canvas.drawPath(p, fill=1, stroke=0)
-        canvas.setFillColor(colors.Ca8a04 if hasattr(colors, 'Ca8a04') else colors.HexColor('#ca8a04'))
-        canvas.circle(80, 80, 20, fill=1, stroke=0)
+        # Corner decorations
+        margin = 25
+        w = doc.pagesize[0] - 50
+        h = doc.pagesize[1] - 50
+        canvas.setLineWidth(1.5)
+        canvas.setStrokeColor(colors.HexColor('#eab308'))
+        
+        # Top-Left corner
+        canvas.line(margin + 5, margin + 5, margin + 15, margin + 5)
+        canvas.line(margin + 5, margin + 5, margin + 5, margin + 15)
+        # Top-Right corner
+        canvas.line(margin + w - 5, margin + 5, margin + w - 15, margin + 5)
+        canvas.line(margin + w - 5, margin + 5, margin + w - 5, margin + 15)
+        # Bottom-Left corner
+        canvas.line(margin + 5, margin + h - 5, margin + 15, margin + h - 5)
+        canvas.line(margin + 5, margin + h - 5, margin + 5, margin + h - 15)
+        # Bottom-Right corner
+        canvas.line(margin + w - 5, margin + h - 5, margin + w - 15, margin + h - 5)
+        canvas.line(margin + w - 5, margin + h - 5, margin + w - 5, margin + h - 15)
+        
+        # Beautiful gold seal
+        seal_x = 80
+        seal_y = doc.pagesize[1] - 80
+        canvas.setFillColor(colors.HexColor('#ca8a04'))
+        canvas.circle(seal_x, seal_y, 25, fill=1, stroke=0)
+        canvas.setFillColor(colors.HexColor('#facc15'))
+        canvas.circle(seal_x, seal_y, 22, fill=1, stroke=0)
+        canvas.setFillColor(colors.HexColor('#ca8a04'))
+        canvas.circle(seal_x, seal_y, 20, fill=1, stroke=0)
+        
         canvas.setFillColor(colors.white)
+        canvas.setFont('Helvetica-Bold', 5)
+        canvas.drawCentredString(seal_x, seal_y + 9, "EDUGENESIS")
         canvas.setFont('Helvetica-Bold', 7)
-        canvas.drawCentredString(80, 78, "VERIFIED")
+        canvas.drawCentredString(seal_x, seal_y - 2, "VERIFIED")
+        canvas.setFont('Helvetica-Bold', 5)
+        canvas.drawCentredString(seal_x, seal_y - 11, "SECURE")
+        
+        # Draw Watermark if unqualified
+        if has_watermark:
+            canvas.setFont('Helvetica-Bold', 55)
+            canvas.setFillColor(colors.HexColor('#ef4444'), alpha=0.08)
+            canvas.saveState()
+            canvas.translate(doc.pagesize[0]/2, doc.pagesize[1]/2)
+            canvas.rotate(28)
+            canvas.drawCentredString(0, 15, "DRAFT / UNVERIFIED")
+            canvas.setFont('STSong-Light', 18)
+            canvas.drawCentredString(0, -15, "学 术 草 稿 / 未 达 结 业 标 准")
+            canvas.restoreState()
+            
+        # Draw cryptographic QR code & verification info
+        qr_x = doc.pagesize[0] - 90
+        qr_y = 45
+        
+        canvas.setFillColor(colors.white)
+        canvas.setStrokeColor(colors.HexColor('#0d9488'))
+        canvas.setLineWidth(1)
+        canvas.rect(qr_x, qr_y, 50, 50, fill=1, stroke=1)
+        
+        try:
+            import qrcode
+            import urllib.parse
+            from reportlab.lib.utils import ImageReader
+            
+            encoded_student = urllib.parse.quote(target_user)
+            encoded_course = urllib.parse.quote(course_title)
+            verify_url = f"{frontend_url}/verify?hash={cert_hash}&student={encoded_student}&course={encoded_course}&accuracy={accuracy}&time={study_time}"
+            
+            qr = qrcode.QRCode(
+                version=None,
+                error_correction=qrcode.constants.ERROR_CORRECT_M,
+                box_size=10,
+                border=1,
+            )
+            qr.add_data(verify_url)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            
+            qr_byte_arr = io.BytesIO()
+            img.save(qr_byte_arr, format='PNG')
+            qr_byte_arr.seek(0)
+            
+            reader = ImageReader(qr_byte_arr)
+            canvas.drawImage(reader, qr_x + 1, qr_y + 1, width=48, height=48)
+        except Exception as qr_err:
+            print(f"Error rendering real QR code in PDF: {qr_err}")
+            canvas.setFillColor(colors.black)
+            canvas.drawString(qr_x + 5, qr_y + 20, "QR Code Error")
+            
+        # Cryptographic Hash label next to QR code
+        canvas.setFont('Helvetica-Bold', 7)
+        canvas.setFillColor(colors.HexColor('#4b5563'))
+        canvas.drawRightString(doc.pagesize[0]-100, 75, "SECURE VERIFICATION HASH:")
+        canvas.setFont('Courier-Bold', 7)
+        canvas.drawRightString(doc.pagesize[0]-100, 63, f"{cert_hash[:32]}")
+        canvas.drawRightString(doc.pagesize[0]-100, 53, f"{cert_hash[32:]}")
+        
         canvas.restoreState()
         
     doc.build(story, onFirstPage=add_background_border)
@@ -296,3 +442,64 @@ def download_certificate(current_username: str = Depends(get_current_username)):
     }
     from fastapi import Response
     return Response(content=pdf_bytes, headers=headers, media_type="application/pdf")
+
+@router.get("/achievements/qrcode")
+def get_qrcode(
+    hash: str,
+    student: str,
+    course: str,
+    accuracy: int,
+    time: int
+):
+    try:
+        import qrcode
+        import urllib.parse
+        from fastapi.responses import Response
+        
+        frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+        encoded_student = urllib.parse.quote(student)
+        encoded_course = urllib.parse.quote(course)
+        
+        verify_url = f"{frontend_url}/verify?hash={hash}&student={encoded_student}&course={encoded_course}&accuracy={accuracy}&time={time}"
+        
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=1,
+        )
+        qr.add_data(verify_url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        
+        return Response(content=buf.getvalue(), media_type="image/png")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"QR generation failed: {str(e)}")
+
+@router.get("/achievements/verify")
+def verify_certificate(
+    hash: str,
+    student: str,
+    course: str
+):
+    import hashlib
+    
+    hash_input = f"{student}:{course}"
+    expected_hash = hashlib.sha256(hash_input.encode()).hexdigest()
+    
+    if hash == expected_hash:
+        return {
+            "valid": True,
+            "student": student,
+            "course": course,
+            "message": "Certificate signature is valid and authentic."
+        }
+    else:
+        return {
+            "valid": False,
+            "message": "Certificate signature verification failed. The certificate may have been modified."
+        }

@@ -73,9 +73,22 @@ def stream_tutor_reply(
     tutor_personality: Optional[str] = None,
     knowledge_context: Optional[str] = None,
 ):
-    system_prompt = f"""你是一个自适应学习系统中的个人AI导师智能体。
+    active_prompt_text = ""
+    try:
+        from app.db import db_get_prompt_templates
+        templates = db_get_prompt_templates(username)
+        active_t = next((t for t in templates if t.get("is_active")), None)
+        if active_t:
+            active_prompt_text = active_t.get("system_prompt", "")
+    except Exception as e:
+        print(f"Error loading prompt template: {e}")
+
+    if not active_prompt_text:
+        active_prompt_text = """你是一个自适应学习系统中的个人AI导师智能体。
 你正在与学生对话。你的语气应该是鼓励性的、专业的、清晰的。
-支持使用 Markdown 格式（加粗、列表、标题），但回答要保持简明扼要，控制在 150 字以内。
+支持使用 Markdown 格式（加粗、列表、标题），但回答要保持简明扼要，控制在 150 字以内。"""
+
+    system_prompt = f"""{active_prompt_text}
 
 学生画像特征（请根据学生的水平和认知风格调整你的解释）：
 {json.dumps(current_profile.model_dump(), ensure_ascii=False)}
@@ -285,22 +298,33 @@ Output STRICTLY a JSON object with keys question, options, answer, explanation. 
 
 
 def diagnose_sandbox_submission(code: str, node_id: str, profile: UserProfile, username: str = "default_user") -> Optional[str]:
+    system_prompt = f"""You are the Academic Diagnostics Agent in an adaptive multi-agent tutoring network.
+Analyze the student's python code, detect bugs/errors, and provide academic diagnostic feedback.
+Topic/Challenge Node: {node_id}
+Student Cognitive Profile:
+- Learning style: {profile.cognitive_style}
+- Common error patterns: {json.dumps(profile.error_patterns, ensure_ascii=False)}
+
+You MUST output your response in Chinese in the following EXACT structured format:
+[EXPLANATION]
+1. <分析第一步，推导并说明当前代码存在的具体逻辑或语法错误成因>
+2. <分析第二步，梳理解题思路与优化的学术路径>
+3. <分析第三步，给出防坑避错提示或根据画像风格的学习建议>
+
+[CODE]
+```python
+<此处提供完整的、可直接运行并通过该关卡测试用例的修复后正确代码>
+```
+"""
     return request_text_completion(
         username,
         "diagnostics",
         [
             {
                 "role": "system",
-                "content": f"""You are the Academic Diagnostics Agent in an adaptive multi-agent tutoring network.
-Analyze the student's python code and provide diagnostic feedback.
-Topic/Challenge Node: {node_id}
-Student Cognitive Profile:
-- Learning style: {profile.cognitive_style}
-- Common error patterns: {json.dumps(profile.error_patterns, ensure_ascii=False)}
-
-Provide a friendly, concise, professional diagnostic in Chinese.""",
+                "content": system_prompt,
             },
-            {"role": "user", "content": f"Here is my code:\n{code}"},
+            {"role": "user", "content": f"这是我当前的代码：\n{code}"},
         ],
         temperature=0.3,
         timeout=10,

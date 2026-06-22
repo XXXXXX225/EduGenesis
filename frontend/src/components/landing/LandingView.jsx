@@ -220,22 +220,22 @@ const LandingView = () => {
 
     const steps = {
       diagnose: [
-        { agent: 'executive', log: '💡 [主管智能体]: 捕获学生在前测输入中提供的兴趣与学术基础。启动画像推演...', consensus: 20 },
-        { agent: 'profile', log: '🧠 [画像智能体]: 基于输入提取关键词 "机器学习", "分类边界"，更新雷达：[理论分析] -> 85%。判定为“硬核理论”风格。', consensus: 50 },
-        { agent: 'path', log: '🗺️ [路径智能体]: 检索知识拓扑图。重构路径：Stage 1 变更为 "梯度下降数学偏导证明"，生成对应课件。', consensus: 80 },
-        { agent: 'security', log: '🔒 [安全校验智能体]: 校验推送的线性公式及学术数据，防幻觉事实检查：PASS。学术安全共识达成！', consensus: 100 }
+        { agent: 'executive', log: '[主管智能体]: 捕获学生在前测输入中提供的兴趣与学术基础。启动画像推演...', consensus: 20 },
+        { agent: 'profile', log: '[画像智能体]: 基于输入提取关键词 "机器学习", "分类边界"，更新雷达：[理论分析] -> 85%。判定为“硬核理论”风格。', consensus: 50 },
+        { agent: 'path', log: '[路径智能体]: 检索知识拓扑图。重构路径：Stage 1 变更为 "梯度下降数学偏导证明"，生成对应课件。', consensus: 80 },
+        { agent: 'security', log: '[安全校验智能体]: 校验推送的线性公式及学术数据，防幻觉事实检查：PASS。学术安全共识达成！', consensus: 100 }
       ],
       sandbox_success: [
-        { agent: 'executive', log: '💡 [主管智能体]: 捕获到用户在 AI 编程沙盒成功通过 PyTest 全量用例。启动学时统计。', consensus: 30 },
-        { agent: 'profile', log: '🧠 [画像智能体]: 雷达更新：[实操应用] +12%，学习时长 +10 分钟。诊断出学生对 Python list 切片熟练度极高。', consensus: 60 },
-        { agent: 'path', log: '🗺️ [路径智能体]: 推进主线关卡。解锁 Stage 2 "面向对象封装 CLI 计算器" 及 "代码重构最佳实践"。', consensus: 85 },
-        { agent: 'security', log: '🔒 [安全校验智能体]: 扫描解锁命令以及写入日志参数安全性。校验共识：SUCCESS。', consensus: 100 }
+        { agent: 'executive', log: '[主管智能体]: 捕获到用户在 AI 编程沙盒成功通过 PyTest 全量用例。启动学时统计。', consensus: 30 },
+        { agent: 'profile', log: '[画像智能体]: 雷达更新：[实操应用] +12%，学习时长 +10 分钟。诊断出学生对 Python list 切片熟练度极高。', consensus: 60 },
+        { agent: 'path', log: '[路径智能体]: 推进主线关卡。解锁 Stage 2 "面向对象封装 CLI 计算器" 及 "代码重构最佳实践"。', consensus: 85 },
+        { agent: 'security', log: '[安全校验智能体]: 扫描解锁命令以及写入日志参数安全性。校验共识：SUCCESS。', consensus: 100 }
       ],
       remedy: [
-        { agent: 'executive', log: '💡 [主管智能体]: 捕获到用户在单元测试中产生 IndexOutOfBoundsError。紧急触发纠偏。', consensus: 25 },
-        { agent: 'profile', log: '🧠 [画像智能体]: 画像微调：[易错倾向-越界率] 增加。标记知识漏洞 "数组边界"，写入错题 ledger。', consensus: 55 },
-        { agent: 'path', log: '🗺️ [路径智能体]: 中止主线推进。动态回溯，逆向从错题库调度同类考点 MCQ 测试，开启靶向纠偏。', consensus: 80 },
-        { agent: 'security', log: '🔒 [安全校验智能体]: 检索错题模板，过滤可能产生的歧义代码，安全审核：PASS。靶向训练包分发！', consensus: 100 }
+        { agent: 'executive', log: '[主管智能体]: 捕获到用户在单元测试中产生 IndexOutOfBoundsError。紧急触发纠偏。', consensus: 25 },
+        { agent: 'profile', log: '[画像智能体]: 画像微调：[易错倾向-越界率] 增加。标记知识漏洞 "数组边界"，写入错题 ledger。', consensus: 55 },
+        { agent: 'path', log: '[路径智能体]: 中止主线推进。动态回溯，逆向从错题库调度同类考点 MCQ 测试，开启靶向纠偏。', consensus: 80 },
+        { agent: 'security', log: '[安全校验智能体]: 检索错题模板，过滤可能产生的歧义代码，安全审核：PASS。靶向训练包分发！', consensus: 100 }
       ]
     };
 

@@ -12,7 +12,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Strict CORS configuration - Allow only default local Vite dev port to call the backend APIs
+# CORS configuration - Allow local dev ports and production domain
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -23,7 +23,9 @@ app.add_middleware(
         "http://localhost:5175",
         "http://127.0.0.1:5175",
         "http://localhost:3000",
-        "http://127.0.0.1:3000"
+        "http://127.0.0.1:3000",
+        "https://edugenesis.ccwu.cc",
+        "http://edugenesis.ccwu.cc",
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],

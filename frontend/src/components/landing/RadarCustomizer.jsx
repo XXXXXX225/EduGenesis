@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AlertTriangle, AlertOctagon, Trophy, TrendingUp } from 'lucide-react';
 
 const RadarCustomizer = () => {
   // 3 user knobs (10 - 100)
@@ -34,21 +35,26 @@ const RadarCustomizer = () => {
   let recommendDesc = "";
   let recommendType = "info";
 
+  let recommendIcon = null;
   if (coding < 35) {
     recommendType = "warning";
-    recommendTitle = "⚠️ 诊断结果：编程动手基底薄弱";
+    recommendIcon = <AlertTriangle size={14} style={{ color: '#f59e0b' }} />;
+    recommendTitle = "诊断结果：编程动手基底薄弱";
     recommendDesc = "画像智能体检测到您在语法结构 and 代码改错上存在明显盲区。路径智能体自动拦截前沿理论模块，已在您 timeline 的 Stage 3 沙盒层强制挂载 3 张概念 MCQ 选择题微课。";
   } else if (security < 35) {
     recommendType = "danger";
-    recommendTitle = "🚫 诊断结果：代码安全与边界意识欠缺";
+    recommendIcon = <AlertOctagon size={14} style={{ color: '#ef4444' }} />;
+    recommendTitle = "诊断结果：代码安全与边界意识欠缺";
     recommendDesc = "由于算法边界及内存过滤机制评分较低，系统判定您在生产端编写代码时易发生溢出和不洁注入。推荐：锁定前驱任务，强制激活隔离沙盒的“全面监视模式”。";
   } else if (coding >= 70 && concept >= 70 && security >= 60) {
     recommendType = "success";
-    recommendTitle = "🏆 诊断结果：自适应学习画像评级为 - 卓越";
+    recommendIcon = <Trophy size={14} style={{ color: '#10b981' }} />;
+    recommendTitle = "诊断结果：自适应学习画像评级为 - 卓越";
     recommendDesc = "您的各项认知能力已全面收敛，画像智能体联合路径、沙盒主管会签成功。自动授予《大模型自适应微专业毕业证书》，结业 PDF 证书已开放下载！";
   } else {
     recommendType = "info";
-    recommendTitle = "🚀 诊断结果：学习画像均衡稳健发展中";
+    recommendIcon = <TrendingUp size={14} style={{ color: '#3b82f6' }} />;
+    recommendTitle = "诊断结果：学习画像均衡稳健发展中";
     recommendDesc = "当前认知脉络合理收敛。画像智能体实时生成 4 道靶向巩固测验题。保持探索，建议在沙盒中增加代码行数以进一步提高调试分数。";
   }
 
@@ -111,7 +117,10 @@ const RadarCustomizer = () => {
           boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
           transition: 'all 0.3s ease'
         }}>
-          <h4 style={{ margin: '0 0 6px', fontSize: '13px', fontWeight: 'bold', color: 'var(--text-main)' }}>{recommendTitle}</h4>
+          <h4 style={{ margin: '0 0 6px', fontSize: '13px', fontWeight: 'bold', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {recommendIcon}
+            <span>{recommendTitle}</span>
+          </h4>
           <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>{recommendDesc}</p>
         </div>
       </div>

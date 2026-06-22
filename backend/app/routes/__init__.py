@@ -9,6 +9,8 @@ from app.routes.errors import router as errors_router
 from app.routes.console import router as console_router
 from app.routes.settings import router as settings_router
 from app.routes.kb import router as kb_router
+from app.routes.admin import router as admin_router
+from app.routes.auth_recovery import router as auth_recovery_router
 from app.db import init_db
 
 router = APIRouter()
@@ -23,6 +25,8 @@ router.include_router(errors_router)
 router.include_router(console_router)
 router.include_router(settings_router, prefix="/settings")
 router.include_router(kb_router, prefix="/kb")
+router.include_router(admin_router)
+router.include_router(auth_recovery_router)
 
 # Ensure DB is initialized
 init_db()

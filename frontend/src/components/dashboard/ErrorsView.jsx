@@ -1,5 +1,5 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, AlertTriangle, Sparkles } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 
 const modalHeaderStyle = {
@@ -31,8 +31,8 @@ export default function ErrorsView() {
   return (
     <>
       <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px', marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px', color: 'var(--text-main)' }}>
-          ⚠️ 智能错题加固本
+        <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <AlertTriangle size={16} style={{ color: 'var(--warning)' }} /> 智能错题加固本
         </h3>
         <p style={{ color: 'var(--text-muted)', fontSize: '11px', margin: 0, lineHeight: '1.4' }}>
           画像智能体为您记录的所有自适应测验易错题包。
@@ -81,7 +81,7 @@ export default function ErrorsView() {
                 className="cyber-btn"
                 style={{ padding: '6px 10px', fontSize: '10.5px', flexGrow: 1, justifyContent: 'center' }}
               >
-                💡 智能体解析
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Sparkles size={12} /> 智能体解析</span>
               </button>
               <button
                 type="button"

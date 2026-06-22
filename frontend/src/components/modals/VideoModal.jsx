@@ -212,7 +212,7 @@ export default function VideoModal({ isOpen, onClose, videos, nodeTitle }) {
                   fontWeight: '800', 
                   letterSpacing: '0.05em' 
                 }}>
-                  <Sparkles size={14} /> 🧠 画像智能体推荐
+                  <Sparkles size={14} /> 画像智能体推荐
                 </span>
                 <span style={{ 
                   fontSize: '11px', 

@@ -83,7 +83,7 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
     const userMessage = { role: 'user', content: messageText };
     setChatHistory(prev => [...prev, userMessage]);
     setIsStreaming(true);
-    setTutorStatus('🧠 [主管智能体] 正在唤醒协同网络...');
+    setTutorStatus('[主管智能体] 正在唤醒协同网络...');
 
     if (typingTimerRef.current) {
       clearTimeout(typingTimerRef.current);
@@ -147,7 +147,7 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
       setChatHistory(prev => {
         const updated = [...prev];
         if (updated.length > 0) {
-          updated[updated.length - 1].content = '⚠️ 本地后端服务未运行。请打开终端进入 backend/ 目录并运行 `python main.py`，再试一次。';
+          updated[updated.length - 1].content = '[警告] 本地后端服务未运行。请打开终端进入 backend/ 目录并运行 `python main.py`，再试一次。';
         }
         return updated;
       });

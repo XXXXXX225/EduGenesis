@@ -47,3 +47,12 @@ Thumbs.db
 scratch/
 .superpowers/
 
+# Zip archives and presentation files
+*.zip
+*.pptx
+
+# Temporary scripts and transcripts
+backend/transcript_decoded.txt
+backend/read_transcript.py
+backend/reseed_rag.py
+backend/manage_accounts.py

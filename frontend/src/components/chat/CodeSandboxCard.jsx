@@ -21,8 +21,8 @@ export default function CodeSandboxCard({ code, lang }) {
   const handleRun = async () => {
     if (isRunning) return;
     setIsRunning(true);
-    setRunLogs(['$ python demo.py', '🤖 [安全校验智能体] 正在扫描代码特征与安全检测...', '⚡ 正在装载虚拟沙箱运行代码...']);
-
+    setRunLogs(['$ python demo.py', '[安全校验智能体] 正在扫描代码特征与安全检测...', '正在装载虚拟沙箱运行代码...']);
+ 
     try {
       const response = await apiPost('/sandbox/run_raw', { code: editableCode });
       if (response.status === 'success') {
@@ -30,7 +30,7 @@ export default function CodeSandboxCard({ code, lang }) {
         setRunLogs(prev => [
           ...prev,
           ...consoleLines,
-          '\n✅ 运行完毕。'
+          '\n[成功] 运行完毕。'
         ]);
       } else {
         const consoleLines = (response.console_output || '').split('\n').filter(Boolean);
@@ -38,14 +38,14 @@ export default function CodeSandboxCard({ code, lang }) {
         setRunLogs(prev => [
           ...prev,
           ...consoleLines,
-          ...errorLines.map(line => `❌ ${line}`),
-          '\n❌ 运行失败。'
+          ...errorLines.map(line => `[错误] ${line}`),
+          '\n[失败] 运行失败。'
         ]);
       }
     } catch (err) {
       setRunLogs(prev => [
         ...prev,
-        `❌ 网络异常或接口错误：${err.message}`
+        `[错误] 网络异常或接口错误：${err.message}`
       ]);
     } finally {
       setIsRunning(false);

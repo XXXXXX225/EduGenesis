@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Download, FileText, Video, Map, HelpCircle, Code2 } from 'lucide-react';
+import { ArrowRight, Download, FileText, Video, Map, HelpCircle, Code2, BookOpen } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 
 const getResourceIcon = (type) => {
@@ -29,8 +29,8 @@ export default function ResourcesView() {
   return (
     <>
       <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px', marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px', color: 'var(--text-main)' }}>
-          📚 关卡智能资源包
+        <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <BookOpen size={16} style={{ color: 'var(--primary)' }} /> 关卡智能资源包
         </h3>
         <p style={{ color: 'var(--text-muted)', fontSize: '11px', margin: 0, lineHeight: '1.4' }}>
           多智能体已根据您的特征，为您配齐以下自适应学习资源：

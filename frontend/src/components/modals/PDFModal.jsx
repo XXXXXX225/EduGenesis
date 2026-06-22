@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, FileText, MessageSquare, Send, Sparkles, BookOpen } from 'lucide-react';
+import { X, FileText, MessageSquare, Send, Sparkles, BookOpen, Zap, AlertTriangle } from 'lucide-react';
 import { apiSSEStream } from '../../utils/api';
 import { useAppContext } from '../../context/AppContext';
 import QuizCard from '../chat/QuizCard';
@@ -249,7 +249,7 @@ export default function PDFModal({ isOpen, onClose, pdfContent, nodeTitle }) {
     const nextMessages = [...tutorMessages, userMsg];
     setTutorMessages(nextMessages);
     setIsTutorStreaming(true);
-    setTutorStatus('🧠 [主管智能体] 正在分派问答任务...');
+    setTutorStatus('[主管智能体] 正在分派问答任务...');
 
     // Placeholder for assistant stream content
     const assistantPlaceholder = { role: 'assistant', content: '' };
@@ -289,7 +289,7 @@ Provide a friendly, encouraging, and academically accurate explanation to the st
       });
     } catch (err) {
       console.error('Tutor chat failed:', err);
-      setTutorStatus(`❌ 接口异常: ${err.message}`);
+      setTutorStatus(`[接口异常]: ${err.message}`);
       setIsTutorStreaming(false);
     }
   };
@@ -299,7 +299,7 @@ Provide a friendly, encouraging, and academically accurate explanation to the st
     if (selectedText) {
       setTutorInput(prev => prev + (prev ? '\n' : '') + `关于这段课本文字：\n"${selectedText}"\n我想请问：`);
     } else {
-      await showCustomAlert('💡 智能提示：请先用鼠标在左侧课本中框选需要提问的段落文字，然后再点击本按钮导入！');
+      await showCustomAlert('智能提示：请先用鼠标在左侧课本中框选需要提问的段落文字，然后再点击本按钮导入！');
     }
   };
 
@@ -362,10 +362,11 @@ Provide a friendly, encouraging, and academically accurate explanation to the st
         </div>
 
         {/* Content Workspace */}
-        <div style={{ display: 'flex', gap: '20px', flexGrow: 1, overflow: 'hidden', padding: '16px 0' }}>
+        <div className="pdf-modal-workspace" style={{ display: 'flex', gap: '20px', flexGrow: 1, overflow: 'hidden', padding: '16px 0' }}>
           
           {/* Left Column: PDF Text Reader */}
           <div
+            className={`pdf-modal-reader ${showTutor ? 'with-tutor' : ''}`}
             style={{
               flex: showTutor ? '0 0 calc(58% - 10px)' : '1 1 100%',
               overflowY: 'auto',
@@ -384,6 +385,7 @@ Provide a friendly, encouraging, and academically accurate explanation to the st
           {/* Right Column: AI Tutor Chat Panel */}
           {showTutor && (
             <div
+              className="pdf-modal-tutor"
               style={{
                 flex: '0 0 calc(42% - 10px)',
                 display: 'flex',
@@ -464,20 +466,22 @@ Provide a friendly, encouraging, and academically accurate explanation to the st
  
                {/* Quick Prompt Shortcuts */}
                <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                 <button
-                   onClick={() => handleSendQuestion(`请帮我用一句话概括这节课本《${nodeTitle}》的核心骨架与学习难点。`)}
-                   disabled={isTutorStreaming}
-                   className="tutor-shortcut-btn"
-                 >
-                   ⚡ 核心梗概
-                 </button>
-                 <button
-                   onClick={() => handleSendQuestion("在这章内容中，最容易让初学者踩坑或报错的编码模式是哪些？")}
-                   disabled={isTutorStreaming}
-                   className="tutor-shortcut-btn"
-                 >
-                   ⚠️ 常见避坑点
-                 </button>
+                  <button
+                    onClick={() => handleSendQuestion(`请帮我用一句话概括这节课本《${nodeTitle}》的核心骨架与学习难点。`)}
+                    disabled={isTutorStreaming}
+                    className="tutor-shortcut-btn"
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Zap size={12} className="text-secondary-neon" /> 核心梗概
+                  </button>
+                  <button
+                    onClick={() => handleSendQuestion("在这章内容中，最容易让初学者踩坑或报错的编码模式是哪些？")}
+                    disabled={isTutorStreaming}
+                    className="tutor-shortcut-btn"
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <AlertTriangle size={12} className="text-amber-500" /> 常见避坑点
+                  </button>
                </div>
  
                {/* Chat Send Input Box */}

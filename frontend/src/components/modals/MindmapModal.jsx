@@ -176,6 +176,24 @@ export default function MindmapModal({ isOpen, onClose, mindmapContent, nodeTitl
     setIsDragging(false);
   }, []);
 
+  const handleTouchStart = useCallback((e) => {
+    if (e.touches.length !== 1) return;
+    setIsDragging(true);
+    const touch = e.touches[0];
+    dragStartRef.current = { x: touch.clientX - panX, y: touch.clientY - panY };
+  }, [panX, panY]);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setPanX(touch.clientX - dragStartRef.current.x);
+    setPanY(touch.clientY - dragStartRef.current.y);
+  }, [isDragging]);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
   if (!isOpen || !mindmapContent) return null;
 
   const controlButtonStyle = {
@@ -217,6 +235,9 @@ export default function MindmapModal({ isOpen, onClose, mindmapContent, nodeTitl
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
           style={{
             margin: '16px 0',
             border: '1px solid rgba(255,255,255,0.06)',

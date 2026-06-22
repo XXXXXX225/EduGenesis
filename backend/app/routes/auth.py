@@ -29,8 +29,8 @@ def register_user(request: RegisterRequest):
     pwd_hash = get_password_hash(request.password, request.username)
     goals_str = ",".join(request.learning_goals)
     cursor.execute(
-        "INSERT INTO users (username, password_hash, cognitive_style, learning_goals) VALUES (?, ?, ?, ?)",
-        (request.username, pwd_hash, request.cognitive_style, goals_str)
+        "INSERT INTO users (username, password_hash, cognitive_style, learning_goals, role) VALUES (?, ?, ?, ?, ?)",
+        (request.username, pwd_hash, request.cognitive_style, goals_str, 'user')
     )
     conn.commit()
     conn.close()
@@ -59,13 +59,14 @@ def register_user(request: RegisterRequest):
         "username": request.username,
         "access_token": access_token,
         "token_type": "bearer",
+        "role": "user",
     }
 
 @router.post("/auth/login")
 def login_user(request: LoginRequest):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT password_hash, cognitive_style, learning_goals FROM users WHERE username = ?", (request.username,))
+    cursor.execute("SELECT password_hash, cognitive_style, learning_goals, role FROM users WHERE username = ?", (request.username,))
     row = cursor.fetchone()
     conn.close()
     
@@ -78,6 +79,7 @@ def login_user(request: LoginRequest):
     pwd_hash = row[0]
     cognitive_style = row[1]
     learning_goals = row[2].split(",") if row[2] else []
+    role = row[3] if len(row) > 3 and row[3] else "user"
     
     if not pwd_hash.startswith("pbkdf2_sha256$"):
         # Migrate from old SHA-256 hash
@@ -132,4 +134,5 @@ def login_user(request: LoginRequest):
         "learning_goals": learning_goals,
         "access_token": access_token,
         "token_type": "bearer",
+        "role": role,
     }

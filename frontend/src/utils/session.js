@@ -21,27 +21,31 @@ export function isAuthenticated() {
   return Boolean(token) && isLoggedIn;
 }
 
-export function saveSession({ accessToken, username }, remember = false) {
+export function saveSession({ accessToken, username, role }, remember = false) {
   const storage = remember ? local : session;
   const otherStorage = remember ? session : local;
 
   // 清除另一个存储以避免状态不一致
   otherStorage.removeItem(ACCESS_TOKEN_KEY);
   otherStorage.removeItem(USERNAME_KEY);
+  otherStorage.removeItem('userRole');
   otherStorage.removeItem(LOGGED_IN_KEY);
 
   storage.setItem(ACCESS_TOKEN_KEY, accessToken);
   storage.setItem(USERNAME_KEY, username);
+  storage.setItem('userRole', role || 'user');
   storage.setItem(LOGGED_IN_KEY, 'true');
 }
 
 export function clearSession() {
   session.removeItem(ACCESS_TOKEN_KEY);
   session.removeItem(USERNAME_KEY);
+  session.removeItem('userRole');
   session.removeItem(LOGGED_IN_KEY);
   
   local.removeItem(ACCESS_TOKEN_KEY);
   local.removeItem(USERNAME_KEY);
+  local.removeItem('userRole');
   local.removeItem(LOGGED_IN_KEY);
 }
 
