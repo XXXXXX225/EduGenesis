@@ -1,5 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { HelpCircle, ChevronRight, ChevronLeft, X, Play } from 'lucide-react';
+import { 
+  HelpCircle, 
+  ChevronRight, 
+  ChevronLeft, 
+  X, 
+  Play,
+  Sparkles,
+  MessageSquare,
+  User,
+  TrendingUp,
+  BookOpen,
+  Code2,
+  Cpu,
+  GraduationCap,
+  Settings
+} from 'lucide-react';
 
 export default function OnboardingTour({ isTourActive, setIsTourActive, setActiveTab }) {
   const [activeStep, setActiveStep] = useState(0);
@@ -7,73 +22,86 @@ export default function OnboardingTour({ isTourActive, setIsTourActive, setActiv
 
   const steps = [
     {
-      title: "🎓 欢迎来到 EduGenesis 学术研学系统",
+      title: "欢迎来到 EduGenesis 学术研学系统",
+      icon: <Sparkles size={16} style={{ color: 'var(--primary-neon)' }} />,
       content: "EduGenesis 融合了「动态认知画像」与「自适应多智能体协同」技术。接下来我们将带您进行快速探索，了解各模块的使用技巧！",
       selector: "center",
       placement: "center"
     },
     {
-      title: "💬 智能画像导师",
+      title: "智能画像导师",
+      icon: <MessageSquare size={16} style={{ color: 'var(--primary-neon)' }} />,
       content: "左侧是您的核心对话区。在这里您可以与画像导师自由讨论学术问题或接受随堂考核，导师的反馈将实时动态修正右侧的数据面板。",
       selector: ".desktop-only-chat",
       placement: "left-panel"
     },
     {
-      title: "📊 认知画像与统计",
+      title: "认知画像与统计",
+      icon: <User size={16} style={{ color: 'var(--primary-neon)' }} />,
       content: "在这里您能查看到由 AI 实时建模渲染的个人知识雷达、打卡统计以及通关率。您甚至可以拖动雷达轴线自定义您的「认知基准调节阀」。",
       selector: ".right-sidebar-content-viewport",
       placement: "right-sidebar",
       action: () => setActiveTab('home')
     },
     {
-      title: "🗺️ 自适应学习脉络",
+      title: "自适应学习脉络",
+      icon: <TrendingUp size={16} style={{ color: 'var(--primary-neon)' }} />,
       content: "这是基于您的认知画像智能规划生成的关卡式课程地图。AI 会对难度进行剪枝与对齐。绿色节点代表您已掌握，橙色进行中，灰色代表待探索。",
       selector: ".right-sidebar-content-viewport",
       placement: "right-sidebar",
       action: () => setActiveTab('path')
     },
     {
-      title: "📚 多模态定制资源",
-      content: "想要更系统的阅读？在这里，智能体会为您实时抽取出定制化的概念课本讲解、PPT大纲以及配套的 AI 语音小讲堂，并支持导出学术防伪证书。",
+      title: "多模态定制资源",
+      icon: <BookOpen size={16} style={{ color: 'var(--primary-neon)' }} />,
+      content: "想要更系统的阅读？在这里，智能体会为您实时抽取出定制化的概念课本讲解、PPT大纲以及配套 of AI 语音小讲堂，并支持导出学术防伪证书。",
       selector: ".right-sidebar-content-viewport",
       placement: "right-sidebar",
       action: () => setActiveTab('resources')
     },
     {
-      title: "💻 自适应编程沙盒",
+      title: "自适应编程沙盒",
+      icon: <Code2 size={16} style={{ color: 'var(--primary-neon)' }} />,
       content: "极客实践中心。无需在本地搭建任何开发环境，您就可以在这里编写和运行 Python 代码，系统还提供随堂单元测试和智能纠错诊断功能。",
       selector: ".right-sidebar-content-viewport",
       placement: "right-sidebar",
       action: () => setActiveTab('sandbox')
     },
     {
-      title: "❓ 智能错题加固",
+      title: "智能错题加固",
+      icon: <HelpCircle size={16} style={{ color: 'var(--primary-neon)' }} />,
       content: "所有考核中答错的问题都会被收录在此。您可以在这里开展复盘练习，查看 AI 给出的多维解题剖析，直到最终熟练掌握并通过补考。",
       selector: ".right-sidebar-content-viewport",
       placement: "right-sidebar",
       action: () => setActiveTab('errors')
     },
     {
-      title: "⚙️ 智能体运行日志",
+      title: "智能体运行日志",
+      icon: <Cpu size={16} style={{ color: 'var(--primary-neon)' }} />,
       content: "这是后台智能体协作的心流轨迹展示墙。您能在这里实时监督主管智能体、认知诊断官、大纲编写官在为您计算时的逻辑链路与思考历程。",
       selector: ".right-sidebar-content-viewport",
       placement: "right-sidebar",
       action: () => setActiveTab('agent-console')
     },
     {
-      title: "🏆 学术勋章与成就",
+      title: "学术勋章与成就",
+      icon: <GraduationCap size={16} style={{ color: 'var(--primary-neon)' }} />,
       content: "记录您在 EduGenesis 平台的学术探索轨迹。这里将记录您的连续研学天数、积分累计，以及因为展现特定学习风格而斩获的炫酷勋章。",
       selector: ".right-sidebar-content-viewport",
       placement: "right-sidebar",
       action: () => setActiveTab('achievements')
     },
     {
-      title: "🔧 账号安全与大模型路由",
+      title: "账号安全与大模型路由",
+      icon: <Settings size={16} style={{ color: 'var(--primary-neon)' }} />,
       content: "点击顶部的设置齿轮，您可以随时切换系统底层的 LLM 引擎路由（支持星火、OpenAI兼容接口等），并配置自定义密保问题及二次验证器（2FA）以增强账户安全性。",
       selector: "button[title='模型服务配置']",
       placement: "settings-cog"
     }
   ];
+
+  // ... (keep the rest unchanged until render block)
+
 
   useEffect(() => {
     if (!isTourActive) return;
@@ -284,9 +312,13 @@ export default function OnboardingTour({ isTourActive, setIsTourActive, setActiv
             fontWeight: '800', 
             marginBottom: '10px', 
             color: 'var(--text-main)',
-            lineHeight: '1.4' 
+            lineHeight: '1.4',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
           }}
         >
+          {currentStep.icon}
           {currentStep.title}
         </h3>
 

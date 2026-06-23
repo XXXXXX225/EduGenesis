@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TrendingUp, CheckCircle2, Sparkles, ChevronRight, BookOpen, Cpu, Code2, Save, AlertTriangle, Ban, Trophy, Rocket, Palette, Search } from 'lucide-react';
+import { TrendingUp, CheckCircle2, Sparkles, ChevronRight, BookOpen, Cpu, Code2, Save, AlertTriangle, Ban, Trophy, Rocket, Palette, Search, GraduationCap } from 'lucide-react';
 import { gsap } from 'gsap';
 import { useAppContext } from '../../context/AppContext';
 import { apiPost } from '../../utils/api';
@@ -509,9 +509,13 @@ export default function HomeView() {
       <header className="cyber-card" style={{ padding: '24px 20px', background: 'linear-gradient(135deg, rgba(15, 118, 110, 0.08) 0%, rgba(29, 78, 216, 0.04) 100%)', borderLeft: '4px solid var(--primary-neon)' }}>
         <div className="home-banner-flex" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '0' }}>
-            <div className="neon-badge neon-badge-primary" style={{ marginBottom: '14px', display: 'inline-block', maxWidth: '100%', wordBreak: 'break-word' }}>🎓 学术研学中心 (Academic Dashboard)</div>
+            <div className="neon-badge neon-badge-primary" style={{ marginBottom: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px', maxWidth: '100%', wordBreak: 'break-word' }}>
+              <GraduationCap size={12} />
+              学术研学中心 (Academic Dashboard)
+            </div>
             <h2 style={{ fontSize: '22px', fontWeight: '900', marginBottom: '10px', lineHeight: '1.3' }} className="neon-text-gradient">
-              欢迎回来，{profile.username || '学力体验官'} 👋
+              欢迎回来，{profile.username || '学力体验官'} 
+              <Sparkles size={18} style={{ color: 'var(--primary-neon)', display: 'inline-block', verticalAlign: 'middle', marginLeft: '8px' }} />
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '13px', maxWidth: '680px', lineHeight: '1.6', margin: '0 0 16px 0' }}>
               自适应认知画像导师已装载完毕。当前您的最佳首选学习风格为【{profile.cognitive_style}】。系统已根据您在 [{profile.learning_goals.join(', ')}] 的学习反馈进行了 {profile.learning_stats?.mastered_nodes || 0} 个关卡的剪枝与难度对齐。主管智能体与画像分析官实时在线，守护您的极客研学之旅。
