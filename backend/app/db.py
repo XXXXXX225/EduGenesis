@@ -1280,7 +1280,7 @@ def init_db():
     cursor.execute("DELETE FROM users WHERE username IN ('default_user', 'admin')")
     cursor.execute("DELETE FROM user_profiles WHERE username IN ('default_user', 'admin')")
     cursor.execute("DELETE FROM user_path_nodes WHERE username IN ('default_user', 'admin')")
-    cursor.execute("DELETE FROM user_resources WHERE username IN ('default_user', 'admin')")
+    cursor.execute("DELETE FROM user_resources")
     cursor.execute("DELETE FROM registered_courses WHERE course_id IN ('python_basics', 'machine_learning')")
     cursor.execute("DELETE FROM user_llm_providers WHERE username IN ('default_user', 'admin')")
     cursor.execute("DELETE FROM user_model_routing WHERE username IN ('default_user', 'admin')")
