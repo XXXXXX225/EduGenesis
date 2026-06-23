@@ -19,6 +19,7 @@ import {
 export default function OnboardingTour({ isTourActive, setIsTourActive, setActiveTab }) {
   const [activeStep, setActiveStep] = useState(0);
   const [spotlight, setSpotlight] = useState({ left: 0, top: 0, width: 0, height: 0, active: false });
+  const [dontShowAgain, setDontShowAgain] = useState(false);
 
   const steps = [
     {
@@ -163,7 +164,11 @@ export default function OnboardingTour({ isTourActive, setIsTourActive, setActiv
   };
 
   const handleComplete = () => {
-    localStorage.setItem('edugenesis_onboarding_completed', 'true');
+    if (dontShowAgain) {
+      localStorage.setItem('edugenesis_onboarding_completed', 'true');
+    } else {
+      localStorage.removeItem('edugenesis_onboarding_completed');
+    }
     setIsTourActive(false);
     setActiveStep(0);
   };
@@ -337,25 +342,16 @@ export default function OnboardingTour({ isTourActive, setIsTourActive, setActiv
 
         {/* Card Actions */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {/* Skip button */}
-          <button
-            onClick={handleComplete}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              fontSize: '11.5px',
-              color: 'var(--text-dim)',
-              cursor: 'pointer',
-              fontWeight: '500',
-              padding: '4px 8px',
-              borderRadius: '6px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-main)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-dim)'}
-          >
-            跳过指引
-          </button>
+          {/* Checkbox "以后不再提示" */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-dim)', cursor: 'pointer', userSelect: 'none' }}>
+            <input 
+              type="checkbox" 
+              checked={dontShowAgain} 
+              onChange={(e) => setDontShowAgain(e.target.checked)}
+              style={{ accentColor: 'var(--primary-neon)', cursor: 'pointer' }}
+            />
+            以后不再提示
+          </label>
 
           {/* Nav group */}
           <div style={{ display: 'flex', gap: '8px' }}>
