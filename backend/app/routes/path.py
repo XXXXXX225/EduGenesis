@@ -209,6 +209,9 @@ def complete_node(request: CompleteNodeRequest, current_username: str = Depends(
             
         db_log_agent_action(target_user, "路径智能体", f"关卡节点 [{request.node_id}] 通关标记更新，解锁下一阶段关卡。", "info")
         
+    # Save the updated path nodes list first so subsequent db calls see the updated status!
+    db_save_path_nodes(target_user, nodes)
+        
     # Dynamic path reinforcement: check error tags and insert reinforcement node
     error_tags = db_get_error_tags(target_user)
     if error_tags:
@@ -218,7 +221,7 @@ def complete_node(request: CompleteNodeRequest, current_username: str = Depends(
     if request.node_id.startswith("reinforce_"):
         nodes = db_delete_reinforcement_node(target_user, request.node_id)
         
-    # Save the updated path nodes list
+    # Save the updated path nodes list again (after insertion/deletion)
     db_save_path_nodes(target_user, nodes)
     
     # Update mastered count in profile

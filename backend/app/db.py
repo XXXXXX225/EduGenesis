@@ -448,6 +448,22 @@ if __name__ == "__main__":
             }
         ]
 
+    # Clean the subject name to map to "python_basics" or "machine_learning"
+    from app.knowledge_base import clean_subject_name
+    from app.course_resources_data import get_curated_resources_for_node
+    
+    subject_cleaned = clean_subject_name(subject)
+    curated = get_curated_resources_for_node(subject_cleaned, node_id)
+    if curated:
+        if "quiz" in curated:
+            quiz_content = curated["quiz"]
+        if "slides" in curated:
+            slide_content = curated["slides"]
+        if "code" in curated:
+            code_content = curated["code"]
+        if "videos" in curated:
+            video_fallback_content = curated["videos"]
+
     return {
         "pdf": pdf_content,
         "slide": slide_content,
@@ -456,6 +472,7 @@ if __name__ == "__main__":
         "mindmap": mindmap_content,
         "video": video_fallback_content
     }
+
 
 # Database CRUD functions
 def db_get_profile(username: str) -> UserProfile:
@@ -560,7 +577,8 @@ def db_get_path_nodes(username: str) -> List[PathNode]:
     rows = cursor.fetchall()
     conn.close()
     if not rows:
-        return list(python_path_nodes)
+        import copy
+        return copy.deepcopy(python_path_nodes)
     return [
         PathNode(
             id=row[0],
@@ -716,7 +734,8 @@ def db_sync_path_nodes_by_goals(username: str, goals: List[str]):
             
     if not nodes_to_seed:
         # Fallback if course not found or invalid
-        nodes_to_seed = python_path_nodes
+        import copy
+        nodes_to_seed = copy.deepcopy(python_path_nodes)
         
     # Get existing user path nodes
     existing = db_get_path_nodes(username)
@@ -1257,11 +1276,19 @@ def init_db():
         PRIMARY KEY (username, template_id)
     )
     """)
+    # Reset default demo users and courses to ensure fresh seeder state
+    cursor.execute("DELETE FROM users WHERE username IN ('default_user', 'admin')")
+    cursor.execute("DELETE FROM user_profiles WHERE username IN ('default_user', 'admin')")
+    cursor.execute("DELETE FROM user_path_nodes WHERE username IN ('default_user', 'admin')")
+    cursor.execute("DELETE FROM user_resources WHERE username IN ('default_user', 'admin')")
+    cursor.execute("DELETE FROM registered_courses WHERE course_id IN ('python_basics', 'machine_learning')")
+    cursor.execute("DELETE FROM user_llm_providers WHERE username IN ('default_user', 'admin')")
+    cursor.execute("DELETE FROM user_model_routing WHERE username IN ('default_user', 'admin')")
     
-    
-    # Seed default courses if empty
-    cursor.execute("SELECT COUNT(*) FROM registered_courses")
+    # Seed default courses if missing
+    cursor.execute("SELECT COUNT(*) FROM registered_courses WHERE course_id = 'python_basics'")
     if cursor.fetchone()[0] == 0:
+
         # Convert default nodes to JSON strings
         python_nodes_json = json.dumps([n.model_dump() for n in python_path_nodes], ensure_ascii=False)
         ml_nodes_json = json.dumps([n.model_dump() for n in ml_path_nodes], ensure_ascii=False)
