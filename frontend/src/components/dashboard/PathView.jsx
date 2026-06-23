@@ -68,6 +68,36 @@ const calculateStarPoints = (cx, cy, spikes, outerRadius, innerRadius) => {
   return points.join(' ');
 };
 
+// Get node coordinate by its logical ID rather than index to handle dynamic reinforcement nodes
+const getNodeCoordinate = (node, index) => {
+  if (!node) return null;
+  
+  // Try to match standard node number (e.g. node1, node2, node1_extra, reinforce_node1_2)
+  const match = node.id.match(/node(\d+)/i);
+  if (match) {
+    const nodeNum = parseInt(match[1], 10);
+    const baseCoord = coords[nodeNum - 1];
+    if (baseCoord) {
+      // If it's a reinforcement / extra node, offset it slightly to show a branch
+      if (node.id.includes('extra') || node.id.includes('reinforce')) {
+        return {
+          x: baseCoord.x + 25,
+          y: baseCoord.y + 20
+        };
+      }
+      return baseCoord;
+    }
+  }
+  
+  // Secondary fallback: use index if within bounds
+  if (typeof index === 'number' && index < coords.length) {
+    return coords[index];
+  }
+  
+  // Ultimate fallback to prevent crashes
+  return { x: 160, y: 120 };
+};
+
 export default function PathView() {
   const {
     pathNodes,
@@ -101,8 +131,10 @@ export default function PathView() {
     const beams = [];
     for (let i = 0; i < pathNodes.length - 1; i++) {
       const toNode = pathNodes[i + 1];
-      const fromPt = coords[i];
-      const toPt = coords[i + 1];
+      const fromPt = getNodeCoordinate(pathNodes[i], i);
+      const toPt = getNodeCoordinate(pathNodes[i + 1], i + 1);
+
+      if (!fromPt || !toPt) continue;
 
       let strokeColor = 'rgba(255, 255, 255, 0.06)';
       let strokeDash = 'none';
@@ -145,7 +177,7 @@ export default function PathView() {
 
   const renderStars = () => {
     return pathNodes.map((node, index) => {
-      const pt = coords[index];
+      const pt = getNodeCoordinate(node, index);
       if (!pt) return null;
       const isSelected = selectedNode?.id === node.id;
 
