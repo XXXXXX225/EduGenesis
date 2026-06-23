@@ -200,12 +200,13 @@ function AppContent() {
 
   useEffect(() => {
     if (isLoggedIn && currentView === 'dashboard') {
-      const tourCompleted = localStorage.getItem('edugenesis_onboarding_completed_v2');
+      const key = `edugenesis_onboarding_completed_v2_${regUsername || 'guest'}`;
+      const tourCompleted = localStorage.getItem(key);
       if (!tourCompleted) {
         setIsTourActive(true);
       }
     }
-  }, [isLoggedIn, currentView]);
+  }, [isLoggedIn, currentView, regUsername]);
 
   useEffect(() => {
     if (!customDialog) return;
@@ -1186,6 +1187,7 @@ function AppContent() {
         isTourActive={isTourActive} 
         setIsTourActive={setIsTourActive} 
         setActiveTab={setActiveTab} 
+        username={regUsername}
       />
 
       {/* Error explanation details modal */}

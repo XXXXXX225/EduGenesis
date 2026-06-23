@@ -16,7 +16,7 @@ import {
   Settings
 } from 'lucide-react';
 
-export default function OnboardingTour({ isTourActive, setIsTourActive, setActiveTab }) {
+export default function OnboardingTour({ isTourActive, setIsTourActive, setActiveTab, username }) {
   const [activeStep, setActiveStep] = useState(0);
   const [spotlight, setSpotlight] = useState({ left: 0, top: 0, width: 0, height: 0, active: false });
   const [dontShowAgain, setDontShowAgain] = useState(false);
@@ -164,10 +164,11 @@ export default function OnboardingTour({ isTourActive, setIsTourActive, setActiv
   };
 
   const handleComplete = () => {
+    const key = `edugenesis_onboarding_completed_v2_${username || 'guest'}`;
     if (dontShowAgain) {
-      localStorage.setItem('edugenesis_onboarding_completed_v2', 'true');
+      localStorage.setItem(key, 'true');
     } else {
-      localStorage.removeItem('edugenesis_onboarding_completed_v2');
+      localStorage.removeItem(key);
     }
     setIsTourActive(false);
     setActiveStep(0);
