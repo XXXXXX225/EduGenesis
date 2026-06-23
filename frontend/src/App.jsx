@@ -50,6 +50,7 @@ import AchievementsView from './components/dashboard/AchievementsView';
 import SettingsView from './components/dashboard/SettingsView';
 import AdminView from './components/dashboard/AdminView';
 import VerifyView from './components/verify/VerifyView';
+import OnboardingTour from './components/shared/OnboardingTour';
 
 import PDFModal from './components/modals/PDFModal';
 import SlideModal from './components/modals/SlideModal';
@@ -194,7 +195,17 @@ function AppContent() {
   } = useAppContext();
 
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const [isTourActive, setIsTourActive] = React.useState(false);
   const [deltas, setDeltas] = useState({ study_time: 0, quiz_accuracy: 0, mastered_nodes: 0 });
+
+  useEffect(() => {
+    if (isLoggedIn && currentView === 'dashboard') {
+      const tourCompleted = localStorage.getItem('edugenesis_onboarding_completed');
+      if (!tourCompleted) {
+        setIsTourActive(true);
+      }
+    }
+  }, [isLoggedIn, currentView]);
 
   useEffect(() => {
     if (!customDialog) return;
@@ -719,6 +730,26 @@ function AppContent() {
               <Settings size={14} />
             </button>
 
+            {/* 新手指引帮助按钮 */}
+            <button
+              onClick={() => setIsTourActive(true)}
+              style={{
+                padding: '8px',
+                borderRadius: '10px',
+                background: 'var(--bg-card-active)',
+                border: '1px solid var(--border-neon)',
+                color: 'var(--text-main)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.3s'
+              }}
+              title="开启新手功能指引"
+            >
+              <HelpCircle size={14} />
+            </button>
+
             {/* User Avatar Cockpit */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '12px', borderLeft: '1px solid rgba(0,0,0,0.08)' }}>
               <div style={{ padding: '6px', borderRadius: '10px', background: 'rgba(15, 118, 110, 0.06)', border: '1px solid rgba(15, 118, 110, 0.12)', display: 'flex' }}>
@@ -1151,6 +1182,11 @@ function AppContent() {
         nodeTitle={selectedNode?.title}
       />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <OnboardingTour 
+        isTourActive={isTourActive} 
+        setIsTourActive={setIsTourActive} 
+        setActiveTab={setActiveTab} 
+      />
 
       {/* Error explanation details modal */}
       {selectedErrorExp && (

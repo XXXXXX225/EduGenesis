@@ -2039,3 +2039,52 @@ body.dark-mode .timeline-badge-wrapper {
   }
 }
 
+/* ── 新手指引 Spotlight & 卡片样式 ────────────────── */
+.onboarding-card {
+  animation: onboardingGlowPulse 3s ease-in-out infinite alternate, tabFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes onboardingGlowPulse {
+  0% {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 15px rgba(13, 148, 136, 0.15);
+  }
+  100% {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55), 0 0 25px rgba(13, 148, 136, 0.35);
+  }
+}
+
+/* Spotlight pulsing border animation */
+@keyframes spotlightPulse {
+  0% {
+    border-color: var(--primary-neon);
+    box-shadow: 0 0 0 9999px rgba(8, 12, 21, 0.78), 0 0 15px rgba(13, 148, 136, 0.4);
+  }
+  50% {
+    border-color: var(--secondary);
+    box-shadow: 0 0 0 9999px rgba(8, 12, 21, 0.78), 0 0 25px rgba(59, 130, 246, 0.6);
+  }
+  100% {
+    border-color: var(--primary-neon);
+    box-shadow: 0 0 0 9999px rgba(8, 12, 21, 0.78), 0 0 15px rgba(13, 148, 136, 0.4);
+  }
+}
+
+.onboarding-spotlight-box {
+  animation: spotlightPulse 2s infinite ease-in-out;
+}
+
+/* Onboarding responsive adaptations */
+@media (max-width: 900px) {
+  /* On tablets/smaller screens, float card at bottom center to avoid squeezing */
+  .onboarding-card {
+    left: 50% !important;
+    right: auto !important;
+    bottom: 20px !important;
+    top: auto !important;
+    transform: translateX(-50%) !important;
+    width: 90vw !important;
+    max-width: 450px !important;
+  }
+}
+
+
