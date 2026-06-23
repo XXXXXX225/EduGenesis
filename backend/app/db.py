@@ -1401,7 +1401,7 @@ def init_db():
         for node in python_path_nodes:
             cursor.execute(
                 "INSERT INTO user_path_nodes (username, node_id, title, status, description, resources) VALUES (?, ?, ?, ?, ?, ?)",
-                ("admin", node.id, node.title, node.status, node.description, json.dumps(node.resources))
+                ("admin", node.id, node.title, "completed", node.description, json.dumps(node.resources))
             )
             admin_profile = UserProfile(
                 knowledge_base=100,

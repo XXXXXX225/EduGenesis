@@ -165,6 +165,11 @@ def run_sandbox_code(request: SandboxRunRequest, current_username: str = Depends
                         next_node.status = "active"
                 db_save_path_nodes(target_user, nodes)
                 
+                # Update mastered count in profile to keep it in sync with the path nodes status
+                completed_count = sum(1 for n in nodes if n.status == "completed")
+                profile.learning_stats["mastered_nodes"] = min(8, completed_count)
+                db_save_profile(target_user, profile)
+                
                 # Pre-seed resources for the newly active node (either idx+1 or idx+2)
                 active_node = None
                 for n in nodes:
