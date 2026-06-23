@@ -181,31 +181,34 @@ export default function PathView() {
       if (!pt) return null;
       const isSelected = selectedNode?.id === node.id;
 
-      let outerRingColor = 'rgba(255, 255, 255, 0.1)';
-      let coreColor = 'var(--text-muted)';
+      let outerRingColor = 'rgba(255, 255, 255, 0.15)';
+      let coreColor = '#64748b'; // Muted grey-blue star for locked nodes, readable on dark background
       let ringScaleClass = '';
       let coreGlow = 'none';
-      let labelColor = 'var(--text-muted)';
+      let labelColor = '#64748b'; // Muted but readable label for locked nodes
       let isCompleted = node.status === 'completed';
       let isActive = node.status === 'active';
 
       if (isCompleted) {
-        outerRingColor = 'var(--success)';
-        coreColor = 'var(--success)';
-        coreGlow = 'drop-shadow(0 0 4px var(--success))';
-        labelColor = 'var(--text-main)';
+        outerRingColor = '#22c55e'; // Bright neon green ring
+        coreColor = '#22c55e'; // Bright neon green core
+        coreGlow = 'drop-shadow(0 0 5px #22c55e)';
+        labelColor = '#e2e8f0'; // Very bright off-white label for completed nodes
       } else if (isActive) {
-        outerRingColor = 'var(--primary-neon)';
-        coreColor = 'var(--primary-neon)';
+        outerRingColor = '#2dd4bf'; // Bright neon teal ring
+        coreColor = '#2dd4bf'; // Bright neon teal core
         ringScaleClass = 'star-ring-active';
-        coreGlow = 'drop-shadow(0 0 6px var(--primary-neon))';
-        labelColor = 'var(--primary-neon)';
+        coreGlow = 'drop-shadow(0 0 6px #2dd4bf)';
+        labelColor = '#2dd4bf'; // Neon teal label
       }
 
       if (isSelected) {
-        outerRingColor = 'var(--secondary)';
-        coreGlow = 'drop-shadow(0 0 8px var(--secondary))';
-        labelColor = 'var(--secondary)';
+        outerRingColor = '#60a5fa'; // Bright neon blue ring
+        coreGlow = 'drop-shadow(0 0 8px #60a5fa)';
+        labelColor = '#60a5fa'; // Neon blue label
+        if (isActive) {
+          coreColor = '#60a5fa';
+        }
       }
 
       return (
