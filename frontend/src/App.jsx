@@ -200,7 +200,7 @@ function AppContent() {
 
   useEffect(() => {
     if (isLoggedIn && currentView === 'dashboard') {
-      const tourCompleted = localStorage.getItem('edugenesis_onboarding_completed');
+      const tourCompleted = localStorage.getItem('edugenesis_onboarding_completed_v2');
       if (!tourCompleted) {
         setIsTourActive(true);
       }

@@ -165,9 +165,9 @@ export default function OnboardingTour({ isTourActive, setIsTourActive, setActiv
 
   const handleComplete = () => {
     if (dontShowAgain) {
-      localStorage.setItem('edugenesis_onboarding_completed', 'true');
+      localStorage.setItem('edugenesis_onboarding_completed_v2', 'true');
     } else {
-      localStorage.removeItem('edugenesis_onboarding_completed');
+      localStorage.removeItem('edugenesis_onboarding_completed_v2');
     }
     setIsTourActive(false);
     setActiveStep(0);

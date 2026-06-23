@@ -49,6 +49,7 @@ scratch/
 
 # Zip archives and presentation files
 *.zip
+!frontend/dist.zip
 *.pptx
 
 # Temporary scripts and transcripts
