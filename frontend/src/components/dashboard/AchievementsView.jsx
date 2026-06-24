@@ -32,7 +32,7 @@ export default function AchievementsView() {
   const studyTime = profile.learning_stats?.study_time || 45;
   const isQualified = masteredNodes >= 8;
 
-  const isML = profile.learning_goals?.some(g => g.includes("Machine Learning"));
+  const isML = profile.learning_goals?.some(g => g.includes("Machine Learning") || g.includes("机器学习") || g.includes("machine_learning"));
   const courseTitle = isML ? "机器学习算法理论与实操" : "Python 基础自适应导论";
   const studentName = regUsername || "体验官";
 

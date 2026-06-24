@@ -36,11 +36,12 @@ def register_user(request: RegisterRequest):
     conn.close()
     
     # Create profile
+    is_ml = any(any(x in g for x in ["Machine Learning", "机器学习", "machine_learning"]) for g in request.learning_goals)
     profile = UserProfile(
-        knowledge_base=30 if "Machine Learning" in request.learning_goals else 40,
-        learning_pace=60 if "Machine Learning" in request.learning_goals else 50,
+        knowledge_base=30 if is_ml else 40,
+        learning_pace=60 if is_ml else 50,
         cognitive_style=request.cognitive_style,
-        error_patterns=["Gradient instability"] if "Machine Learning" in request.learning_goals else ["Syntax Errors", "Indentation Issues"],
+        error_patterns=["Gradient instability"] if is_ml else ["Syntax Errors", "Indentation Issues"],
         learning_goals=request.learning_goals,
         engagement=80
     )
@@ -112,11 +113,12 @@ def login_user(request: LoginRequest):
     profile_exists = c.fetchone()
     conn.close()
     if not profile_exists:
+        is_ml = any(any(x in g for x in ["Machine Learning", "机器学习", "machine_learning"]) for g in learning_goals)
         profile = UserProfile(
-            knowledge_base=30 if "Machine Learning" in learning_goals else 40,
-            learning_pace=60 if "Machine Learning" in learning_goals else 50,
+            knowledge_base=30 if is_ml else 40,
+            learning_pace=60 if is_ml else 50,
             cognitive_style=cognitive_style,
-            error_patterns=["Gradient instability"] if "Machine Learning" in learning_goals else ["Syntax Errors", "Indentation Issues"],
+            error_patterns=["Gradient instability"] if is_ml else ["Syntax Errors", "Indentation Issues"],
             learning_goals=learning_goals,
             engagement=80
         )

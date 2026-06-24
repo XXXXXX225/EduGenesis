@@ -161,7 +161,7 @@ def download_certificate(current_username: str = Depends(get_current_username)):
     db_log_agent_action(target_user, "画像智能体", f"统计最终学情数据：知识库掌握度={profile.knowledge_base}%，测验正确率={profile.learning_stats.get('quiz_accuracy', 85)}%。正式签发证书。", "consensus")
     
     course_title = "Python 基础自适应导论"
-    if any("Machine Learning" in g for g in profile.learning_goals):
+    if any(any(x in g for x in ["Machine Learning", "机器学习", "machine_learning"]) for g in profile.learning_goals):
         course_title = "机器学习算法理论与实操"
         
     try:

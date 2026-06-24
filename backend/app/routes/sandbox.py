@@ -26,7 +26,7 @@ router = APIRouter()
 def get_sandbox_challenge(node_id: str | None = None, current_username: str = Depends(get_current_username)):
     target_user = current_username
     profile = db_get_profile(target_user)
-    is_ml = any("Machine Learning" in g for g in profile.learning_goals)
+    is_ml = any(any(x in g for x in ["Machine Learning", "机器学习", "machine_learning"]) for g in profile.learning_goals)
     challenges = ML_CHALLENGES if is_ml else PYTHON_CHALLENGES
     
     if not node_id:
@@ -65,7 +65,7 @@ def run_sandbox_code(request: SandboxRunRequest, current_username: str = Depends
         }
             
     profile = db_get_profile(target_user)
-    is_ml = any("Machine Learning" in g for g in profile.learning_goals)
+    is_ml = any(any(x in g for x in ["Machine Learning", "机器学习", "machine_learning"]) for g in profile.learning_goals)
     challenges = ML_CHALLENGES if is_ml else PYTHON_CHALLENGES
     
     if node_id not in challenges:

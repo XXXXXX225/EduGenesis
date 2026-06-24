@@ -67,7 +67,7 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
         db_log_agent_action(target_user, "路径智能体", f"定制路径规划完成！已通过大模型在线实时生成 8 个定制自适应关卡。", "info")
     else:
         # Fallback to predefined lists
-        is_ml = any("Machine Learning" in g for g in goals)
+        is_ml = any(any(x in g for x in ["Machine Learning", "机器学习", "machine_learning"]) for g in goals)
         base_nodes = ml_path_nodes if is_ml else python_path_nodes
         style = profile.cognitive_style.lower()
         
