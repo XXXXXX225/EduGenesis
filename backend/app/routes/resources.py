@@ -42,37 +42,56 @@ def get_resources(node_id: str, current_username: str = Depends(get_current_user
     rows = cursor.fetchall()
     conn.close()
     
-    # If no resources are found for this user and node, trigger automatic generation/fallback
-    if not rows:
-        # Find the node configuration to understand the topic and resource types
-        nodes = db_get_path_nodes(target_user)
-        node_title = "General Study Topic"
-        node_description = ""
-        node_resources = ["pdf"]
-        for node in nodes:
-            if node.id == node_id:
-                node_title = node.title
-                node_description = node.description
-                node_resources = node.resources
-                break
-                
-        from app.agents.coordinator import AgentCoordinator
-        coordinator = AgentCoordinator(
-            username=target_user,
-            node_id=node_id,
-            node_title=node_title,
-            node_description=node_description,
-            node_resources=node_resources,
-            trigger_type="auto"
-        )
-        generated_data = coordinator.run_consensus_pipeline()
+    # Find the node configuration to understand the topic and resource types
+    nodes = db_get_path_nodes(target_user)
+    node_title = "General Study Topic"
+    node_description = ""
+    node_resources = ["pdf"]
+    for node in nodes:
+        if node.id == node_id:
+            node_title = node.title
+            node_description = node.description
+            node_resources = node.resources
+            break
+            
+    existing_types = {row[0] for row in rows}
+    missing_resources = [res for res in node_resources if res not in existing_types]
+    
+    # If any resources are missing, trigger automatic generation/fallback for the missing ones
+    if missing_resources:
         profile = db_get_profile(target_user)
+        from app.knowledge_base import clean_subject_name
+        subject = profile.learning_goals[0] if (profile.learning_goals and len(profile.learning_goals) > 0) else "Python Basics"
+        course_id = clean_subject_name(subject)
+        from app.course_resources_data import is_node_unmodified
+        is_demo_course = course_id in ["python_basics", "machine_learning"]
+        
         fallback_assets = get_fallback_assets_for_topic(node_title, profile, node_id)
+        
+        # Only use pre-seeded fallback assets if the node is unmodified.
+        # If the user has adjusted/modified the node, generate resources using AI!
+        is_unmodified = False
+        if is_demo_course:
+            is_unmodified = is_node_unmodified(course_id, node_id, node_title)
+            
+        if is_demo_course and is_unmodified:
+            generated_data = fallback_assets
+        else:
+            from app.agents.coordinator import AgentCoordinator
+            coordinator = AgentCoordinator(
+                username=target_user,
+                node_id=node_id,
+                node_title=node_title,
+                node_description=node_description,
+                node_resources=missing_resources,
+                trigger_type="auto"
+            )
+            generated_data = coordinator.run_consensus_pipeline()
             
         # Save generated items to SQLite
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        for res_type in node_resources:
+        for res_type in missing_resources:
             content_val = generated_data.get(res_type, fallback_assets.get(res_type, ""))
             if not isinstance(content_val, str):
                 content_val = json.dumps(content_val, ensure_ascii=False)
@@ -94,13 +113,7 @@ def get_resources(node_id: str, current_username: str = Depends(get_current_user
         rows = cursor.fetchall()
         conn.close()
     else:
-        # If rows are found, log a read event to show real-time agent operation in console
-        nodes = db_get_path_nodes(target_user)
-        node_title = "General Study Topic"
-        for node in nodes:
-            if node.id == node_id:
-                node_title = node.title
-                break
+        # If all expected rows are found, log a read event to show real-time agent operation in console
         profile = db_get_profile(target_user)
         db_log_agent_action(target_user, "主管智能体", f"用户开始学习关卡 [{node_title}]，正在调配并渲染多模态自适应中文学术资源库。", "info")
         db_log_agent_action(target_user, "画像智能体", f"画像校验：当前认知风格 [{profile.cognitive_style}] 与所加载 of 资源完美对齐，启动个性化学情监控跟踪器。", "consensus")
@@ -134,17 +147,33 @@ def generate_resources(request: ResourceGenerateRequest, current_username: str =
             node_resources = node.resources
             break
             
-    from app.agents.coordinator import AgentCoordinator
-    coordinator = AgentCoordinator(
-        username=target_user,
-        node_id=node_id,
-        node_title=node_title,
-        node_description=node_description,
-        node_resources=node_resources,
-        trigger_type="manual"
-    )
-    generated_data = coordinator.run_consensus_pipeline()
+    from app.knowledge_base import clean_subject_name
+    subject = profile.learning_goals[0] if (profile.learning_goals and len(profile.learning_goals) > 0) else "Python Basics"
+    course_id = clean_subject_name(subject)
+    from app.course_resources_data import is_node_unmodified
+    is_demo_course = course_id in ["python_basics", "machine_learning"]
+    
     fallback_assets = get_fallback_assets_for_topic(node_title, profile, node_id)
+    
+    # Only use pre-seeded fallback assets if the node is unmodified.
+    # If the user has adjusted/modified the node, generate resources using AI!
+    is_unmodified = False
+    if is_demo_course:
+        is_unmodified = is_node_unmodified(course_id, node_id, node_title)
+        
+    if is_demo_course and is_unmodified:
+        generated_data = fallback_assets
+    else:
+        from app.agents.coordinator import AgentCoordinator
+        coordinator = AgentCoordinator(
+            username=target_user,
+            node_id=node_id,
+            node_title=node_title,
+            node_description=node_description,
+            node_resources=node_resources,
+            trigger_type="manual"
+        )
+        generated_data = coordinator.run_consensus_pipeline()
         
     # Save generated items to SQLite
     conn = sqlite3.connect(DB_PATH)

@@ -2,7 +2,7 @@
 import { getAccessToken, clearSession } from './session';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
-const DEFAULT_TIMEOUT_MS = 15000;
+const DEFAULT_TIMEOUT_MS = 60000;
 
 function buildHeaders(extraHeaders = {}) {
   const token = getAccessToken();

@@ -103,6 +103,29 @@ const LandingView = () => {
   // GSAP scroll trigger animations for landing sections
   useEffect(() => {
     const ctx = gsap.context(() => {
+      // Cross-fade academic background overlay 1 and 2 on scroll
+      gsap.to(".academic-bg-overlay-1", {
+        scrollTrigger: {
+          trigger: "body",
+          start: "top top",
+          end: "bottom bottom",
+          scrub: true
+        },
+        opacity: 0,
+        ease: "none"
+      });
+
+      gsap.to(".academic-bg-overlay-2", {
+        scrollTrigger: {
+          trigger: "body",
+          start: "top top",
+          end: "bottom bottom",
+          scrub: true
+        },
+        opacity: theme === 'light' ? 0.12 : 0.05,
+        ease: "none"
+      });
+
       const elUsers = document.querySelector('.stat-num-users');
       const elEff = document.querySelector('.stat-num-efficiency');
       const elAcc = document.querySelector('.stat-num-accuracy');

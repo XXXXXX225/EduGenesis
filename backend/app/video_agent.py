@@ -253,6 +253,8 @@ def search_bilibili_videos(node_title: str, profile: Optional[UserProfile] = Non
         
     return filtered[:4]
 
+_video_recommendations_cache = {}
+
 def get_video_recommendations_for_node(node_title: str, node_description: str, profile: UserProfile, username: str = "default_user") -> List[dict]:
     """
     一键式高层视频推荐智能体接口。
@@ -260,11 +262,16 @@ def get_video_recommendations_for_node(node_title: str, node_description: str, p
     2. 使用优化后的关键词检索 B 站视频候选。
     3. 调用 LLM 筛选排序候选视频，并生成个性化推荐评语。
     """
+    cache_key = (node_title, username)
+    if cache_key in _video_recommendations_cache:
+        print(f"[Video Agent] [Cache Hit] Returning cached video recommendations for node '{node_title}'")
+        return _video_recommendations_cache[cache_key]
+
     query = generate_optimized_search_query(node_title, node_description, username)
     if not query.strip():
         query = node_title
         
-    print(f"[Video Agent] Optimized search query for '{node_title}': '{query}'")
+    print(f"[Video Agent] [Cache Miss] Optimized search query for '{node_title}': '{query}'")
     
     keyword = determine_search_keyword(query, profile)
     url = f"https://api.bilibili.com/x/web-interface/search/all/v2?keyword={encode_keyword(keyword)}"
@@ -304,10 +311,14 @@ def get_video_recommendations_for_node(node_title: str, node_description: str, p
         
     if not candidates:
         # 降级：直接通过原始 search_bilibili_videos 爬取候选（包含自带过滤）
-        return search_bilibili_videos(node_title, profile)
+        res = search_bilibili_videos(node_title, profile)
+        _video_recommendations_cache[cache_key] = res
+        return res
 
     # 步骤 3：AI 筛选及推荐理由生成
-    return select_and_recommend_videos(candidates, node_title, node_description, profile, username)
+    res = select_and_recommend_videos(candidates, node_title, node_description, profile, username)
+    _video_recommendations_cache[cache_key] = res
+    return res
 
 def encode_keyword(keyword: str) -> str:
     """简单的 URL 编码辅助函数"""

@@ -39,6 +39,56 @@ def get_password_hash(password: str, username: str) -> str:
     h = hashlib.pbkdf2_hmac('sha256', pwd_bytes, salt, iterations)
     return f"pbkdf2_sha256${iterations}${username}${h.hex()}"
 
+def generate_mindmap_from_markdown(markdown_text: str, topic: str) -> str:
+    """
+    根据讲义 Markdown 内容的标题结构，动态生成符合 Mermaid 规范的思维导图
+    """
+    if not markdown_text:
+        topic_escaped = topic.replace('"', "'")
+        return f"""graph TD
+    A["{topic_escaped} 知识树"] --> B["基本概念"]
+    A --> C["实践应用"]"""
+    
+    import re
+    lines = markdown_text.split("\n")
+    mermaid_lines = ["graph TD"]
+    
+    def clean_label(label: str) -> str:
+        label = re.sub(r'[*_`]', '', label)
+        label = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', label)
+        label = label.strip().replace('"', "'")
+        return f'"{label}"'
+        
+    topic_escaped = topic.replace('"', "'")
+    mermaid_lines.append(f'    Root[{clean_label(topic_escaped)}]')
+    
+    h2_count = 0
+    h3_count = 0
+    current_h2 = None
+    
+    for line in lines:
+        line = line.strip()
+        if line.startswith("## "):
+            h2_title = line[3:].strip()
+            h2_id = f"H2_{h2_count}"
+            h2_count += 1
+            mermaid_lines.append(f'    {h2_id}[{clean_label(h2_title)}]')
+            mermaid_lines.append(f'    Root --> {h2_id}')
+            current_h2 = h2_id
+        elif line.startswith("### ") and current_h2:
+            h3_title = line[4:].strip()
+            h3_id = f"H3_{h3_count}"
+            h3_count += 1
+            mermaid_lines.append(f'    {h3_id}[{clean_label(h3_title)}]')
+            mermaid_lines.append(f'    {current_h2} --> {h3_id}')
+            
+    if h2_count == 0:
+        return f"""graph TD
+    A["{topic_escaped} 知识树"] --> B["基本概念"]
+    A --> C["实践应用"]"""
+    
+    return "\n".join(mermaid_lines)
+
 # Custom asset seeder for topics
 def get_fallback_assets_for_topic(topic: str, profile: UserProfile, node_id: str = ""):
     from app.knowledge_base import load_course_material
@@ -464,6 +514,10 @@ if __name__ == "__main__":
         if "videos" in curated:
             video_fallback_content = curated["videos"]
 
+    if material:
+        pdf_content = material
+        mindmap_content = generate_mindmap_from_markdown(material, topic)
+
     return {
         "pdf": pdf_content,
         "slide": slide_content,
@@ -571,23 +625,54 @@ def db_get_path_nodes(username: str) -> List[PathNode]:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT node_id, title, status, description, resources FROM user_path_nodes WHERE username = ? ORDER BY node_id ASC",
+        "SELECT node_id, title, status, description, resources, completed_resources FROM user_path_nodes WHERE username = ? ORDER BY node_id ASC",
         (username,)
     )
     rows = cursor.fetchall()
-    conn.close()
     if not rows:
+        conn.close()
         import copy
         return copy.deepcopy(python_path_nodes)
-    return [
-        PathNode(
-            id=row[0],
-            title=row[1],
-            status=row[2],
-            description=row[3],
-            resources=json.loads(row[4])
-        ) for row in rows
-    ]
+        
+    nodes = []
+    need_save = False
+    for row in rows:
+        res_list = json.loads(row[4]) if row[4] else []
+        if len(res_list) < 3:
+            res_list = ["slide", "pdf", "mindmap", "quiz", "video"]
+            desc_lower = (row[3] or "").lower()
+            title_lower = (row[1] or "").lower()
+            if any(k in desc_lower or k in title_lower for k in ["code", "代码", "实战", "编程"]):
+                if "code" not in res_list:
+                    res_list.append("code")
+            need_save = True
+            
+        comp_res = []
+        if len(row) > 5 and row[5]:
+            try:
+                comp_res = json.loads(row[5])
+            except Exception:
+                comp_res = []
+                
+        nodes.append(
+            PathNode(
+                id=row[0],
+                title=row[1],
+                status=row[2],
+                description=row[3],
+                resources=res_list,
+                completed_resources=comp_res
+            )
+        )
+    if need_save:
+        for node in nodes:
+            cursor.execute(
+                "INSERT OR REPLACE INTO user_path_nodes (username, node_id, title, status, description, resources, completed_resources) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (username, node.id, node.title, node.status, node.description, json.dumps(node.resources), json.dumps(node.completed_resources))
+            )
+        conn.commit()
+    conn.close()
+    return nodes
 
 def db_save_path_nodes(username: str, nodes: List[PathNode]):
     conn = sqlite3.connect(DB_PATH)
@@ -595,9 +680,19 @@ def db_save_path_nodes(username: str, nodes: List[PathNode]):
     cursor.execute("DELETE FROM user_path_nodes WHERE username = ?", (username,))
     for node in nodes:
         cursor.execute(
-            "INSERT INTO user_path_nodes (username, node_id, title, status, description, resources) VALUES (?, ?, ?, ?, ?, ?)",
-            (username, node.id, node.title, node.status, node.description, json.dumps(node.resources))
+            "INSERT INTO user_path_nodes (username, node_id, title, status, description, resources, completed_resources) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (username, node.id, node.title, node.status, node.description, json.dumps(node.resources), json.dumps(node.completed_resources))
         )
+    conn.commit()
+    conn.close()
+
+def db_update_single_path_node(username: str, node_id: str, title: str, description: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE user_path_nodes SET title = ?, description = ? WHERE username = ? AND node_id = ?",
+        (title, description, username, node_id)
+    )
     conn.commit()
     conn.close()
 
@@ -673,6 +768,20 @@ def db_auto_register_course(display_name: str, username: str = "default_user") -
         n.setdefault("status", "locked")
         if i == 0:
             n["status"] = "active"
+        n_resources = list(n.get("resources", []))
+        if len(n_resources) < 3:
+            n_resources = ["slide", "pdf", "mindmap", "quiz", "video"]
+            desc_lower = (n.get("description") or "").lower()
+            title_lower = (n.get("title") or "").lower()
+            if any(k in desc_lower or k in title_lower for k in ["code", "代码", "实战", "编程"]):
+                if "code" not in n_resources:
+                    n_resources.append("code")
+        else:
+            if "video" not in n_resources:
+                n_resources.append("video")
+            if "mindmap" not in n_resources:
+                n_resources.append("mindmap")
+        n["resources"] = n_resources
     
     # Extract keywords from node titles for future matching
     keywords = [display_name]
@@ -728,6 +837,21 @@ def db_sync_path_nodes_by_goals(username: str, goals: List[str]):
     if row:
         try:
             nodes_data = json.loads(row[0])
+            for n in nodes_data:
+                n_resources = list(n.get("resources", []))
+                if len(n_resources) < 3:
+                    n_resources = ["slide", "pdf", "mindmap", "quiz", "video"]
+                    desc_lower = (n.get("description") or "").lower()
+                    title_lower = (n.get("title") or "").lower()
+                    if any(k in desc_lower or k in title_lower for k in ["code", "代码", "实战", "编程"]):
+                        if "code" not in n_resources:
+                            n_resources.append("code")
+                else:
+                    if "video" not in n_resources:
+                        n_resources.append("video")
+                    if "mindmap" not in n_resources:
+                        n_resources.append("mindmap")
+                n["resources"] = n_resources
             nodes_to_seed = [PathNode(**n) for n in nodes_data]
         except Exception as e:
             print(f"Error parsing nodes for course {course_id}: {e}")
@@ -756,19 +880,6 @@ def db_sync_path_nodes_by_goals(username: str, goals: List[str]):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM user_resources WHERE username = ?", (username,))
-        
-        # Pre-seed resources for ALL nodes of the new course to ensure instant loading for presentation
-        profile = db_get_profile(username)
-        for node in nodes_to_seed:
-            default_assets = get_fallback_assets_for_topic(node.title, profile, node.id)
-            for res_type in node.resources:
-                content_val = default_assets.get(res_type, "")
-                if not isinstance(content_val, str):
-                    content_val = json.dumps(content_val, ensure_ascii=False)
-                cursor.execute(
-                    "INSERT INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
-                    (username, node.id, res_type, content_val)
-                )
         conn.commit()
         conn.close()
 
@@ -1126,9 +1237,14 @@ def init_db():
         status TEXT NOT NULL,
         description TEXT NOT NULL,
         resources TEXT NOT NULL,
+        completed_resources TEXT DEFAULT '[]',
         PRIMARY KEY (username, node_id)
     )
     """)
+    try:
+        cursor.execute("ALTER TABLE user_path_nodes ADD COLUMN completed_resources TEXT DEFAULT '[]'")
+    except sqlite3.OperationalError:
+        pass
     
     # User Resources Table
     cursor.execute("""
@@ -1281,6 +1397,7 @@ def init_db():
     cursor.execute("DELETE FROM user_profiles WHERE username IN ('default_user', 'admin')")
     cursor.execute("DELETE FROM user_path_nodes WHERE username IN ('default_user', 'admin')")
     cursor.execute("DELETE FROM user_resources")
+    cursor.execute("DELETE FROM course_chunks WHERE course_id IN ('python_basics', 'machine_learning')")
     cursor.execute("DELETE FROM registered_courses WHERE course_id IN ('python_basics', 'machine_learning')")
     cursor.execute("DELETE FROM user_llm_providers WHERE username IN ('default_user', 'admin')")
     cursor.execute("DELETE FROM user_model_routing WHERE username IN ('default_user', 'admin')")
@@ -1326,23 +1443,6 @@ def init_db():
                 "INSERT INTO user_path_nodes (username, node_id, title, status, description, resources) VALUES (?, ?, ?, ?, ?, ?)",
                 ("default_user", node.id, node.title, node.status, node.description, json.dumps(node.resources))
             )
-            default_profile = UserProfile(
-                knowledge_base=40,
-                learning_pace=50,
-                cognitive_style="Practical Coding",
-                error_patterns=["Syntax Errors", "Indentation Issues"],
-                learning_goals=["Python Basics"],
-                engagement=80
-            )
-            default_assets = get_fallback_assets_for_topic(node.title, default_profile, node.id)
-            for res_type in node.resources:
-                content_val = default_assets.get(res_type, "")
-                if not isinstance(content_val, str):
-                    content_val = json.dumps(content_val, ensure_ascii=False)
-                cursor.execute(
-                    "INSERT INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
-                    ("default_user", node.id, res_type, content_val)
-                )
     else:
         stored_hash = row[1]
         if not stored_hash.startswith("pbkdf2_sha256$"):
@@ -1403,23 +1503,6 @@ def init_db():
                 "INSERT INTO user_path_nodes (username, node_id, title, status, description, resources) VALUES (?, ?, ?, ?, ?, ?)",
                 ("admin", node.id, node.title, "completed", node.description, json.dumps(node.resources))
             )
-            admin_profile = UserProfile(
-                knowledge_base=100,
-                learning_pace=50,
-                cognitive_style="Practical Coding",
-                error_patterns=[],
-                learning_goals=["Python Basics"],
-                engagement=100
-            )
-            admin_assets = get_fallback_assets_for_topic(node.title, admin_profile, node.id)
-            for res_type in node.resources:
-                content_val = admin_assets.get(res_type, "")
-                if not isinstance(content_val, str):
-                    content_val = json.dumps(content_val, ensure_ascii=False)
-                cursor.execute(
-                    "INSERT INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
-                    ("admin", node.id, res_type, content_val)
-                )
 
         # Seed default LLM providers and model routing for admin
         cursor.execute(

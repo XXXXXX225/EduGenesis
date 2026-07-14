@@ -173,29 +173,42 @@ def extract_keywords(text: str) -> list:
 def load_course_material(subject: str, node_id: str) -> str:
     """
     Load the Markdown file corresponding to the subject and node_id.
+    Safely sanitizes paths to prevent directory traversal.
     """
     course_folder = clean_subject_name(subject)
     node_id_clean = node_id.lower().strip()
-    filename = f"{node_id_clean}.md"
-    file_path = os.path.join(COURSES_DIR, course_folder, filename)
+    # Strip directory traversal components
+    node_id_basename = os.path.basename(node_id_clean)
+    filename = f"{node_id_basename}.md"
+    
+    file_path = os.path.abspath(os.path.join(COURSES_DIR, course_folder, filename))
+    resolved_courses_dir = os.path.abspath(COURSES_DIR) + os.path.sep
+    
+    if not file_path.startswith(resolved_courses_dir):
+        print(f"Directory traversal blocked: {file_path} escapes {resolved_courses_dir}")
+        return ""
+
     if os.path.exists(file_path):
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
             print(f"Error reading knowledge base file {file_path}: {e}")
+            
     # Fallback: scan directory files matching numbers
     try:
         num_match = re.search(r'\d+', node_id_clean)
         if num_match:
             num = num_match.group()
-            dir_path = os.path.join(COURSES_DIR, course_folder)
-            if os.path.exists(dir_path):
+            dir_path = os.path.abspath(os.path.join(COURSES_DIR, course_folder))
+            if dir_path.startswith(resolved_courses_dir) and os.path.exists(dir_path):
                 for f_name in os.listdir(dir_path):
                     if f_name.endswith(".md") and num in f_name:
-                        full_p = os.path.join(dir_path, f_name)
-                        with open(full_p, "r", encoding="utf-8") as f:
-                            return f.read()
+                        # Ensure individual file is safe
+                        full_p = os.path.abspath(os.path.join(dir_path, f_name))
+                        if full_p.startswith(resolved_courses_dir) and os.path.exists(full_p):
+                            with open(full_p, "r", encoding="utf-8") as f:
+                                return f.read()
     except Exception as e:
         print(f"Fallback directory scan failed: {e}")
     return ""
@@ -247,8 +260,8 @@ def seed_default_course_chunks():
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Check if course_chunks has entries
-        cursor.execute("SELECT COUNT(*) FROM course_chunks")
+        # Check if course_chunks has entries for default courses
+        cursor.execute("SELECT COUNT(*) FROM course_chunks WHERE course_id IN ('python_basics', 'machine_learning')")
         if cursor.fetchone()[0] > 0:
             return
             

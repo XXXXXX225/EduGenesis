@@ -19,7 +19,7 @@ class UserProfile(BaseModel):
     }, description="Academic stats for dashboard homepage")
 
 class UserMessage(BaseModel):
-    role: str = Field(..., description="Role of the sender: 'user' or 'assistant'")
+    role: str = Field(..., description="Role of the sender: 'user', 'assistant', or 'system'")
     content: str = Field(..., description="Content of the message")
 
 class ChatRequest(BaseModel):
@@ -27,6 +27,15 @@ class ChatRequest(BaseModel):
     current_profile: Optional[UserProfile] = Field(default=None, description="Current student profile status")
     session_id: Optional[str] = Field(default=None, description="Optional chat session ID to save messages")
     tutor_personality: Optional[str] = Field(default=None, description="Optional tutor personality style")
+    current_node_id: Optional[str] = Field(default=None, description="Current node ID student is learning")
+    current_node_title: Optional[str] = Field(default=None, description="Current node title student is learning")
+    current_node_description: Optional[str] = Field(default=None, description="Current node description")
+    current_node_status: Optional[str] = Field(default=None, description="Current node status: locked, active, completed")
+    current_node_resources: Optional[List[str]] = Field(default=None, description="Current node available resources")
+    current_resource_type: Optional[str] = Field(default=None, description="Current active resource type: pdf, slide, quiz, mindmap, code, video")
+    last_sandbox_code: Optional[str] = Field(default=None, description="Last code in sandbox")
+    last_sandbox_error: Optional[str] = Field(default=None, description="Last error in sandbox")
+    last_quiz_score: Optional[str] = Field(default=None, description="Last quiz score")
 
 class PathNode(BaseModel):
     id: str
@@ -34,6 +43,11 @@ class PathNode(BaseModel):
     status: str = Field(default="locked", description="'locked', 'active', or 'completed'")
     description: str
     resources: List[str] = Field(default_factory=list, description="Types of resources available")
+    completed_resources: List[str] = Field(default_factory=list, description="Types of resources completed by the user")
+
+class CompleteResourceRequest(BaseModel):
+    node_id: str
+    resource_type: str
 
 class RegisterRequest(BaseModel):
     username: str

@@ -3,7 +3,7 @@ import json
 import sqlite3
 from fastapi import APIRouter, HTTPException, Depends
 from app.auth_utils import get_current_username
-from app.models import PathNode, CompleteNodeRequest
+from app.models import PathNode, CompleteNodeRequest, CompleteResourceRequest
 from app.db import (
     DB_PATH,
     python_path_nodes,
@@ -30,9 +30,7 @@ def get_path(current_username: str = Depends(get_current_username)):
     nodes = db_get_path_nodes(current_username)
     return {"nodes": nodes}
 
-@router.post("/path/regenerate", dependencies=[Depends(rate_limit_resource)])
-def regenerate_path(current_username: str = Depends(get_current_username)):
-    target_user = current_username
+def db_regenerate_path_nodes(target_user: str) -> list:
     profile = db_get_profile(target_user)
     goals = profile.learning_goals
     
@@ -48,12 +46,19 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
             # Maintain correct lock/unlock status for the nodes
             status = "completed" if node_id == "node1" else ("active" if node_id == "node2" else "locked")
             
-            # Ensure "video" and "mindmap" are always included in the node's resources
             node_resources = list(node.get("resources", []))
-            if "video" not in node_resources:
-                node_resources.append("video")
-            if "mindmap" not in node_resources:
-                node_resources.append("mindmap")
+            if len(node_resources) < 3:
+                node_resources = ["slide", "pdf", "mindmap", "quiz", "video"]
+                desc_lower = (node.get("description") or "").lower()
+                title_lower = (node.get("title") or "").lower()
+                if any(k in desc_lower or k in title_lower for k in ["code", "代码", "实战", "编程"]):
+                    if "code" not in node_resources:
+                        node_resources.append("code")
+            else:
+                if "video" not in node_resources:
+                    node_resources.append("video")
+                if "mindmap" not in node_resources:
+                    node_resources.append("mindmap")
                 
             new_nodes.append(
                 PathNode(
@@ -64,7 +69,7 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
                     resources=node_resources
                 )
             )
-        db_log_agent_action(target_user, "路径智能体", f"定制路径规划完成！已通过大模型在线实时生成 8 个定制自适应关卡。", "info")
+        db_log_agent_action(target_user, "路径大纲规划", f"定制路径规划完成！已通过大模型在线实时生成 8 个定制自适应关卡。", "info")
     else:
         # Fallback to predefined lists
         is_ml = any(any(x in g for x in ["Machine Learning", "机器学习", "machine_learning"]) for g in goals)
@@ -93,7 +98,7 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
                     resources=node_resources
                 )
             )
-        db_log_agent_action(target_user, "路径智能体", f"大模型接口离线，已启用自适应静态路径模板为您匹配 8 个关卡。", "warning")
+        db_log_agent_action(target_user, "路径大纲规划", f"大模型接口离线，已启用自适应静态路径模板为您匹配 8 个关卡。", "warning")
             
     db_save_path_nodes(target_user, new_nodes)
     
@@ -104,24 +109,31 @@ def regenerate_path(current_username: str = Depends(get_current_username)):
     conn.commit()
     conn.close()
     
-    # 2. Pre-generate and write back resources for ALL nodes to SQLite to ensure instant loading for presentation
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    for node in new_nodes:
-        node_assets = get_fallback_assets_for_topic(node.title, profile, node.id)
-        for res_type in node.resources:
-            content_val = node_assets.get(res_type, "")
-            if not isinstance(content_val, str):
-                content_val = json.dumps(content_val, ensure_ascii=False)
-            cursor.execute(
-                "INSERT OR REPLACE INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
-                (target_user, node.id, res_type, content_val)
+    # Proactively command Resource Generator to pre-load / pre-generate resources for the active node
+    active_node = next((n for n in new_nodes if n.status == "active"), None)
+    if active_node:
+        try:
+            from app.agents.coordinator import AgentCommandBus
+            AgentCommandBus.send_command(
+                sender="路径大纲规划",
+                recipient="学术资源生成",
+                command="PRE_GENERATE_RESOURCES",
+                payload={
+                    "node_id": active_node.id,
+                    "node_title": active_node.title,
+                    "node_description": active_node.description,
+                    "node_resources": active_node.resources
+                },
+                username=target_user
             )
+        except Exception as e:
+            print(f"Failed to proactively pre-generate resources: {e}")
             
-    conn.commit()
-    conn.close()
-    
+    return new_nodes
+
+@router.post("/path/regenerate", dependencies=[Depends(rate_limit_resource)])
+def regenerate_path(current_username: str = Depends(get_current_username)):
+    new_nodes = db_regenerate_path_nodes(current_username)
     return {"status": "success", "nodes": new_nodes}
 
 @router.post("/path/complete-node")
@@ -136,6 +148,8 @@ def complete_node(request: CompleteNodeRequest, current_username: str = Depends(
     for idx, node in enumerate(nodes):
         if node.id == request.node_id:
             node.status = "completed"
+            if "quiz" not in node.completed_resources:
+                node.completed_resources.append("quiz")
             node_found = True
             current_idx = idx
             break
@@ -192,7 +206,15 @@ def complete_node(request: CompleteNodeRequest, current_username: str = Depends(
         db_save_profile(target_user, profile)
         
         db_log_agent_action(target_user, "画像智能体", f"自适应评估未通过：已对该章节易错模式进行记录，在画像中标记易错领域 [{err_pattern}]。", "warning")
-        db_log_agent_action(target_user, "路径智能体", f"启动动态加固机制！在后续路径中成功插入并激活加固关卡 [{next_node_to_unlock.title}]，已成功适配资源包。", "consensus")
+        
+        from app.agents.coordinator import AgentCommandBus
+        AgentCommandBus.send_command(
+            sender="错题诊断归档",
+            recipient="路径大纲规划",
+            command="INSERT_REINFORCEMENT_NODE",
+            payload={"node_id": request.node_id, "error_msg": err_pattern},
+            username=target_user
+        )
     else:
         # Standard Unlock Flow (Quiz Passed, or direct complete)
         if current_idx + 1 < len(nodes):
@@ -229,32 +251,71 @@ def complete_node(request: CompleteNodeRequest, current_username: str = Depends(
     profile.learning_stats["mastered_nodes"] = min(8, completed_count)
     db_save_profile(target_user, profile)
     
-    # Pre-seed resources for the newly unlocked active node (standard or extra)
-    if next_node_to_unlock:
-        fallback_assets = get_fallback_assets_for_topic(next_node_to_unlock.title, profile, next_node_to_unlock.id)
-        
-        # Fetch fallback assets first (which is instant and contains fallback videos)
-        pass
-                
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        for res_type in next_node_to_unlock.resources:
-            cursor.execute(
-                "SELECT count(*) FROM user_resources WHERE username = ? AND node_id = ? AND resource_type = ?",
-                (target_user, next_node_to_unlock.id, res_type)
-            )
-            exists = cursor.fetchone()[0]
-            if exists == 0:
-                content_val = fallback_assets.get(res_type, "")
-                if not isinstance(content_val, str):
-                    content_val = json.dumps(content_val, ensure_ascii=False)
-                cursor.execute(
-                    "INSERT OR REPLACE INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
-                    (target_user, next_node_to_unlock.id, res_type, content_val)
-                )
-        conn.commit()
-        conn.close()
+
         
     db_record_contribution(target_user, 1)
     updated_nodes = db_get_path_nodes(target_user)
     return {"nodes": [n.model_dump() for n in updated_nodes]}
+
+@router.post("/path/complete-resource")
+def complete_resource(request: CompleteResourceRequest, current_username: str = Depends(get_current_username)):
+    target_user = current_username
+    nodes = db_get_path_nodes(target_user)
+    
+    node_found = False
+    current_idx = -1
+    for idx, node in enumerate(nodes):
+        if node.id == request.node_id:
+            node_found = True
+            current_idx = idx
+            if request.resource_type not in node.completed_resources:
+                node.completed_resources.append(request.resource_type)
+            break
+            
+    if not node_found:
+        raise HTTPException(status_code=404, detail="Node not found in user path.")
+        
+    node = nodes[current_idx]
+    node_completed = False
+    
+    required = set(node.resources)
+    completed = set(node.completed_resources)
+    
+    # Check if all available resources are completed, and if so, complete the node
+    if required.issubset(completed) and node.status == "active":
+        node.status = "completed"
+        node_completed = True
+        
+        # Unlock next node
+        next_node_to_unlock = None
+        if current_idx + 1 < len(nodes):
+            next_node_to_unlock = nodes[current_idx + 1]
+            
+        if next_node_to_unlock and next_node_to_unlock.status == "locked":
+            next_node_to_unlock.status = "active"
+            
+        db_log_agent_action(target_user, "路径智能体", f"恭喜！所有学习任务已达标，关卡节点 [{request.node_id}] 自动解锁通关，下一关已开启。", "success")
+        
+        # If completed node is a reinforcement node, clean it up
+        if request.node_id.startswith("reinforce_"):
+            from app.db import db_delete_reinforcement_node
+            nodes = db_delete_reinforcement_node(target_user, request.node_id)
+            
+        # Update mastered count in profile
+        profile = db_get_profile(target_user)
+        completed_count = sum(1 for n in nodes if n.status == "completed")
+        profile.learning_stats["mastered_nodes"] = min(8, completed_count)
+        profile.knowledge_base = min(100, profile.knowledge_base + 5)
+        db_save_profile(target_user, profile)
+        
+    db_save_path_nodes(target_user, nodes)
+    
+    # Log resource completion
+    db_log_agent_action(target_user, "学习痕迹记录", f"学生已完成关卡 [{node.title}] 的 [{request.resource_type}] 资源学习 (已完成: {len(node.completed_resources)}/{len(node.resources)})。", "info")
+    
+    updated_nodes = db_get_path_nodes(target_user)
+    return {
+        "status": "success",
+        "node_completed": node_completed,
+        "nodes": [n.model_dump() for n in updated_nodes]
+    }

@@ -6,9 +6,11 @@ export function useSandbox({
   setPathNodes,
   setSelectedNode,
   setProfileAlert,
-  setDiagnosticLogs
+  setDiagnosticLogs,
+  chat
 } = {}) {
   const [sandboxChallenge, setSandboxChallenge] = useState(null);
+  const [sandboxError, setSandboxError] = useState('');
   const [sandboxCode, setSandboxCode] = useState(
     "# 任务：编写一个函数 check_even(num)，判断一个数字是否是偶数，返回 True 或 False\n" +
     "def check_even(num):\n" +
@@ -48,12 +50,17 @@ export function useSandbox({
         ...(result.console_output || '').split('\n').filter(Boolean)
       ]);
       if (result.status === 'success') {
+        setSandboxError('');
         const activeSetProfile = passedSetProfile || setProfile;
         const updatedProfile = await apiGet('/profile');
         if (activeSetProfile) activeSetProfile(updatedProfile);
         
-        // Also fetch path nodes to sync skipped and unlocked nodes
-        const pathData = await apiGet('/path');
+        // Mark code resource as completed and fetch path nodes
+        const nodeId = sandboxChallenge?.node_id || 'node3';
+        const pathData = await apiPost('/path/complete-resource', {
+          node_id: nodeId,
+          resource_type: 'code'
+        });
         if (setPathNodes) setPathNodes(pathData.nodes);
         
         if (setProfileAlert) {
@@ -75,9 +82,24 @@ export function useSandbox({
             setSelectedNode(activeNode);
           }
         }
+
+        if (chat) {
+          chat.submitChatMessage(`[系统感知] 学生通过了「${sandboxChallenge?.title || '代码实操'}」的代码测试！`, 'system');
+        }
+      } else {
+        const errorDetail = result.error || '测试未通过';
+        setSandboxError(errorDetail);
+        if (chat) {
+          chat.submitChatMessage(`[系统感知] 学生在「${sandboxChallenge?.title || '代码实操'}」运行代码失败：${errorDetail}`, 'system');
+        }
       }
     } catch (err) {
-      setSandboxTerminal(prev => [...prev, `[运行失败]：${err.message}`]);
+      const errorDetail = err.message || '运行期错误';
+      setSandboxTerminal(prev => [...prev, `[运行失败]：${errorDetail}`]);
+      setSandboxError(errorDetail);
+      if (chat) {
+        chat.submitChatMessage(`[系统感知] 学生在「${sandboxChallenge?.title || '代码实操'}」运行代码失败：${errorDetail}`, 'system');
+      }
     } finally {
       setIsSandboxRunning(false);
     }
@@ -101,6 +123,8 @@ export function useSandbox({
     setSandboxChallenge,
     sandboxCode,
     setSandboxCode,
+    sandboxError,
+    setSandboxError,
     sandboxTerminal,
     setSandboxTerminal,
     isSandboxRunning,

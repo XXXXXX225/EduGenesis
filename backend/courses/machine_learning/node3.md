@@ -1,28 +1,234 @@
-# 经典线性回归算法与收敛验证
+# Linear Regression, Ordinary Least Squares, and Iterative Convergence
 
-线性回归是机器学习中最基础、最直观的监督学习回归算法。它的目标是寻找特征与连续型连续目标变量之间的线性映射关系。
+## 1. Introduction
 
-## 1. 监督学习与线性假设函数
-监督学习是指从标注好的训练数据中学习一个模型，从而预测新样本的属性。
-* **假设函数（Hypothesis）**：
-  设输入特征向量为 $x = [x_1, x_2, \dots, x_d]^T \in \mathbb{R}^d$，线性回归模型假设目标变量 $y$ 可以用特征的线性组合表示：
-  $$h_\theta(x) = \theta_0 + \theta_1 x_1 + \theta_2 x_2 + \dots + \theta_d x_d = \theta^T x$$
-  其中 $\theta = [\theta_0, \theta_1, \dots, \theta_d]^T$ 为模型参数，$\theta_0$ 为偏置项（Bias，通常令 $x_0=1$ 将其纳入参数矩阵）。
+Linear regression is the foundational model of supervised learning. It establishes a linear mapping between a set of continuous features and a continuous target variable. Its mathematical elegance, interpretability, and ease of optimization make it a classic algorithm in both statistical analysis and predictive modeling.
 
-## 2. 均方误差损失函数（MSE）
-为了量化模型当前的预测误差，需要定义损失函数。
-* **均方误差（Mean Squared Error）**：
-  在包含 $m$ 个样本的训练集上，我们使用均方误差来衡量预测值 $h_\theta(x^{(i)})$ 与真实标签 $y^{(i)}$ 之间的偏差：
-  $$J(\theta) = \frac{1}{2m} \sum_{i=1}^m \left( h_\theta(x^{(i)}) - y^{(i)} \right)^2$$
-  * **几何解释**：MSE 对应于点到超平面的欧氏距离平方的平均值。系数 $\frac{1}{2}$ 是为了求导时能与平方项约简，不影响最优化求解。
+### 1.1 History and Origins
+The history of linear regression is linked to the development of scientific error minimization. The method of least squares was first published independently by Adrien-Marie Legendre in 1805 and Carl Friedrich Gauss in 1809. Gauss used the method to predict the orbit of the dwarf planet Ceres, proving its effectiveness in handling observational errors. Sir Francis Galton coined the term "regression" in 1885 while studying the relationship between the heights of parents and their children, noting that offspring heights tended to "regress" toward the population mean.
 
-## 3. 闭式解与迭代求解对比
-求解最优参数 $\theta^*$ 使 $J(\theta)$ 最小化，有两种主要途径：
-* **最小二乘法闭式解（Ordinary Least Squares, OLS）**：
-  将数据表示为设计矩阵 $X \in \mathbb{R}^{m \times (d+1)}$，标签表示为向量 $Y \in \mathbb{R}^m$。通过矩阵求导令梯度为零，可得闭式解：
-  $$\theta^* = (X^T X)^{-1} X^T Y$$
-  * **限制**：如果矩阵 $X^T X$ 不可逆（奇异矩阵），或特征数 $d$ 极高（计算矩阵求逆复杂度为 $O(d^3)$），求逆过程将异常缓慢且不稳定。
-* **梯度下降迭代求解**：
-  对于极高维数据，我们通过计算损失函数关于 $\theta_j$ 的偏导数，逐步调整参数：
-  $$\theta_j \leftarrow \theta_j - \alpha \frac{1}{m} \sum_{i=1}^m \left( h_\theta(x^{(i)}) - y^{(i)} \right) x_j^{(i)}$$
-  * **优势**：算法复杂度低，适用于超大规模数据集，可通过调整学习率平滑收敛。
+### 1.2 Mathematical Motivations
+Given an input vector $\mathbf{x} = [x_1, \dots, x_d]^T \in \mathbb{R}^d$, linear regression models the target $y \in \mathbb{R}$ as a linear combination of features, plus a bias (intercept) term $w_0$:
+
+$$h_{\mathbf{w}}(\mathbf{x}) = w_0 + w_1 x_1 + \dots + w_d x_d$$
+
+By appending a constant feature $x_0 = 1$ to our input, we can express the hypothesis function compactly using a vector inner product:
+
+$$h_{\mathbf{w}}(\mathbf{x}) = \mathbf{w}^T \mathbf{x}$$
+
+where $\mathbf{w} = [w_0, w_1, \dots, w_d]^T$ is the parameter vector.
+
+### 1.3 Real-World Relevance
+Linear regression is widely applied in econometrics, quantitative finance, and resource forecasting. For instance, in real estate valuation, it models house prices as a function of square footage, number of rooms, and age. In financial economics, the Capital Asset Pricing Model (CAPM) uses simple linear regression to estimate the systematic risk (Beta) of an individual asset relative to the market portfolio.
+
+---
+
+## 2. Mathematical Foundations & Proofs
+
+This section presents the mathematical derivations of linear regression, proving the closed-form least squares solution and demonstrating its equivalence to Maximum Likelihood Estimation.
+
+### 2.1 The Ordinary Least Squares (OLS) Derivation
+Let $\mathbf{X} \in \mathbb{R}^{m \times (d+1)}$ be the design matrix containing $m$ samples, and $\mathbf{y} \in \mathbb{R}^m$ be the vector of target values. The Mean Squared Error (MSE) cost function $J(\mathbf{w})$ is defined as:
+
+$$J(\mathbf{w}) = \frac{1}{2m} \sum_{i=1}^m \left(\mathbf{w}^T \mathbf{x}^{(i)} - y^{(i)}\right)^2 = \frac{1}{2m} \|\mathbf{X}\mathbf{w} - \mathbf{y}\|_2^2$$
+
+To find the weight vector $\mathbf{w}$ that minimizes $J(\mathbf{w})$, we expand the norm:
+
+$$J(\mathbf{w}) = \frac{1}{2m} (\mathbf{X}\mathbf{w} - \mathbf{y})^T (\mathbf{X}\mathbf{w} - \mathbf{y}) = \frac{1}{2m} \left( \mathbf{w}^T \mathbf{X}^T \mathbf{X} \mathbf{w} - 2 \mathbf{w}^T \mathbf{X}^T \mathbf{y} + \mathbf{y}^T \mathbf{y} \right)$$
+
+Taking the gradient with respect to $\mathbf{w}$ using matrix calculus:
+
+$$\nabla_{\mathbf{w}} J(\mathbf{w}) = \frac{1}{m} \left( \mathbf{X}^T \mathbf{X} \mathbf{w} - \mathbf{X}^T \mathbf{y} \right)$$
+
+Setting the gradient to $\mathbf{0}$ yields the normal equations:
+
+$$\mathbf{X}^T \mathbf{X} \mathbf{w} = \mathbf{X}^T \mathbf{y}$$
+
+Assuming $\mathbf{X}^T \mathbf{X}$ is invertible, we obtain the closed-form OLS solution:
+
+$$\mathbf{w}^* = (\mathbf{X}^T \mathbf{X})^{-1} \mathbf{X}^T \mathbf{y}$$
+
+---
+
+### 2.2 Maximum Likelihood Estimation (MLE) Derivation
+We prove that minimizing the sum of squared errors is equivalent to maximizing the log-likelihood of the data under the assumption of Gaussian noise.
+
+Assume that for each sample $i$, the target $y^{(i)}$ is generated by:
+
+$$y^{(i)} = \mathbf{w}^T \mathbf{x}^{(i)} + \epsilon^{(i)}$$
+
+where the noise terms $\epsilon^{(i)}$ are independent and identically distributed (i.i.d.) random variables following a Gaussian distribution with mean $0$ and variance $\sigma^2$:
+
+$$\epsilon^{(i)} \sim \mathcal{N}(0, \sigma^2)$$
+
+This implies that the conditional probability density of $y^{(i)}$ given $\mathbf{x}^{(i)}$ parameterized by $\mathbf{w}$ is:
+
+$$p(y^{(i)} \mid \mathbf{x}^{(i)}; \mathbf{w}) = \frac{1}{\sqrt{2\pi}\sigma} \exp\left( -\frac{\left(y^{(i)} - \mathbf{w}^T \mathbf{x}^{(i)}\right)^2}{2\sigma^2} \right)$$
+
+Due to independence, the likelihood function $L(\mathbf{w})$ of the entire dataset is the product of individual probabilities:
+
+$$L(\mathbf{w}) = \prod_{i=1}^m p(y^{(i)} \mid \mathbf{x}^{(i)}; \mathbf{w}) = \prod_{i=1}^m \frac{1}{\sqrt{2\pi}\sigma} \exp\left( -\frac{\left(y^{(i)} - \mathbf{w}^T \mathbf{x}^{(i)}\right)^2}{2\sigma^2} \right)$$
+
+Taking the natural logarithm to get the log-likelihood $\ell(\mathbf{w})$:
+
+$$\ell(\mathbf{w}) = \ln L(\mathbf{w}) = \sum_{i=1}^m \ln\left( \frac{1}{\sqrt{2\pi}\sigma} \right) - \sum_{i=1}^m \frac{\left(y^{(i)} - \mathbf{w}^T \mathbf{x}^{(i)}\right)^2}{2\sigma^2}$$
+
+$$\ell(\mathbf{w}) = m \ln\left( \frac{1}{\sqrt{2\pi}\sigma} \right) - \frac{1}{2\sigma^2} \sum_{i=1}^m \left(y^{(i)} - \mathbf{w}^T \mathbf{x}^{(i)}\right)^2$$
+
+To maximize $\ell(\mathbf{w})$ with respect to $\mathbf{w}$, we can ignore the first constant term and the positive coefficient $\frac{1}{2\sigma^2}$:
+
+$$\max_{\mathbf{w}} \ell(\mathbf{w}) \iff \min_{\mathbf{w}} \sum_{i=1}^m \left(y^{(i)} - \mathbf{w}^T \mathbf{x}^{(i)}\right)^2$$
+
+This matches the formulation of minimizing the sum of squared errors, proving the equivalence.
+
+---
+
+### 2.3 Computational Complexity Analysis
+* **Closed-Form Solver**: Computing $\mathbf{w}^* = (\mathbf{X}^T \mathbf{X})^{-1} \mathbf{X}^T \mathbf{y}$ requires:
+  1. Matrix multiplication $\mathbf{X}^T \mathbf{X}$ of shape $(d+1) \times (d+1)$, taking $O(d^2 m)$ time.
+  2. Matrix inversion of a $(d+1) \times (d+1)$ matrix, taking $O(d^3)$ time.
+  3. Total complexity: $O(d^2 m + d^3)$. This becomes computationally expensive and numerically unstable when the feature dimension $d$ is very large (e.g., $d > 10,000$).
+* **Iterative Gradient Descent**: 
+  Calculating the gradient $\nabla_{\mathbf{w}} J(\mathbf{w}) = \frac{1}{m} \mathbf{X}^T (\mathbf{X}\mathbf{w} - \mathbf{y})$ takes $O(dm)$ operations per epoch. For $N$ epochs, the complexity is $O(Ndm)$, which scales linearly with both feature size and dataset size, making it ideal for massive datasets.
+
+---
+
+## 3. Geometrical and Computational Interpretations
+
+The OLS solver can be interpreted geometrically as a projection onto a subspace.
+
+```
+                  Geometric Projection of OLS Regression
+                            y (Target Vector in R^m)
+                            ^
+                           /|
+                          / |  e = y - Xw (Orthogonal Error Vector)
+                         /  |
+                        /   v
+                       +----> Xw (Projected Prediction in Column Space of X)
+                     /
+                   /
+                 / Col(X) (Subspace spanned by Columns of X)
+```
+
+The design matrix $\mathbf{X} \in \mathbb{R}^{m \times d}$ spans a column space (a subspace of $\mathbb{R}^m$ of dimension at most $d$). The target vector $\mathbf{y} \in \mathbb{R}^m$ typically does not lie within this column space. 
+
+To find the vector in the column space $\text{Col}(\mathbf{X})$ that is closest to $\mathbf{y}$, we project $\mathbf{y}$ orthogonally onto $\text{Col}(\mathbf{X})$. The prediction vector $\hat{\mathbf{y}} = \mathbf{X}\mathbf{w}$ is this projection. The error vector (residual) $\mathbf{e} = \mathbf{y} - \mathbf{X}\mathbf{w}$ must be orthogonal to the column space:
+
+$$\mathbf{X}^T \mathbf{e} = \mathbf{0} \implies \mathbf{X}^T (\mathbf{y} - \mathbf{X}\mathbf{w}) = \mathbf{0} \implies \mathbf{X}^T \mathbf{X} \mathbf{w} = \mathbf{X}^T \mathbf{y}$$
+
+This derivation matches the algebraic normal equations.
+
+---
+
+## 4. Algorithmic Implementation from Scratch
+
+The following Python class implements Linear Regression using both the closed-form OLS solver and the iterative Gradient Descent algorithm.
+
+```python
+# -*- coding: utf-8 -*-
+import numpy as np
+
+class LinearRegressionScratch:
+    """
+    Linear Regression model implemented from scratch using NumPy.
+    Supports both closed-form (OLS) and gradient descent solvers.
+    """
+    def __init__(self):
+        self.w = None
+        
+    def fit_ols(self, X: np.ndarray, y: np.ndarray):
+        """
+        Fits the model using the closed-form Ordinary Least Squares solution.
+        """
+        X = np.array(X, dtype=np.float64)
+        y = np.array(y, dtype=np.float64).reshape(-1, 1)
+        
+        # Add intercept column of ones
+        m = X.shape[0]
+        X_b = np.hstack([np.ones((m, 1)), X])
+        
+        # Calculate closed-form solution: w = (X^T X)^(-1) X^T y
+        try:
+            self.w = np.linalg.inv(X_b.T @ X_b) @ X_b.T @ y
+        except np.linalg.LinAlgError:
+            # Handle singular matrix using pseudo-inverse
+            self.w = np.linalg.pinv(X_b.T @ X_b) @ X_b.T @ y
+            
+    def fit_gd(self, X: np.ndarray, y: np.ndarray, lr: float = 0.01, epochs: int = 1000, batch_size: int = 32):
+        """
+        Fits the model using mini-batch gradient descent.
+        """
+        X = np.array(X, dtype=np.float64)
+        y = np.array(y, dtype=np.float64).reshape(-1, 1)
+        m, d = X.shape
+        X_b = np.hstack([np.ones((m, 1)), X])
+        
+        # Initialize weights randomly
+        self.w = np.random.randn(d + 1, 1) * 0.01
+        
+        for epoch in range(epochs):
+            # Shuffle the dataset
+            indices = np.random.permutation(m)
+            X_shuffled = X_b[indices]
+            y_shuffled = y[indices]
+            
+            for i in range(0, m, batch_size):
+                xb = X_shuffled[i:i+batch_size]
+                yb = y_shuffled[i:i+batch_size]
+                
+                # Compute predictions and errors
+                predictions = xb @ self.w
+                errors = predictions - yb
+                
+                # Compute gradient
+                gradient = (1.0 / len(xb)) * xb.T @ errors
+                
+                # Update weights
+                self.w -= lr * gradient
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predicts target values for given input features.
+        """
+        X = np.array(X, dtype=np.float64)
+        m = X.shape[0]
+        X_b = np.hstack([np.ones((m, 1)), X])
+        return X_b @ self.w
+
+    def compute_metrics(self, X: np.ndarray, y: np.ndarray) -> dict:
+        """
+        Computes MSE and R2 score evaluation metrics.
+        """
+        y = np.array(y, dtype=np.float64).reshape(-1, 1)
+        predictions = self.predict(X)
+        mse = np.mean((predictions - y) ** 2)
+        
+        # Total sum of squares
+        y_mean = np.mean(y)
+        tss = np.sum((y - y_mean) ** 2)
+        
+        # Residual sum of squares
+        rss = np.sum((y - predictions) ** 2)
+        
+        r2 = 1.0 - (rss / (tss + 1e-12))
+        return {"MSE": mse, "R2": r2}
+
+# Validation execution
+if __name__ == "__main__":
+    np.random.seed(42)
+    # Generate synthetic linear dataset: y = 5 + 3*x1 + 2*x2 + noise
+    X = np.random.rand(100, 2) * 10
+    y = 5.0 + 3.0 * X[:, 0] + 2.0 * X[:, 1] + np.random.randn(100) * 0.5
+    
+    # 1. Test OLS Solver
+    model_ols = LinearRegressionScratch()
+    model_ols.fit_ols(X, y)
+    print("OLS Parameters:\n", model_ols.w.flatten())
+    print("OLS Metrics:", model_ols.compute_metrics(X, y))
+    
+    # 2. Test Gradient Descent Solver
+    model_gd = LinearRegressionScratch()
+    model_gd.fit_gd(X, y, lr=0.005, epochs=2000, batch_size=16)
+    print("\nGD Parameters:\n", model_gd.w.flatten())
+    print("GD Metrics:", model_gd.compute_metrics(X, y))

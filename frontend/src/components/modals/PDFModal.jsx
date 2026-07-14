@@ -83,11 +83,127 @@ const parseIncompleteTags = (text) => {
   return { cleanText: text, pendingTag: null };
 };
 
-const tagsRegex = /(\[QUIZ:\s*\{[\s\S]*?\}\s*\]|\[MINDMAP:\s*(?:[\s\S]*?\n\s*\]|[^\]]*?\])|\[CODE:\s*\w+\s*\|(?:[\s\S]*?\n\s*\]|[^\]]*?\]))/g;
+function splitContentTags(content) {
+  if (!content) return [];
+  const parts = [];
+  let currentIndex = 0;
+  const len = content.length;
+
+  const tagPrefixes = [
+    '[QUIZ:',
+    '[VIDEO_RECOMMEND:',
+    '[MINDMAP:',
+    '[CODE:',
+    '[SLIDES:',
+    '[PDF:',
+    '[DIAGRAM:',
+    '[VIDEO:'
+  ];
+
+  while (currentIndex < len) {
+    let nextTagIdx = -1;
+    let matchedPrefix = '';
+    
+    for (const prefix of tagPrefixes) {
+      const idx = content.indexOf(prefix, currentIndex);
+      if (idx !== -1 && (nextTagIdx === -1 || idx < nextTagIdx)) {
+        nextTagIdx = idx;
+        matchedPrefix = prefix;
+      }
+    }
+
+    if (nextTagIdx === -1) {
+      parts.push(content.substring(currentIndex));
+      break;
+    }
+
+    parts.push(content.substring(currentIndex, nextTagIdx));
+
+    let depth = 1;
+    let scanIdx = nextTagIdx + matchedPrefix.length;
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inTripleSingleQuote = false;
+    let inTripleDoubleQuote = false;
+    let inComment = false;
+
+    while (scanIdx < len && depth > 0) {
+      const char = content[scanIdx];
+      const nextChar = content[scanIdx + 1];
+      const prevChar = content[scanIdx - 1];
+
+      if (char === '"' && nextChar === '"' && content[scanIdx + 2] === '"') {
+        if (inTripleDoubleQuote) {
+          inTripleDoubleQuote = false;
+        } else if (!inSingleQuote && !inDoubleQuote && !inTripleSingleQuote && !inComment) {
+          inTripleDoubleQuote = true;
+        }
+        scanIdx += 3;
+        continue;
+      }
+
+      if (char === "'" && nextChar === "'" && content[scanIdx + 2] === "'") {
+        if (inTripleSingleQuote) {
+          inTripleSingleQuote = false;
+        } else if (!inSingleQuote && !inDoubleQuote && !inTripleDoubleQuote && !inComment) {
+          inTripleSingleQuote = true;
+        }
+        scanIdx += 3;
+        continue;
+      }
+
+      if (inComment) {
+        if (char === '\n') {
+          inComment = false;
+        }
+        scanIdx++;
+        continue;
+      }
+
+      if (!inSingleQuote && !inDoubleQuote && !inTripleSingleQuote && !inTripleDoubleQuote) {
+        if (char === '#') {
+          inComment = true;
+          scanIdx++;
+          continue;
+        }
+      }
+
+      if (char === '"' && prevChar !== '\\') {
+        if (inDoubleQuote) {
+          inDoubleQuote = false;
+        } else if (!inSingleQuote && !inTripleSingleQuote && !inTripleDoubleQuote) {
+          inDoubleQuote = true;
+        }
+      } else if (char === "'" && prevChar !== '\\') {
+        if (inSingleQuote) {
+          inSingleQuote = false;
+        } else if (!inDoubleQuote && !inTripleSingleQuote && !inTripleDoubleQuote) {
+          inSingleQuote = true;
+        }
+      }
+
+      const inString = inSingleQuote || inDoubleQuote || inTripleSingleQuote || inTripleDoubleQuote;
+      if (!inString && !inComment) {
+        if (char === '[') {
+          depth++;
+        } else if (char === ']') {
+          depth--;
+        }
+      }
+
+      scanIdx++;
+    }
+
+    parts.push(content.substring(nextTagIdx, scanIdx));
+    currentIndex = scanIdx;
+  }
+
+  return parts;
+}
 
 function TutorChatMessage({ content, isStreaming }) {
   if (!content) return null;
-  const parts = content.split(tagsRegex);
+  const parts = splitContentTags(content);
   
   let lastVisibleTextIndex = -1;
   for (let i = parts.length - 1; i >= 0; i--) {

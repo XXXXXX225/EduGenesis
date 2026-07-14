@@ -587,6 +587,8 @@ function AppContent() {
   if (currentView === 'landing' || currentView === 'auth' || !isLoggedIn) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative', overflowX: 'hidden' }}>
+        <div className="academic-bg-overlay-1"></div>
+        <div className="academic-bg-overlay-2"></div>
         <div className="glow-orb-1" style={{ position: 'absolute', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(15, 118, 110, 0.05) 0%, transparent 70%)', top: '15%', right: '10%', pointerEvents: 'none', zIndex: 0 }}></div>
         <div className="glow-orb-2" style={{ position: 'absolute', width: '420px', height: '420px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(29, 78, 216, 0.04) 0%, transparent 70%)', bottom: '10%', left: '5%', pointerEvents: 'none', zIndex: 0 }}></div>
 
@@ -854,8 +856,11 @@ function AppContent() {
                           loadSessionMessages(sess.session_id);
                         }}
                       >
-                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '160px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <MessageSquare size={13} style={{ opacity: 0.7, flexShrink: 0 }} /> {sess.title}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', flexGrow: 1, minWidth: 0, paddingRight: '8px' }}>
+                          <MessageSquare size={13} style={{ opacity: 0.7, flexShrink: 0 }} />
+                          <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flexGrow: 1 }}>
+                            {sess.title}
+                          </span>
                         </span>
                         <div className="history-item-actions">
                           <button

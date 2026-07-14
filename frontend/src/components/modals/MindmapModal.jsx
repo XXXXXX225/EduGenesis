@@ -52,9 +52,9 @@ function preprocessMermaidText(text) {
 
   // Wrap unquoted node labels containing special characters in double quotes
   processed = processed.replace(
-    /(\b\w+)\s*(\[\(|\[\[|\[|\(|\{|\>)\s*([^\r\n]*?)\s*(\)\]|\]\]|\]|\)|\})/g,
+    /([\p{L}\p{N}_][\p{L}\p{N}_\.-]*)\s*(\[\(|\[\[|\(\(|\{\{|\[\/|\[\\|\)\)|\[|\(|\{|>)\s*([^\r\n]*?)\s*(\)\]|\]\]|\)\)|\}\}|\/\]|\\\]|\\\/\]|\\_\]|\]|\)|\})/gu,
     (match, id, openBrackets, label, closeBrackets) => {
-      const reserved = ['flowchart', 'graph', 'subgraph', 'end', 'direction', 'click', 'style', 'classDef', 'class', 'linkStyle'];
+      const reserved = ['flowchart', 'graph', 'subgraph', 'end', 'direction', 'click', 'style', 'classDef', 'class', 'linkStyle', 'mindmap'];
       if (reserved.includes(id.toLowerCase())) {
         return match;
       }
@@ -75,8 +75,8 @@ function preprocessMermaidText(text) {
     }
   );
 
-  // If the text does not contain 'flowchart' or 'graph', it's invalid
-  if (!processed.includes('flowchart') && !processed.includes('graph')) {
+  // If the text does not contain 'flowchart' or 'graph' or 'mindmap', it's invalid
+  if (!processed.includes('flowchart') && !processed.includes('graph') && !processed.includes('mindmap')) {
     processed = `flowchart TD\n    A["概念脑图生成中..."]`;
   }
 

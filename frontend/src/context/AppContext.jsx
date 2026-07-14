@@ -213,7 +213,12 @@ export function AppProvider({ children }) {
     currentSessionId,
     tutorPersonality,
     chatSessions,
-    setChatSessions
+    setChatSessions,
+    getSelectedNode: () => selectedNode,
+    getActiveModal: () => activeModal,
+    getSandboxCode: () => sandboxHook?.sandboxCode,
+    getSandboxError: () => sandboxHook?.sandboxError,
+    getLastQuizScore: () => quizHook?.lastQuizScore
   });
   const speechHook = useSpeech();
   const quizHook = useQuiz({
@@ -223,14 +228,16 @@ export function AppProvider({ children }) {
     setSelectedNode,
     setPathNodes,
     setProfileAlert,
-    setDiagnosticLogs
+    setDiagnosticLogs,
+    chat: chatHook
   });
   const sandboxHook = useSandbox({
     setProfile,
     setPathNodes,
     setSelectedNode,
     setProfileAlert,
-    setDiagnosticLogs
+    setDiagnosticLogs,
+    chat: chatHook
   });
 
   // 📔 Smart Error Notebook states
@@ -561,6 +568,41 @@ export function AppProvider({ children }) {
     }
   };
 
+  const completeResource = async (nodeId, resourceType) => {
+    if (!nodeId || !resourceType) return;
+    try {
+      const data = await apiPost('/path/complete-resource', {
+        node_id: nodeId,
+        resource_type: resourceType
+      });
+      setPathNodes(data.nodes);
+      
+      // Update selectedNode so it reflects updated completed_resources immediately
+      if (selectedNode && selectedNode.id === nodeId) {
+        const updatedNode = data.nodes.find(n => n.id === nodeId);
+        if (updatedNode) {
+          setSelectedNode(updatedNode);
+        }
+      }
+      
+      if (data.node_completed) {
+        setProfileAlert("恭喜！您已完成当前关卡的所有学习任务，下一关卡已开启。");
+        setDiagnosticLogs(prev => [
+          ...prev,
+          {
+            time: new Date().toLocaleTimeString(),
+            log: `关卡通关: 节点 [${selectedNode?.title || nodeId}] 所有任务完成，下一关已解锁！`
+          }
+        ]);
+        if (chatHook) {
+          chatHook.submitChatMessage(`[系统感知] 学生完成了「${selectedNode?.title || nodeId}」的所有关联任务资源学习，恭喜通关！`, 'system');
+        }
+      }
+    } catch (err) {
+      console.error("Failed to complete resource:", err);
+    }
+  };
+
   const handleRegeneratePath = async () => {
     setIsRegeneratingPath(true);
     try {
@@ -648,6 +690,7 @@ export function AppProvider({ children }) {
         goPortalHome,
         goDashboardHome,
         fetchNodeResources,
+        completeResource,
         fetchErrors,
         fetchConsoleLogs,
         handleDiagnoseError,

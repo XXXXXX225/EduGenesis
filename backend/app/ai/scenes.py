@@ -48,17 +48,27 @@ IMPORTANT RULES for switch_to_subject:
 - If the student's input is a regular chat, question, or does not indicate switching to a new learning goal/subject, set "switch_to_subject" to null.
 
 Output STRICTLY a JSON object (no markdown formatting) matching this schema:
-{{
-  "profile_updates": {{
+{
+  "profile_updates": {
     "knowledge_base": null or int(0-100),
     "learning_pace": null or int(0-100),
     "cognitive_style": null or str,
     "error_patterns": null or list of str,
     "learning_goals": null or list of str,
     "engagement": null or int(0-100)
-  }},
-  "switch_to_subject": null or str (either one of the display_name values above, or the name of a new subject to register)
-}}"""
+  },
+  "switch_to_subject": null or str (either one of the display_name values above, or the name of a new subject to register),
+  "trigger_replan": bool (set to true ONLY if the student explicitly asks to replan the entire path),
+  "apply_node_adjustment": null or {
+    "node_id": str (e.g. "node2"),
+    "title": str (the upgraded/adjusted node title, e.g. "工程级逻辑回归与二分类实战"),
+    "description": str (the upgraded/adjusted node description summarizing the new content)
+  }
+}
+
+Guidelines for apply_node_adjustment:
+- If the student requests to apply a recently discussed or proposed node adjustment/upgrade (e.g. "帮我把调整的节点应用到路径中", "应用升级", "确定调整" or similar), or if they express approval of a specific node's content adjustment, identify which node ID was discussed in the chat (e.g. "node2"), and output the proposed title and description. Otherwise, set it to null.
+"""
 
     api_messages = [{"role": "system", "content": system_prompt}]
     api_messages.extend({"role": msg.role, "content": msg.content} for msg in messages)
@@ -72,6 +82,15 @@ def stream_tutor_reply(
     videos_context: Optional[list[dict]] = None,
     tutor_personality: Optional[str] = None,
     knowledge_context: Optional[str] = None,
+    current_node_id: Optional[str] = None,
+    current_node_title: Optional[str] = None,
+    current_node_description: Optional[str] = None,
+    current_node_status: Optional[str] = None,
+    current_node_resources: Optional[list[str]] = None,
+    current_resource_type: Optional[str] = None,
+    last_sandbox_code: Optional[str] = None,
+    last_sandbox_error: Optional[str] = None,
+    last_quiz_score: Optional[str] = None,
 ):
     active_prompt_text = ""
     try:
@@ -90,6 +109,19 @@ def stream_tutor_reply(
 
     system_prompt = f"""{active_prompt_text}
 
+学生当前学习状态：
+- 当前学习的关卡节点 ID: {current_node_id or "未选择"}
+- 关卡名称: {current_node_title or "未选择"}
+- 关卡简介: {current_node_description or "暂无"}
+- 关卡状态: {current_node_status or "暂无"}
+- 该关卡可用资源: {', '.join(current_node_resources) if current_node_resources else "无"}
+- 正在查看的资源类型: {current_resource_type or "无"}
+- 沙盒中最近编写的代码:
+{last_sandbox_code or "暂无代码记录"}
+- 代码最近运行错误信息:
+{last_sandbox_error or "无运行错误"}
+- 最近自适应测试得分: {last_quiz_score or "无记录"}
+
 学生画像特征（请根据学生的水平和认知风格调整你的解释）：
 {json.dumps(current_profile.model_dump(), ensure_ascii=False)}
 
@@ -99,6 +131,7 @@ def stream_tutor_reply(
 3. 知识思维导图卡片：[MINDMAP: <以 graph TD 或 graph LR 开始的 Mermaid 流程图代码>]
 4. 代码沙箱卡片：[CODE: python | <Python 源代码>]
 5. 幻灯片卡片：[SLIDES: 标题1 | 内容1 --- 标题2 | 内容2]
+   【幻灯片美学高保真约束】：使用该标签时，所有页面都应该设计成具有高度吸引力和可读性的内容。绝对禁止将数据库内部的字段（如“节点ID”、“可用资源”、“任务要求”、“后续节点预告”等）直接作为页标题或内容展示。每一页的标题必须生动（例如：“🔥 关卡内容升级通知”、“🎯 核心升级方向”、“🛠️ 实战任务要求”等），且内容排版整密，不能在幻灯片内部嵌套其他 [CODE: ...]、[QUIZ: ...] 等长标签，也不能将海量 JSON 或代码塞在幻灯片里。
 6. PDF讲义课本：[PDF: 标题 | <详尽的 Markdown 格式讲义内容>]"""
 
     if knowledge_context:
@@ -124,7 +157,13 @@ def stream_tutor_reply(
         )
 
     api_messages = [{"role": "system", "content": system_prompt}]
-    api_messages.extend({"role": msg.role, "content": msg.content} for msg in messages)
+    for msg in messages:
+        role = msg.role
+        content = msg.content
+        if role == "system":
+            role = "user"
+            content = f"[系统通知] {content}"
+        api_messages.append({"role": role, "content": content})
     return request_stream_completion(username, "chat", api_messages, temperature=0.7, timeout=12)
 
 
@@ -211,12 +250,37 @@ def generate_path_nodes(goals: list[str], style: str, username: str = "default_u
         db_log_agent_action(username, "路径智能体", "路径规划中止: 未检测到有效的大模型服务 Key。", "warning")
         return []
 
+    # Dynamically retrieve student knowledge level and learning pace to adjust path difficulty
+    try:
+        from app.db import db_get_profile
+        profile = db_get_profile(username)
+        kb_score = profile.knowledge_base
+        pace_score = profile.learning_pace
+    except Exception:
+        kb_score = 50
+        pace_score = 50
+
     system_prompt = f"""你是一个多智能体教育网络中的路径规划智能体。
 你的任务是为学生生成正好 8 个定制的个性化学习关卡节点。
 学生的学习目标: {", ".join(goals)}
 学生的认知风格: {style}
+学生当前专业知识掌握水平: {kb_score} / 100
+学生当前倾向的学习速度: {pace_score} / 100
 
-【强制约束】：你必须输出一个包含 "nodes" 键的 JSON 对象，其中节点列表的数量必须精确为 8 个。所有节点的标题（title）和描述（description）必须完全使用简体中文，严禁使用任何英文。"""
+【自适应难度与节奏调整约束】：
+1. 知识掌握水平 (kb_score) 代表学生当前的专业储备度：
+   - 若值较高（如 >= 70），规划的关卡节点应该明显偏向中高阶主题，跳过低端、极其简单的概念性名词解释，直接进入核心设计模式、高并发、深度数学方程推导、或中高阶工程实践。
+   - 若值偏低（如 <= 45），关卡节点必须极其循序渐进，前几个关卡需偏向基础常识讲解，引入直观具象的实例描述。
+2. 学习步调 (pace_score) 代表学生的偏好进度：若值很高（如 >= 70），关卡间知识跨度可以适当拉大，信息密度大幅提高。
+
+【强制约束】：你必须输出一个包含 "nodes" 键的 JSON 对象，其中节点列表的数量必须精确为 8 个。
+每个节点必须包含以下字段：
+- "id": 字符串，例如 "node1", "node2", ..., "node8"
+- "title": 关卡标题，必须是中文
+- "description": 关卡描述，必须是中文
+- "resources": 列表，包含该关卡对应的多种学习资源类型（从 ["slide", "pdf", "mindmap", "quiz", "code", "video"] 中选择至少 4 种，例如 ["slide", "pdf", "mindmap", "quiz", "video"]）
+
+所有节点的标题（title）和描述（description）必须完全使用简体中文，严禁使用任何英文。"""
     parsed = request_json_completion(
         username,
         "planner",
@@ -244,6 +308,11 @@ def generate_course_syllabus(course_name: str, description: str, username: str =
 课程名称: {course_name}
 课程描述: {description}
 你必须输出一个包含 "nodes" 键的 JSON 对象，该键是一个正好包含 8 个大纲章节节点的列表。
+每个节点必须包含以下字段：
+- "title": 章节标题，必须是中文
+- "description": 章节描述，必须是中文
+- "resources": 列表，包含该章节建议的多种学习资源类型（从 ["slide", "pdf", "mindmap", "quiz", "code", "video"] 中选择至少 4 种，例如 ["slide", "pdf", "mindmap", "quiz", "video"]）
+
 【语言约束】：所有大纲节点的标题（title）和描述（description）必须完全使用简体中文，禁止使用英文。""",
             },
             {"role": "user", "content": "现在请立即生成包含 8 个大纲章节的 JSON 对象。"},

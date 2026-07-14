@@ -56,14 +56,18 @@ def generate_course_materials(course_id: str, username: str = "default_user") ->
         logger.error(f"Course '{course_id}' must have exactly 8 syllabus nodes. Found {len(nodes) if nodes else 0}.")
         return False
 
-    # 2. Ensure course folder exists on physical disk
-    course_dir = os.path.join(COURSES_DIR, course_id)
+    # 2. Ensure course folder exists on physical disk (sandbox validation)
+    course_dir = os.path.abspath(os.path.join(COURSES_DIR, course_id))
+    resolved_courses_dir = os.path.abspath(COURSES_DIR) + os.path.sep
+    if not course_dir.startswith(resolved_courses_dir):
+        logger.error(f"Directory traversal blocked for course_id: '{course_id}'")
+        return False
     os.makedirs(course_dir, exist_ok=True)
 
     # 3. Generate Markdown content for each node
     generated_files = []
     for idx, node in enumerate(nodes):
-        node_id = node.get("id", f"node{idx+1}")
+        node_id = os.path.basename(node.get("id", f"node{idx+1}"))
         node_title = node.get("title", f"第{idx+1}章")
         node_desc = node.get("description", "")
         
@@ -90,19 +94,47 @@ def generate_course_materials(course_id: str, username: str = "default_user") ->
             {"role": "user", "content": f"请立刻为章节《{node_title}》撰写深入的教科书正文内容。"}
         ]
         
-        # Call LLM
-        chapter_markdown = request_text_completion(
-            username=username,
-            capability="planner",
-            messages=messages,
-            temperature=0.4,
-            timeout=40  # Textbook generation might take a bit longer
-        )
+        # Check if the textbook file already exists for pre-seeded/existing courses
+        file_path = os.path.abspath(os.path.join(course_dir, f"{node_id}.md"))
+        if not file_path.startswith(resolved_courses_dir):
+            logger.error(f"File write traversal blocked: {file_path}")
+            return False
+            
+        chapter_markdown = ""
+        # If it is a demo course and the node is unmodified, try to read the existing file from disk first.
+        # If the node's title has changed, we use the LLM to generate custom textbook chapters!
+        from app.course_resources_data import is_node_unmodified
+        is_unmodified = is_node_unmodified(course_id, node_id, node_title)
         
+        if course_id in ["python_basics", "machine_learning"] and is_unmodified and os.path.exists(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    # Strip any initial "# node_title" to avoid double titles
+                    if content.startswith(f"# {node_title}\n\n"):
+                        chapter_markdown = content[len(f"# {node_title}\n\n"):]
+                    elif content.startswith(f"#{node_title}\n\n"):
+                        chapter_markdown = content[len(f"#{node_title}\n\n"):]
+                    else:
+                        chapter_markdown = content
+                logger.info(f"Loaded existing textbook file for unmodified demo course {course_id} / {node_id} directly from disk.")
+            except Exception as e:
+                logger.error(f"Failed to read existing textbook file {file_path}: {e}")
+
         if not chapter_markdown:
-            logger.error(f"Failed to generate content for {node_id} via LLM.")
-            # Fallback mock content in case of API failure to prevent complete workflow crash
-            chapter_markdown = f"""## 1. {node_title} 概述
+            # Call LLM
+            chapter_markdown = request_text_completion(
+                username=username,
+                capability="planner",
+                messages=messages,
+                temperature=0.4,
+                timeout=40  # Textbook generation might take a bit longer
+            )
+            
+            if not chapter_markdown:
+                logger.error(f"Failed to generate content for {node_id} via LLM.")
+                # Fallback mock content in case of API failure to prevent complete workflow crash
+                chapter_markdown = f"""## 1. {node_title} 概述
 本章节关于《{node_title}》的知识点。主要涵盖了 {node_desc} 的核心概念和应用场景。
 
 ## 2. 核心原理与推导
@@ -110,10 +142,13 @@ def generate_course_materials(course_id: str, username: str = "default_user") ->
 
 ## 3. 专业实战应用
 通过结合典型案例，我们可以在实际项目中部署并校验该模块的有效性。"""
-            logger.warning(f"Using fallback mock content for {node_id}.")
+                logger.warning(f"Using fallback mock content for {node_id}.")
 
-        # Save to file
-        file_path = os.path.join(course_dir, f"{node_id}.md")
+        # Save to file (with boundary checking)
+        file_path = os.path.abspath(os.path.join(course_dir, f"{node_id}.md"))
+        if not file_path.startswith(resolved_courses_dir):
+            logger.error(f"File write traversal blocked: {file_path}")
+            return False
         try:
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(f"# {node_title}\n\n{chapter_markdown}\n")

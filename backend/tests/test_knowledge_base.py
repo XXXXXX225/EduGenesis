@@ -85,4 +85,37 @@ def test_semantic_similarity_search():
     assert "node_id" in results[0]
     assert results[0]["score"] >= 0.0
 
+def test_load_course_material_path_traversal():
+    # Attempting to load files outside the course directory should return empty string (blocked)
+    res1 = load_course_material("Python Basics", "../../../etc/passwd")
+    assert res1 == ""
+    
+    res2 = load_course_material("Python Basics", "..\\..\\..\\windows\\system32")
+    assert res2 == ""
+
+def test_generate_mindmap_from_markdown():
+    from app.db import generate_mindmap_from_markdown
+    md = """# Title
+Some text
+## Chapter 1: Basic
+Intro text
+### Chapter 1.1: Installation
+Details
+## Chapter 2: Coding
+Text
+### Chapter 2.1: Types
+More details
+"""
+    mindmap = generate_mindmap_from_markdown(md, "Main Topic")
+    assert "graph TD" in mindmap
+    assert "Root[\"Main Topic\"]" in mindmap
+    assert "H2_0[\"Chapter 1: Basic\"]" in mindmap
+    assert "H3_0[\"Chapter 1.1: Installation\"]" in mindmap
+    assert "H2_1[\"Chapter 2: Coding\"]" in mindmap
+    assert "H3_1[\"Chapter 2.1: Types\"]" in mindmap
+    assert "Root --> H2_0" in mindmap
+    assert "H2_0 --> H3_0" in mindmap
+    assert "Root --> H2_1" in mindmap
+    assert "H2_1 --> H3_1" in mindmap
+
 

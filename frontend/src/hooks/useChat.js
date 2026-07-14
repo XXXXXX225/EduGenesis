@@ -1,7 +1,22 @@
 import { useState, useRef, useEffect } from 'react';
 import { apiSSEStream } from '../utils/api';
 
-export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, setDiagnosticLogs, currentSessionId, tutorPersonality, chatSessions, setChatSessions }) {
+export function useChat({
+  profile,
+  setProfile,
+  setProfileAlert,
+  setPathNodes,
+  setDiagnosticLogs,
+  currentSessionId,
+  tutorPersonality,
+  chatSessions,
+  setChatSessions,
+  getSelectedNode,
+  getActiveModal,
+  getSandboxCode,
+  getSandboxError,
+  getLastQuizScore
+}) {
   const [chatHistory, setChatHistory] = useState([
     { role: 'assistant', content: '您好！我是您的个性化学习助教。我会根据我们的对话动态构建您的学习画像，并定制专属的学习路径。你可以告诉我你的编程水平，或者发送“我想学机器学习”来调整内容。' }
   ]);
@@ -77,11 +92,17 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
     typingTimerRef.current = setTimeout(tick, 20);
   };
 
-  const submitChatMessage = async (messageText) => {
+  const submitChatMessage = async (messageText, role = 'user') => {
     if (isStreaming || !messageText.trim()) return;
 
-    const userMessage = { role: 'user', content: messageText };
-    setChatHistory(prev => [...prev, userMessage]);
+    const selectedNode = getSelectedNode ? getSelectedNode() : null;
+    const activeModal = getActiveModal ? getActiveModal() : null;
+    const sandboxCode = getSandboxCode ? getSandboxCode() : null;
+    const sandboxError = getSandboxError ? getSandboxError() : null;
+    const quizScore = getLastQuizScore ? getLastQuizScore() : null;
+
+    const newMessage = { role: role, content: messageText };
+    setChatHistory(prev => [...prev, newMessage]);
     setIsStreaming(true);
     setTutorStatus('[主管智能体] 正在唤醒协同网络...');
 
@@ -97,10 +118,19 @@ export function useChat({ profile, setProfile, setProfileAlert, setPathNodes, se
 
     try {
       await apiSSEStream('/chat', {
-        messages: [...chatHistory, userMessage],
+        messages: [...chatHistory.filter(m => m.content !== ''), newMessage],
         current_profile: profile,
         session_id: currentSessionId,
-        tutor_personality: tutorPersonality
+        tutor_personality: tutorPersonality,
+        current_node_id: selectedNode?.id || null,
+        current_node_title: selectedNode?.title || null,
+        current_node_description: selectedNode?.description || null,
+        current_node_status: selectedNode?.status || null,
+        current_node_resources: selectedNode?.resources || null,
+        current_resource_type: activeModal || null,
+        last_sandbox_code: sandboxCode || null,
+        last_sandbox_error: sandboxError || null,
+        last_quiz_score: quizScore || null
       }, (data) => {
         if (data.type === 'status') {
           setTutorStatus(data.status);

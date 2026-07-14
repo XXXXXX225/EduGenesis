@@ -1,11 +1,13 @@
 import React from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { BookOpen, Sparkles, Play, Terminal, Cpu } from 'lucide-react';
+import { BookOpen, Sparkles, Play, Terminal, Cpu, MessageSquare } from 'lucide-react';
 
 export default function SandboxView() {
   const {
     setProfile,
     goDashboardHome,
+    chat,
+    setActiveTab,
     sandbox: {
       sandboxChallenge,
       sandboxAIAdvice,
@@ -169,6 +171,36 @@ export default function SandboxView() {
             <div className="code-editor-header">
               <span style={{ fontSize: '12px', color: '#8e8e9f', fontFamily: 'monospace', fontWeight: '700' }}>main.py (Python 3.10)</span>
               <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    chat.submitChatMessage(`我在运行自适应沙盒的代码时遇到了问题。这是我编写的代码：\n\n\`\`\`python\n${sandboxCode || ''}\n\`\`\`\n\n您能帮我看一下这部分代码，提供一些指导和修改建议吗？`);
+                    setActiveTab('chat');
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, var(--accent-cyan) 0%, var(--primary-neon) 100%)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '6px',
+                    color: '#ffffff',
+                    padding: '6px 12px',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(45, 212, 191, 0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'none';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  <MessageSquare size={12} /> 寻求导师指导
+                </button>
                 <button
                   type="button"
                   onClick={async () => {

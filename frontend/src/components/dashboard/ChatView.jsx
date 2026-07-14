@@ -5,10 +5,119 @@ import { apiGet } from '../../utils/api';
 
 import QuizCard from '../chat/QuizCard';
 import VideoRecommendCard from '../chat/VideoRecommendCard';
-import MermaidRenderer from '../chat/MermaidRenderer';
 import CodeSandboxCard from '../chat/CodeSandboxCard';
 import SlidesCarouselCard from '../chat/SlidesCarouselCard';
 import PDFDownloadCard from '../chat/PDFDownloadCard';
+
+const LatexRenderer = ({ text }) => {
+  if (!text) return null;
+
+  // Regex to match block math $$...$$ and inline math $...$ or \(...\) or \[...\]
+  const mathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\\\$[^\s$][^$\n]*?[^\s$]\$|\$[^\s$]\$|\$[^\s$][^$\n]*?[^\s$]\$)/g;
+  const parts = text.split(mathRegex);
+
+  const formatMath = (mathStr) => {
+    let clean = mathStr;
+    let isBlock = false;
+    if (clean.startsWith('$$') && clean.endsWith('$$')) {
+      clean = clean.slice(2, -2);
+      isBlock = true;
+    } else if (clean.startsWith('$') && clean.endsWith('$')) {
+      clean = clean.slice(1, -1);
+    } else if (clean.startsWith('\\[') && clean.endsWith('\\]')) {
+      clean = clean.slice(2, -2);
+      isBlock = true;
+    } else if (clean.startsWith('\\(') && clean.endsWith('\\)')) {
+      clean = clean.slice(2, -2);
+    }
+
+    clean = clean.trim();
+
+    // Map common LaTeX math symbols
+    const symbols = {
+      '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\delta': 'δ',
+      '\\epsilon': 'ε', '\\zeta': 'ζ', '\\eta': 'η', '\\theta': 'θ',
+      '\\iota': 'ι', '\\kappa': 'κ', '\\lambda': 'λ', '\\mu': 'μ',
+      '\\nu': 'ν', '\\xi': 'ξ', '\\pi': 'π', '\\rho': 'ρ',
+      '\\sigma': 'σ', '\\tau': 'τ', '\\upsilon': 'υ', '\\phi': 'φ',
+      '\\chi': 'χ', '\\psi': 'ψ', '\\omega': 'ω',
+      '\\Delta': 'Δ', '\\Gamma': 'Γ', '\\Theta': 'Θ', '\\Lambda': 'Λ',
+      '\\Xi': 'Ξ', '\\Pi': 'Π', '\\Sigma': 'Σ', '\\Phi': 'Φ',
+      '\\Psi': 'Ψ', '\\Omega': 'Ω',
+      '\\infty': '∞', '\\le': '≤', '\\ge': '≥', '\\neq': '≠',
+      '\\approx': '≈', '\\times': '×', '\\div': '÷', '\\pm': '±',
+      '\\cdot': '·', '\\in': '∈', '\\notin': '∉', '\\subset': '⊂',
+      '\\supset': '⊃', '\\subseteq': '⊆', '\\supseteq': '⊇',
+      '\\forall': '∀', '\\exists': '∃', '\\nabla': '∇',
+      '\\partial': '∂', '\\sum': '∑', '\\prod': '∏', '\\int': '∫',
+      '\\log': 'log', '\\ln': 'ln', '\\sin': 'sin', '\\cos': 'cos',
+      '\\tan': 'tan', '\\exp': 'exp', '\\lim': 'lim', '\\to': '→',
+      '\\rightarrow': '→', '\\leftarrow': '←', '\\implies': '⇒',
+      '\\iff': '⇔', '\\backslash': '\\'
+    };
+
+    let html = clean;
+
+    // Apply symbol translations
+    Object.entries(symbols).forEach(([key, val]) => {
+      const escapedKey = key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      html = html.replace(new RegExp(escapedKey, 'g'), val);
+    });
+
+    // Handle fractions: \frac{a}{b} -> vertical fraction using flexbox
+    html = html.replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, '<span style="display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; font-size: 0.85em; line-height: 1;"><sup style="border-bottom: 1px solid; padding: 0 2px; bottom: 0;">$1</sup><sub style="top: 0; padding: 0 2px;">$2</sub></span>');
+
+    // Handle font styling: \mathbf{x}, \mathrm{x}, \text{x}
+    html = html.replace(/\\mathbf\{([^{}]+)\}/g, '<strong style="font-style: normal;">$1</strong>');
+    html = html.replace(/\\mathrm\{([^{}]+)\}/g, '<span style="font-style: normal;">$1</span>');
+    html = html.replace(/\\text\{([^{}]+)\}/g, '<span style="font-style: normal;">$1</span>');
+
+    // Handle superscripts: x^{abc} or x^2
+    html = html.replace(/\^\{([^{}]+)\}/g, '<sup>$1</sup>');
+    html = html.replace(/\^([a-zA-Z0-9])/g, '<sup>$1</sup>');
+
+    // Handle subscripts: x_{abc} or x_i
+    html = html.replace(/_\{([^{}]+)\}/g, '<sub>$1</sub>');
+    html = html.replace(/_([a-zA-Z0-9])/g, '<sub>$1</sub>');
+
+    // Strip remaining backslashes for formatting commands
+    html = html.replace(/\\/g, '');
+
+    return (
+      <span
+        className={isBlock ? "math-block" : "math-inline"}
+        style={{
+          fontFamily: 'Cambria Math, Georgia, serif',
+          fontStyle: 'italic',
+          display: isBlock ? 'block' : 'inline-block',
+          textAlign: isBlock ? 'center' : 'left',
+          margin: isBlock ? '12px 0' : '0 2px',
+          padding: isBlock ? '8px' : '0 2px',
+          background: isBlock ? 'rgba(255,255,255,0.02)' : 'transparent',
+          borderRadius: isBlock ? '8px' : '0',
+          border: isBlock ? '1px solid rgba(255,255,255,0.04)' : 'none'
+        }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  };
+
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (!part) return null;
+        const isMath = (part.startsWith('$$') && part.endsWith('$$')) ||
+                       (part.startsWith('$') && part.endsWith('$')) ||
+                       (part.startsWith('\\[') && part.endsWith('\\]')) ||
+                       (part.startsWith('\\(') && part.endsWith('\\)'));
+        if (isMath) {
+          return <React.Fragment key={index}>{formatMath(part)}</React.Fragment>;
+        }
+        return <span key={index}>{part}</span>;
+      })}
+    </>
+  );
+};
 
 const TutorAvatar = () => {
   const { chat, agentLogs } = useAppContext();
@@ -363,6 +472,123 @@ const parseIncompleteTags = (text) => {
   }
   return { cleanText: text, pendingTag: null };
 };
+function splitContentTags(content) {
+  if (!content) return [];
+  const parts = [];
+  let currentIndex = 0;
+  const len = content.length;
+
+  const tagPrefixes = [
+    '[QUIZ:',
+    '[VIDEO_RECOMMEND:',
+    '[MINDMAP:',
+    '[CODE:',
+    '[SLIDES:',
+    '[PDF:',
+    '[DIAGRAM:',
+    '[VIDEO:'
+  ];
+
+  while (currentIndex < len) {
+    let nextTagIdx = -1;
+    let matchedPrefix = '';
+    
+    for (const prefix of tagPrefixes) {
+      const idx = content.indexOf(prefix, currentIndex);
+      if (idx !== -1 && (nextTagIdx === -1 || idx < nextTagIdx)) {
+        nextTagIdx = idx;
+        matchedPrefix = prefix;
+      }
+    }
+
+    if (nextTagIdx === -1) {
+      parts.push(content.substring(currentIndex));
+      break;
+    }
+
+    parts.push(content.substring(currentIndex, nextTagIdx));
+
+    let depth = 1;
+    let scanIdx = nextTagIdx + matchedPrefix.length;
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inTripleSingleQuote = false;
+    let inTripleDoubleQuote = false;
+    let inComment = false;
+
+    while (scanIdx < len && depth > 0) {
+      const char = content[scanIdx];
+      const nextChar = content[scanIdx + 1];
+      const prevChar = content[scanIdx - 1];
+
+      if (char === '"' && nextChar === '"' && content[scanIdx + 2] === '"') {
+        if (inTripleDoubleQuote) {
+          inTripleDoubleQuote = false;
+        } else if (!inSingleQuote && !inDoubleQuote && !inTripleSingleQuote && !inComment) {
+          inTripleDoubleQuote = true;
+        }
+        scanIdx += 3;
+        continue;
+      }
+
+      if (char === "'" && nextChar === "'" && content[scanIdx + 2] === "'") {
+        if (inTripleSingleQuote) {
+          inTripleSingleQuote = false;
+        } else if (!inSingleQuote && !inDoubleQuote && !inTripleDoubleQuote && !inComment) {
+          inTripleSingleQuote = true;
+        }
+        scanIdx += 3;
+        continue;
+      }
+
+      if (inComment) {
+        if (char === '\n') {
+          inComment = false;
+        }
+        scanIdx++;
+        continue;
+      }
+
+      if (!inSingleQuote && !inDoubleQuote && !inTripleSingleQuote && !inTripleDoubleQuote) {
+        if (char === '#') {
+          inComment = true;
+          scanIdx++;
+          continue;
+        }
+      }
+
+      if (char === '"' && prevChar !== '\\') {
+        if (inDoubleQuote) {
+          inDoubleQuote = false;
+        } else if (!inSingleQuote && !inTripleSingleQuote && !inTripleDoubleQuote) {
+          inDoubleQuote = true;
+        }
+      } else if (char === "'" && prevChar !== '\\') {
+        if (inSingleQuote) {
+          inSingleQuote = false;
+        } else if (!inDoubleQuote && !inTripleSingleQuote && !inTripleDoubleQuote) {
+          inSingleQuote = true;
+        }
+      }
+
+      const inString = inSingleQuote || inDoubleQuote || inTripleSingleQuote || inTripleDoubleQuote;
+      if (!inString && !inComment) {
+        if (char === '[') {
+          depth++;
+        } else if (char === ']') {
+          depth--;
+        }
+      }
+
+      scanIdx++;
+    }
+
+    parts.push(content.substring(nextTagIdx, scanIdx));
+    currentIndex = scanIdx;
+  }
+
+  return parts;
+}
 
 const InteractiveChatBubble = ({ msg, isStreaming }) => {
   const { speech: { handleSlideSpeech, stopSlideSpeech } } = useAppContext();
@@ -411,10 +637,7 @@ const InteractiveChatBubble = ({ msg, isStreaming }) => {
     return null;
   }
 
-  // Expand regex to capture all resource tags robustly without splitting on internal brackets (like A[Node] or arr=[1,2,3] or markdown links)
-  const tagsRegex = /(\[QUIZ:\s*\{[\s\S]*?\}\s*\]|\[VIDEO_RECOMMEND:\s*\{[\s\S]*?\}\s*\]|\[MINDMAP:\s*(?:[\s\S]*?\n\s*\]|[^\]]*?\])|\[CODE:\s*\w+\s*\|(?:[\s\S]*?\n\s*\]|[^\]]*?\])|\[SLIDES:(?:[\s\S]*?\n\s*\]|[^\]]*?\])|\[PDF:\s*(?:[\s\S]*?\n\s*\]|[^\]]*?\])|\[DIAGRAM:\s*[^\]|]+\s*\|\s*[^\]]+\]|\[VIDEO:\s*[^\]|]+\s*\|\s*[^\]]+\])/g;
-
-  const parts = content.split(tagsRegex);
+  const parts = splitContentTags(content);
 
   // Find the index of the last text part that is actually rendered (not an incomplete tag, and not a parsed tag card)
   let lastVisibleTextIndex = -1;
@@ -457,8 +680,8 @@ const InteractiveChatBubble = ({ msg, isStreaming }) => {
         }
 
         if (part.startsWith('[MINDMAP:') && part.endsWith(']')) {
-          const code = part.substring(9, part.length - 1).trim();
-          return <MermaidRenderer key={index} code={code} />;
+          // Chat mindmap feature disabled per user request
+          return null;
         }
 
         if (part.startsWith('[CODE:') && part.endsWith(']')) {
@@ -587,7 +810,7 @@ const InteractiveChatBubble = ({ msg, isStreaming }) => {
           <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {cleanText && (
               <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-                {cleanText}
+                <LatexRenderer text={cleanText} />
                 {showCursorHere && !pendingTag && (
                   <span
                     style={{
@@ -774,6 +997,37 @@ export default function ChatView({ chatEndRef }) {
         {/* Dialog Area */}
         <div className="chat-view-dialog" style={{ flexGrow: '1', padding: '28px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {chatHistory.map((msg, index) => {
+            if (msg.role === 'system') {
+              return (
+                <div
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    margin: '8px 0',
+                    width: '100%'
+                  }}
+                >
+                  <div style={{
+                    padding: '8px 16px',
+                    background: 'linear-gradient(135deg, rgba(13, 148, 136, 0.08) 0%, rgba(2, 132, 199, 0.04) 100%)',
+                    border: '1px solid rgba(13, 148, 136, 0.2)',
+                    borderRadius: '12px',
+                    color: 'var(--primary-neon)',
+                    fontSize: '11px',
+                    fontFamily: 'monospace',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                    backdropFilter: 'blur(4px)'
+                  }}>
+                    <Cpu size={12} className="animate-pulse" style={{ color: 'var(--secondary)' }} />
+                    <span>{msg.content}</span>
+                  </div>
+                </div>
+              );
+            }
             const isLastAssistant = index === lastAssistantIdx && msg.role !== 'user';
             return (
               <div

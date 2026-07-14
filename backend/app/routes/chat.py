@@ -89,8 +89,8 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             user_msg = request.messages[-1]
             db_save_chat_message(
                 session_id=request.session_id,
-                message_id=f"user-{now_ts}-{str(uuid.uuid4())[:8]}",
-                role="user",
+                message_id=f"{user_msg.role}-{now_ts}-{str(uuid.uuid4())[:8]}",
+                role=user_msg.role,
                 content=user_msg.content
             )
             db_record_contribution(target_user, 1)
@@ -102,21 +102,38 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                 new_title = user_msg.content[:15] + ("..." if len(user_msg.content) > 15 else "")
                 db_update_chat_session_title(request.session_id, new_title)
 
-        # Fetch relevant Bilibili videos from video agent
+        # Fetch relevant Bilibili videos from video agent, user profile updates, and RAG query optimization in parallel
         from app.video_agent import get_video_recommendations_for_node
+        from app.ai import optimize_video_query_from_message
+
         rec_videos = []
-        try:
+        analysis = None
+        optimized_query = ""
+
+        # Step 1: Supervisor orchestrator thinking state
+        yield f"data: {json.dumps({'type': 'status', 'status': '🧠 [主管智能体] 正在唤醒协同智能体网络...'})}\n\n"
+
+        if _chat_cfg.api_key:
+            yield f"data: {json.dumps({'type': 'status', 'status': '📊 [协同网络] 正在并行执行画像诊断与检索优化...'})}\n\n"
+
+            # 1. Determine active node
             active_node = None
-            nodes = db_get_path_nodes(target_user)
-            active_node = next((n for n in nodes if n.status == 'active'), None)
-            if not active_node and nodes:
-                active_node = nodes[0]
-            
-            # Check if user specifically asked for videos in the current message
-            user_msg_content = request.messages[-1].content if request.messages else ""
-            from app.ai import optimize_video_query_from_message
-            specific_kw = await asyncio.to_thread(optimize_video_query_from_message, user_msg_content, target_user)
-            
+            try:
+                nodes = db_get_path_nodes(target_user)
+                active_node = next((n for n in nodes if n.status == 'active'), None)
+                if not active_node and nodes:
+                    active_node = nodes[0]
+            except Exception as e:
+                print(f"Failed to fetch active node: {e}")
+
+            # 2. Extract video keywords from user message (this is a very fast string check if no keywords are matched, else runs a fast LLM text completion)
+            user_msg = request.messages[-1].content if request.messages else ""
+            try:
+                specific_kw = await asyncio.to_thread(optimize_video_query_from_message, user_msg, target_user)
+            except Exception as e:
+                print(f"Failed to check video keywords: {e}")
+                specific_kw = None
+
             if specific_kw:
                 print(f"[Video Recommendation Query] Extracted specific keyword: '{specific_kw}' from user message")
                 node_title = specific_kw
@@ -124,156 +141,266 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
             else:
                 node_title = active_node.title if active_node else "Python 变量与数据类型"
                 node_desc = active_node.description if active_node else "探索 Python 基础语法"
-            
-            rec_videos = await asyncio.to_thread(
+
+            # Define the background profile analysis task
+            async def run_profile_analysis_bg():
+                try:
+                    analysis = await asyncio.to_thread(
+                        analyze_chat_profile,
+                        request.messages,
+                        current_profile,
+                        target_user
+                    )
+                    if not analysis:
+                        return None, False, False
+                    
+                    profile_updated = False
+                    path_updated = False
+                    
+                    p_updates = analysis.get("profile_updates")
+                    if p_updates:
+                        for k, v in p_updates.items():
+                            if v is not None and hasattr(current_profile, k):
+                                setattr(current_profile, k, v)
+                                profile_updated = True
+                    
+                    subj = analysis.get("switch_to_subject")
+                    if not subj and "profile_updates" in analysis and isinstance(analysis["profile_updates"], dict):
+                        subj = analysis["profile_updates"].get("switch_to_subject")
+                    
+                    if subj:
+                        subj_str = str(subj).strip().lower()
+                        all_courses = db_get_all_registered_courses()
+                        matched_course = None
+                        for course in all_courses:
+                            c_display = course["display_name"].lower()
+                            c_id = course["course_id"].lower()
+                            kws = [k.lower() for k in course.get("keywords", [])]
+                            if subj_str == c_display or subj_str == c_id or subj_str in c_display or c_display in subj_str or any(kw in subj_str for kw in kws):
+                                matched_course = course
+                                break
+                        if matched_course:
+                            subj = matched_course["display_name"]
+                            
+                    if subj and subj not in current_profile.learning_goals:
+                        all_courses = db_get_all_registered_courses()
+                        valid_names = {c["display_name"] for c in all_courses}
+                        if subj not in valid_names:
+                            await asyncio.to_thread(db_auto_register_course, subj, target_user)
+                            valid_names.add(subj)
+                        if subj in valid_names:
+                            current_profile.learning_goals = [subj]
+                            db_sync_path_nodes_by_goals(target_user, [subj])
+                            profile_updated = True
+                            path_updated = True
+                    
+                    if profile_updated:
+                        db_save_profile(target_user, current_profile)
+                    
+                    replan_requested = analysis.get("trigger_replan", False)
+                    if replan_requested:
+                        from app.agents.coordinator import AgentCommandBus
+                        await asyncio.to_thread(
+                            AgentCommandBus.send_command,
+                            "AI助教聊天",
+                            "路径大纲规划",
+                            "REPLAN_PATH",
+                            {"kb_score": current_profile.knowledge_base, "pace_score": current_profile.learning_pace},
+                            target_user
+                        )
+                        path_updated = True
+                        
+                    node_adj = analysis.get("apply_node_adjustment")
+                    if node_adj and isinstance(node_adj, dict):
+                        node_id = node_adj.get("node_id")
+                        title = node_adj.get("title")
+                        description = node_adj.get("description")
+                        if node_id and title and description:
+                            from app.db import db_update_single_path_node
+                            await asyncio.to_thread(
+                                db_update_single_path_node,
+                                target_user,
+                                node_id,
+                                title,
+                                description
+                            )
+                            # Log action
+                            db_log_agent_action(
+                                target_user,
+                                "路径大纲规划",
+                                f"接收自适应调整指令：成功将节点 [{node_id}] 升级为「{title}」。",
+                                "success"
+                            )
+                            # Trigger resource pre-generation for this updated node
+                            from app.agents.coordinator import AgentCommandBus
+                            await asyncio.to_thread(
+                                AgentCommandBus.send_command,
+                                "路径规划",
+                                "学术资源生成",
+                                "PRE_GENERATE_RESOURCES",
+                                {
+                                    "node_id": node_id,
+                                    "node_title": title,
+                                    "node_description": description,
+                                    "node_resources": ["slide", "pdf", "mindmap", "quiz", "code", "video"]
+                                },
+                                target_user
+                            )
+                            path_updated = True
+                        
+                    return analysis, profile_updated, path_updated
+                except Exception as e:
+                    print(f"Background profile analysis failed: {e}")
+                    return None, False, False
+
+            # Spawn background profile analysis (non-blocking)
+            bg_analysis_task = asyncio.create_task(run_profile_analysis_bg())
+
+            # Define the video recommendations task
+            video_task = asyncio.to_thread(
                 get_video_recommendations_for_node,
                 node_title,
                 node_desc,
                 current_profile,
                 target_user
             )
-        except Exception as e:
-            print(f"Failed to fetch videos in chat route: {e}")
 
-        # Step 1: Supervisor orchestrator thinking state
-        yield f"data: {json.dumps({'type': 'status', 'status': '🧠 [主管智能体] 正在唤醒协同智能体网络...'})}\n\n"
-        await asyncio.sleep(0.4)
-        
-        if _chat_cfg.api_key:
-            # Step 2: Structured Analyzer Call
-            yield f"data: {json.dumps({'type': 'status', 'status': '📊 [画像智能体] 正在对您的认知指标进行多维提取与诊断...'})}\n\n"
+            # RAG Query Optimization Heuristic Check (bypass if short/simple message)
+            should_optimize_rag = False
+            user_msg_str = request.messages[-1].content if request.messages else ""
+            if len(request.messages) > 1 and len(user_msg_str) > 15:
+                reference_words = ["它", "这个", "那个", "这些", "那些", "之前", "刚才", "接着", "上一个", "刚才的", "继续"]
+                if any(rw in user_msg_str for rw in reference_words):
+                    should_optimize_rag = True
+
+            # Gather parallel tasks (only video_task and rag_task if needed)
+            tasks_to_gather = [video_task]
+            if should_optimize_rag:
+                rag_task = asyncio.to_thread(
+                    optimize_rag_query,
+                    request.messages,
+                    target_user
+                )
+                tasks_to_gather.append(rag_task)
             
-            analysis = await asyncio.to_thread(analyze_chat_profile, request.messages, current_profile, target_user)
-            
-            profile_updated = False
-            path_updated = False
-            
-            if analysis:
-                p_updates = analysis.get("profile_updates")
-                if p_updates:
-                    for k, v in p_updates.items():
-                        if v is not None and hasattr(current_profile, k):
-                            setattr(current_profile, k, v)
-                            profile_updated = True
+            try:
+                if len(tasks_to_gather) == 2:
+                    rec_videos, optimized_query = await asyncio.gather(*tasks_to_gather)
+                    print(f"[RAG Query Optimization] Original: '{user_msg_str}' -> Optimized: '{optimized_query}'")
+                else:
+                    rec_videos = await video_task
+                    optimized_query = user_msg_str
+            except Exception as e:
+                print(f"Failed to run parallel tasks: {e}")
+                rec_videos = []
+                optimized_query = user_msg_str
                 
-                subj = analysis.get("switch_to_subject")
-                if not subj and "profile_updates" in analysis and isinstance(analysis["profile_updates"], dict):
-                    subj = analysis["profile_updates"].get("switch_to_subject")
-                
-                if subj:
-                    subj_str = str(subj).strip().lower()
-                    all_courses = db_get_all_registered_courses()
-                    matched_course = None
-                    for course in all_courses:
-                        c_display = course["display_name"].lower()
-                        c_id = course["course_id"].lower()
-                        kws = [k.lower() for k in course.get("keywords", [])]
-                        
-                        # Match display name, course ID, or any of the keywords
-                        if subj_str == c_display or subj_str == c_id or subj_str in c_display or c_display in subj_str or any(kw in subj_str for kw in kws):
-                            matched_course = course
-                            break
-                            
-                    if matched_course:
-                        subj = matched_course["display_name"]
-                        
-                if subj and subj not in current_profile.learning_goals:
-                    # Check if course is already registered
-                    all_courses = db_get_all_registered_courses()
-                    valid_names = {c["display_name"] for c in all_courses}
-                    
-                    if subj not in valid_names:
-                        # Auto-register the new course on-the-fly!
-                        yield f"data: {json.dumps({'type': 'status', 'status': f'🎓 [规划智能体] 正在为「{subj}」自动生成课程大纲，请稍候...'})}\n\n"
-                        registered_ok = await asyncio.to_thread(db_auto_register_course, subj, target_user)
-                        if registered_ok:
-                            valid_names.add(subj)
-                    
-                    if subj in valid_names:
-                        current_profile.learning_goals = [subj]
-                        db_sync_path_nodes_by_goals(target_user, [subj])
-                        profile_updated = True
-                        path_updated = True
-            
-            if profile_updated:
-                db_save_profile(target_user, current_profile)
-                
-            yield f"data: {json.dumps({'type': 'status', 'status': '📍 [路径智能体] 正在优化您的知识时间轴拓扑结构...'})}\n\n"
-            await asyncio.sleep(0.4)
-            
-            yield f"data: {json.dumps({'type': 'status', 'status': '💬 [导师智能体] 正在根据新画像为您生成个性化讲义...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'status': '💬 [导师智能体] 正在根据画像生成个性化内容...'})}\n\n"
             
             from app.knowledge_base import clean_subject_name
             subject = current_profile.learning_goals[0] if (current_profile.learning_goals and len(current_profile.learning_goals) > 0) else "python_basics"
             subject_id = clean_subject_name(subject)
-            user_msg = request.messages[-1].content if request.messages else ""
             knowledge_context = ""
             search_context = ""
             
-            # Fetch search configuration
-            search_cfg = db_get_search_settings(target_user)
-            
-            if user_msg:
-                if len(request.messages) > 1:
-                    optimized_query = await asyncio.to_thread(optimize_rag_query, request.messages, target_user)
-                    print(f"[RAG Query Optimization] Original: '{user_msg}' -> Optimized: '{optimized_query}'")
-                else:
-                    optimized_query = user_msg
-                knowledge_context = rag_retrieve_context(optimized_query, subject_id, username=target_user)
-                
-                # Check if Web Search is enabled
+            if optimized_query:
+                try:
+                    knowledge_context = rag_retrieve_context(optimized_query, subject_id, username=target_user)
+                except Exception as e:
+                    print(f"RAG context retrieval failed: {e}")
+
+                # Fetch search configuration
+                search_cfg = db_get_search_settings(target_user)
                 if search_cfg.get("search_enabled"):
                     yield f"data: {json.dumps({'type': 'status', 'status': f'🔍 [搜索智能体] 正在检索「{optimized_query}」的最新网络资讯...'})}\n\n"
                     from app.search_agent import run_web_search
-                    search_results = await asyncio.to_thread(
-                        run_web_search,
-                        optimized_query,
-                        search_cfg.get("search_provider", "duckduckgo"),
-                        search_cfg.get("api_key", ""),
-                        search_cfg.get("max_results", 3)
-                    )
-                    
-                    yield f"data: {json.dumps({'type': 'status', 'status': f'✅ [搜索智能体] 成功检索到 {len(search_results)} 条相关网页内容。'})}\n\n"
-                    db_log_agent_action(target_user, "搜索智能体", f"执行联网搜索「{optimized_query}」，获取到 {len(search_results)} 条网页资讯。", "info")
-                    await asyncio.sleep(0.3)
-                    
-                    if search_results:
-                        search_context = "\n\n[以下是通过互联网实时检索到的最新资讯，你必须参考并结合这些最新事实来回答学生，以保证时效性和准确性]：\n"
-                        for idx, res in enumerate(search_results):
-                            search_context += f"{idx + 1}. 【{res['title']}】({res['link']})\n   内容: {res['snippet']}\n"
+                    try:
+                        search_results = await asyncio.to_thread(
+                            run_web_search,
+                            optimized_query,
+                            search_cfg.get("search_provider", "duckduckgo"),
+                            search_cfg.get("api_key", ""),
+                            search_cfg.get("max_results", 3)
+                        )
+                        yield f"data: {json.dumps({'type': 'status', 'status': f'✅ [搜索智能体] 成功检索到 {len(search_results)} 条相关网页内容。'})}\n\n"
+                        db_log_agent_action(target_user, "搜索智能体", f"执行联网搜索「{optimized_query}」，获取到 {len(search_results)} 条网页资讯。", "info")
+                        
+                        if search_results:
+                            search_context = "\n\n[以下是通过互联网实时检索到的最新资讯，你必须参考并结合这些最新事实来回答学生，以保证时效性和准确性]：\n"
+                            for idx, res in enumerate(search_results):
+                                search_context += f"{idx + 1}. 【{res['title']}】({res['link']})\n   内容: {res['snippet']}\n"
+                    except Exception as e:
+                        print(f"Web search agent failed: {e}")
 
             stream_response = await asyncio.to_thread(
                 stream_tutor_reply,
-                request.messages,
-                current_profile,
-                target_user,
-                rec_videos,
-                request.tutor_personality,
-                knowledge_context + search_context
+                messages=request.messages,
+                current_profile=current_profile,
+                username=target_user,
+                videos_context=rec_videos,
+                tutor_personality=request.tutor_personality,
+                knowledge_context=knowledge_context + search_context,
+                current_node_id=request.current_node_id,
+                current_node_title=request.current_node_title,
+                current_node_description=request.current_node_description,
+                current_node_status=request.current_node_status,
+                current_node_resources=request.current_node_resources,
+                current_resource_type=request.current_resource_type,
+                last_sandbox_code=request.last_sandbox_code,
+                last_sandbox_error=request.last_sandbox_error,
+                last_quiz_score=request.last_quiz_score
             )
             
             if stream_response and stream_response.status_code == 200:
                 yield f"data: {json.dumps({'type': 'status', 'status': ''})}\n\n"
                 
-                for chunk_bytes in stream_response.iter_lines():
-                    if chunk_bytes:
-                        line = chunk_bytes.decode('utf-8').strip()
-                        if line.startswith("data:"):
-                            data_str = line[5:].strip()
-                            if data_str == "[DONE]":
-                                break
-                            try:
-                                data_json = json.loads(data_str)
-                                delta = data_json["choices"][0]["delta"]
-                                if "content" in delta and delta["content"] is not None:
-                                    assistant_chunks.append(delta["content"])
-                                    yield f"data: {json.dumps({'type': 'content', 'content': delta['content']})}\n\n"
-                            except Exception:
-                                pass
+                queue = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+
+                def read_stream_thread():
+                    try:
+                        for chunk_bytes in stream_response.iter_lines():
+                            if chunk_bytes:
+                                loop.call_soon_threadsafe(queue.put_nowait, chunk_bytes)
+                    except Exception as e:
+                        print(f"Error in stream reading thread: {e}")
+                    finally:
+                        loop.call_soon_threadsafe(queue.put_nowait, None)
+
+                # Run the stream reading in a background thread
+                asyncio.create_task(asyncio.to_thread(read_stream_thread))
+
+                while True:
+                    chunk_bytes = await queue.get()
+                    if chunk_bytes is None:
+                        break
+                    
+                    line = chunk_bytes.decode('utf-8').strip()
+                    if line.startswith("data:"):
+                        data_str = line[5:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            data_json = json.loads(data_str)
+                            delta = data_json["choices"][0]["delta"]
+                            if "content" in delta and delta["content"] is not None:
+                                assistant_chunks.append(delta["content"])
+                                yield f"data: {json.dumps({'type': 'content', 'content': delta['content']})}\n\n"
+                        except Exception:
+                            pass
                 
                 # If LLM stream produced no content (e.g. API authentication error), fallback to simulator
                 if not assistant_chunks:
-                    async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks, reason="empty_stream"):
+                    async for chunk in run_fallback_simulator(
+                        messages=request.messages,
+                        profile=current_profile,
+                        rec_videos_list=rec_videos,
+                        assistant_chunks=assistant_chunks,
+                        reason="empty_stream",
+                        current_node_title=request.current_node_title,
+                        last_sandbox_error=request.last_sandbox_error,
+                        last_quiz_score=request.last_quiz_score
+                    ):
                         yield chunk
                 else:
                     # Check if we should auto-append video recommendation cards
@@ -333,21 +460,43 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                         except Exception as e:
                             print(f"Failed to generate fallback quiz: {e}")
 
-                    # Push database updates to client
-                    if profile_updated:
-                        yield f"data: {json.dumps({'type': 'profile_update', 'profile': current_profile.model_dump()})}\n\n"
-                        await asyncio.sleep(0.2)
-                    if path_updated:
-                        nodes_list = [n.model_dump() for n in db_get_path_nodes(target_user)]
-                        yield f"data: {json.dumps({'type': 'path_update', 'nodes': nodes_list})}\n\n"
-                        await asyncio.sleep(0.2)
+                    # Await background profile analysis task and push database updates to client
+                    try:
+                        _, bg_profile_updated, bg_path_updated = await bg_analysis_task
+                        if bg_profile_updated:
+                            yield f"data: {json.dumps({'type': 'profile_update', 'profile': current_profile.model_dump()})}\n\n"
+                            await asyncio.sleep(0.2)
+                        if bg_path_updated:
+                            nodes_list = [n.model_dump() for n in db_get_path_nodes(target_user)]
+                            yield f"data: {json.dumps({'type': 'path_update', 'nodes': nodes_list})}\n\n"
+                            await asyncio.sleep(0.2)
+                    except Exception as e:
+                        print(f"Error in awaiting background analysis: {e}")
             else:
                 # LLM API call failed, fallback to simulator
-                async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks, reason="api_failed"):
+                async for chunk in run_fallback_simulator(
+                    messages=request.messages,
+                    profile=current_profile,
+                    rec_videos_list=rec_videos,
+                    assistant_chunks=assistant_chunks,
+                    reason="api_failed",
+                    current_node_title=request.current_node_title,
+                    last_sandbox_error=request.last_sandbox_error,
+                    last_quiz_score=request.last_quiz_score
+                ):
                     yield chunk
         else:
             # No LLM API key provided, default to simulator fallback
-            async for chunk in run_fallback_simulator(request.messages, current_profile, rec_videos, assistant_chunks, reason="no_api_key"):
+            async for chunk in run_fallback_simulator(
+                messages=request.messages,
+                profile=current_profile,
+                rec_videos_list=rec_videos,
+                assistant_chunks=assistant_chunks,
+                reason="no_api_key",
+                current_node_title=request.current_node_title,
+                last_sandbox_error=request.last_sandbox_error,
+                last_quiz_score=request.last_quiz_score
+            ):
                 yield chunk
             
         if request.session_id and assistant_chunks:
@@ -360,14 +509,30 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
                 content=full_reply
             )
             
+        # Ensure the background profile analysis task is completed
+        if _chat_cfg.api_key and 'bg_analysis_task' in locals():
+            try:
+                await bg_analysis_task
+            except Exception as e:
+                print(f"Error awaiting background analysis at cleanup: {e}")
+
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-    async def run_fallback_simulator(messages, profile, rec_videos_list=None, assistant_chunks=None, reason="no_api_key"):
-        status_msg = "⚠️ 未检测到 API Key，已自动启用本地仿真模型。"
+    async def run_fallback_simulator(
+        messages, 
+        profile, 
+        rec_videos_list=None, 
+        assistant_chunks=None, 
+        reason="no_api_key",
+        current_node_title=None,
+        last_sandbox_error=None,
+        last_quiz_score=None
+    ):
+        status_msg = "[系统通知] 未检测到 API Key，已自动启用本地仿真模型。"
         if reason == "api_failed":
-            status_msg = "⚠️ 大模型接口响应失败，已自动启用本地仿真模型。"
+            status_msg = "[系统通知] 大模型接口响应失败，已自动启用本地仿真模型。"
         elif reason == "empty_stream":
-            status_msg = "⚠️ 大模型未返回有效内容，已自动启用本地仿真模型。"
+            status_msg = "[系统通知] 大模型未返回有效内容，已自动启用本地仿真模型。"
         yield f"data: {json.dumps({'type': 'status', 'status': status_msg})}\n\n"
         await asyncio.sleep(0.6)
         yield f"data: {json.dumps({'type': 'status', 'status': ''})}\n\n"
@@ -410,7 +575,26 @@ async def chat_interaction(request: ChatRequest, current_username: str = Depends
 
 
         tutor_response = ""
-        if "video" in user_input_clean or "视频" in user_input_clean:
+        if user_input_clean.startswith("[系统通知]") or user_input_clean.startswith("[系统感知]"):
+            if "测试通过" in user_input_clean or "代码测试全部通过" in user_input_clean:
+                tutor_response = f"太棒了！我看到你在关卡「{current_node_title or '编程练习'}」中的代码测试已经全部通过！这说明你非常扎实地掌握了本章核心概念。我们可以点击下方的关卡进入下一阶段的学习啦！"
+            elif "运行代码失败" in user_input_clean or "运行失败" in user_input_clean:
+                err_info = last_sandbox_error or "语法或运行错误"
+                tutor_response = f"我注意到你在关卡「{current_node_title or '编程练习'}」中的代码运行遇到了错误：\n\n`{err_info}`\n\n别担心，这是编程中的常见情况。通常你可以检查缩进是否为4个空格、变量拼写或者退出条件。如果需要，我可以帮你看看代码！"
+            elif "自适应测评" in user_input_clean or "自适应测试" in user_input_clean:
+                if "通过" in user_input_clean and "未通过" not in user_input_clean:
+                    score_info = last_quiz_score or "及格"
+                    tutor_response = f"恭喜你顺利通过了「{current_node_title or '当前关卡'}」的自适应测验！得分是 {score_info}。你的知识库基础掌握得非常棒，继续保持这个学习节奏！"
+                else:
+                    score_info = last_quiz_score or "未达标"
+                    tutor_response = f"我看到你在「{current_node_title or '当前关卡'}」的测评得分是 {score_info}。没关系，画像智能体已经为你自动生成并挂载了专属的加固关卡。我们可以通过右侧面板进入加固关卡学习针对性的理论，并用沙盒代码进行练习。让我们一起攻克这个难关！"
+            else:
+                tutor_response = f"收到系统通知。我注意到你正在学习关卡「{current_node_title or '当前课程'}」。本关配备了讲义PDF、幻灯片和测试题等丰富的多模态资源，建议你可以配合学习。有任何不懂的概念，随时在这里问我！"
+        elif "我想了解关于" in user_input_clean or "学习进行深度讨论" in user_input_clean or "讨论关卡" in user_input_clean:
+            tutor_response = f"好的，我们来讨论关卡「{current_node_title or '当前学习章节'}」。这个关卡重点是让我们掌握核心的数据结构与逻辑流控制。你目前是对本关的PDF课本概念有疑问，还是在写沙盒代码时遇到了困难？"
+        elif "寻求导师指导" in user_input_clean or "请帮我分析代码" in user_input_clean:
+            tutor_response = f"我已经收到你关于「{current_node_title or '当前关卡'}」的代码指导请求了。分析你的代码，主要的逻辑结构是正确的。建议注意检查缩进对齐，以及函数返回值的类型。你可以尝试在沙盒中点击“运行测试”看看断言结果！"
+        elif "video" in user_input_clean or "视频" in user_input_clean:
             if rec_videos_list:
                 v = rec_videos_list[0]
                 video_json_str = json.dumps({

@@ -66,3 +66,78 @@ def test_fstring_dunder_escapes():
     is_safe, msg = is_code_safe(unsafe_fstring)
     # The f-string itself triggers AST checks on Attribute and potentially JoinedStr containing dunder
     assert is_safe is False
+
+def test_security_agent_code_scanning():
+    from app.agents.coordinator import SecurityAgent
+    
+    agent = SecurityAgent()
+    
+    # 1. Context with safe code block
+    context_safe = {
+        "username": "test_user",
+        "node_title": "Test Title",
+        "node_resources": ["pdf"],
+        "generated_data": {
+            "pdf": "这里是一段教材内容：\n```python\nx = 10\ny = 20\nprint(x + y)\n```"
+        },
+        "fallback_assets": {
+            "pdf": "Fallback content"
+        }
+    }
+    res_safe = agent.run(context_safe)
+    assert res_safe["security_passed"] is True
+    assert res_safe["generated_data"]["pdf"] != "Fallback content"
+    
+    # 2. Context with unsafe code block (using import os)
+    context_unsafe = {
+        "username": "test_user",
+        "node_title": "Test Title",
+        "node_resources": ["pdf"],
+        "generated_data": {
+            "pdf": "这里是一段教材内容：\n```python\nimport os\nos.system('echo bad')\n```"
+        },
+        "fallback_assets": {
+            "pdf": "Fallback content"
+        }
+    }
+    res_unsafe = agent.run(context_unsafe)
+    assert res_unsafe["security_passed"] is False
+    assert res_unsafe["generated_data"]["pdf"] == "Fallback content"
+
+def test_agent_command_bus_log_and_dispatch():
+    from app.agents.coordinator import AgentCommandBus
+    
+    # Test dispatching a command from Tutor to Path Planner
+    AgentCommandBus.send_command(
+        sender="AI助教聊天",
+        recipient="路径大纲规划",
+        command="REPLAN_PATH",
+        payload={"kb_score": 80, "pace_score": 80},
+        username="test_user"
+    )
+    
+    # Verify log is written to system_logs table
+    import sqlite3
+    from app.db import DB_PATH
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT sender, message FROM system_logs WHERE username = 'test_user' ORDER BY rowid DESC LIMIT 20")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    assert len(rows) >= 2
+    
+    senders = [r[0] for r in rows]
+    messages = [r[1] for r in rows]
+    
+    # Assert Tutor -> Path Planner REPLAN_PATH command exists
+    assert any("AI助教聊天 ➔ 路径大纲规划" in s for s in senders)
+    assert any("REPLAN_PATH" in m for m in messages)
+    
+    # Assert Path Planner confirmation log exists
+    assert any("路径大纲规划" in s for s in senders)
+    assert any("重新规划已完成" in m for m in messages)
+    
+    # Assert Path Planner -> Resource Generator PRE_GENERATE_RESOURCES command exists
+    assert any("路径大纲规划 ➔ 学术资源生成" in s for s in senders)
+    assert any("PRE_GENERATE_RESOURCES" in m for m in messages)

@@ -13,7 +13,8 @@ def setup_database():
     init_db()
 
 def test_course_generation_and_indexing_flow():
-    course_id = "physics_test"
+    import time
+    course_id = f"physics_test_{int(time.time())}"
     display_name = "大学物理基础"
     description = "探究经典力学与电磁学的基本原理"
     
@@ -70,12 +71,20 @@ def test_course_generation_and_indexing_flow():
         
     finally:
         # 7. Clean up all generated data
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM registered_courses WHERE course_id = ?", (course_id,))
-        cursor.execute("DELETE FROM course_chunks WHERE course_id = ?", (course_id,))
-        conn.commit()
-        conn.close()
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [r[0] for r in cursor.fetchall()]
+            
+            if "registered_courses" in tables:
+                cursor.execute("DELETE FROM registered_courses WHERE course_id = ?", (course_id,))
+            if "course_chunks" in tables:
+                cursor.execute("DELETE FROM course_chunks WHERE course_id = ?", (course_id,))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
         
         if os.path.exists(physical_dir):
             shutil.rmtree(physical_dir)

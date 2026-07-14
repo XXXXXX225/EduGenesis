@@ -178,6 +178,9 @@ class SecurityAgent(BaseAgent):
         content_checking_passed = True
         error_reasons = []
         
+        from app.security import is_code_safe
+        import re
+        
         for r_type in node_resources:
             if r_type == "video":
                 continue
@@ -199,6 +202,15 @@ class SecurityAgent(BaseAgent):
                 if "graph " not in str_content:
                     content_checking_passed = False
                     error_reasons.append("Mermaid 脑图资源不符合 graph TD/LR 等拓扑规范")
+                    
+            # 3. Python code block static safety audit (preventing dynamic bypasses or escape commands)
+            python_blocks = re.findall(r'```python\s*\n(.*?)\n```', str_content, re.DOTALL)
+            for block in python_blocks:
+                is_safe, err_msg = is_code_safe(block)
+                if not is_safe:
+                    content_checking_passed = False
+                    error_reasons.append(f"资源 [{r_type}] 包含不安全代码段：{err_msg}")
+                    break
                     
         if content_checking_passed:
             msg = f"对 [{node_title}] 生成的课本及试题进行安全过滤审计与学术合规校验。检查项：中文正确性、代码安全性、Mermaid语法。审计状态：100% 合规，准予入库。"
@@ -256,3 +268,97 @@ class AgentCoordinator:
                     current_context["generated_data"] = current_context["fallback_assets"].copy()
                     
         return current_context.get("generated_data", {})
+
+
+class AgentCommandBus:
+    @staticmethod
+    def send_command(sender: str, recipient: str, command: str, payload: dict, username: str):
+        """
+        跨智能体指令总线。记录交互日志并分发指令至目标智能体执行。
+        """
+        payload_desc = json.dumps(payload, ensure_ascii=False)
+        db_log_agent_action(
+            username, 
+            f"{sender} ➔ {recipient}", 
+            f"发送指令 [{command}] | 参数: {payload_desc}", 
+            "consensus"
+        )
+        
+        try:
+            if recipient == "路径大纲规划":
+                if command == "REPLAN_PATH":
+                    from app.routes.path import db_regenerate_path_nodes
+                    db_regenerate_path_nodes(username)
+                    db_log_agent_action(
+                        username,
+                        "路径大纲规划",
+                        "接收并执行来自 [AI助教聊天] 的指令：自适应难度与节点大纲重新规划已完成！已自动调整所有学习关卡节点内容。",
+                        "success"
+                    )
+                elif command == "INSERT_REINFORCEMENT_NODE":
+                    from app.db import db_insert_reinforcement_node
+                    node_id = payload.get("node_id", "node2")
+                    error_msg = payload.get("error_msg", "测试未通过")
+                    db_insert_reinforcement_node(username, node_id, error_msg)
+                    db_log_agent_action(
+                        username,
+                        "路径大纲规划",
+                        f"接收并执行来自 [{sender}] 的指令：已在当前关卡之后动态插入错题强化训练节点 [{node_id}_extra]。",
+                        "success"
+                    )
+            elif recipient == "学术资源生成":
+                if command == "PRE_GENERATE_RESOURCES":
+                    node_id = payload.get("node_id")
+                    node_title = payload.get("node_title")
+                    node_description = payload.get("node_description")
+                    node_resources = payload.get("node_resources", ["pdf", "quiz", "mindmap", "video"])
+                    
+                    import sys
+                    import threading
+                    def run_pregen():
+                        coordinator = AgentCoordinator(
+                            username=username,
+                            node_id=node_id,
+                            node_title=node_title,
+                            node_description=node_description,
+                            node_resources=node_resources,
+                            trigger_type="auto"
+                        )
+                        coordinator.run_consensus_pipeline()
+                        db_log_agent_action(
+                            username,
+                            "学术资源生成",
+                            f"关卡 [{node_title}] 的多模态学术资源后台预生成任务执行就绪。",
+                            "success"
+                        )
+                    
+                    if "pytest" in sys.modules:
+                        # In test suite, run synchronously to avoid async race conditions on SQLite test DB
+                        run_pregen()
+                    else:
+                        t = threading.Thread(target=run_pregen)
+                        t.start()
+                    db_log_agent_action(
+                        username,
+                        "学术资源生成",
+                        f"接收来自 [{sender}] 的预加载指令：后台多线程已启动，正在静默生成关卡 [{node_title}] 的多模态学术资源包。",
+                        "info"
+                    )
+            elif recipient == "AI助教聊天":
+                if command == "PUSH_ERROR_DIAGNOSIS":
+                    error_msg = payload.get("error_msg", "")
+                    node_id = payload.get("node_id", "")
+                    db_log_agent_action(
+                        username,
+                        "AI助教聊天",
+                        f"已成功接收并解析来自 [错题诊断归档] 的诊断报告：已捕获代码沙盒编译/期异常，准备在下一次对话中主动引导学生纠偏。",
+                        "success"
+                    )
+        except Exception as e:
+            print(f"[AgentCommandBus Error] Failed to execute {command} from {sender} to {recipient}: {e}")
+            db_log_agent_action(
+                username,
+                recipient,
+                f"处理来自 [{sender}] 的指令 [{command}] 时发生内部异常：{str(e)}",
+                "danger"
+            )

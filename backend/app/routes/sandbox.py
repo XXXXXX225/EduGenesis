@@ -170,32 +170,7 @@ def run_sandbox_code(request: SandboxRunRequest, current_username: str = Depends
                 profile.learning_stats["mastered_nodes"] = min(8, completed_count)
                 db_save_profile(target_user, profile)
                 
-                # Pre-seed resources for the newly active node (either idx+1 or idx+2)
-                active_node = None
-                for n in nodes:
-                    if n.status == "active":
-                        active_node = n
-                        break
-                if active_node:
-                    fallback_assets = get_fallback_assets_for_topic(active_node.title, profile, active_node.id)
-                    conn = sqlite3.connect(DB_PATH)
-                    cursor = conn.cursor()
-                    for res_type in active_node.resources:
-                        cursor.execute(
-                            "SELECT count(*) FROM user_resources WHERE username = ? AND node_id = ? AND resource_type = ?",
-                            (target_user, active_node.id, res_type)
-                        )
-                        exists = cursor.fetchone()[0]
-                        if exists == 0:
-                            content_val = fallback_assets.get(res_type, "")
-                            if not isinstance(content_val, str):
-                                content_val = json.dumps(content_val, ensure_ascii=False)
-                            cursor.execute(
-                                "INSERT OR REPLACE INTO user_resources (username, node_id, resource_type, content) VALUES (?, ?, ?, ?)",
-                                (target_user, active_node.id, res_type, content_val)
-                            )
-                    conn.commit()
-                    conn.close()
+
             
             # Sync mastered count
             nodes = db_get_path_nodes(target_user)
@@ -236,7 +211,17 @@ def run_sandbox_code(request: SandboxRunRequest, current_username: str = Depends
             conn.commit()
             conn.close()
             
-            db_log_agent_action(target_user, "画像智能体", f"检测到编译/运行期异常：已捕获错题并归档至错题本 [{challenge['title']}]", "warning")
+            db_log_agent_action(target_user, "错题诊断归档", f"检测到编译/运行期异常：已捕获错题并归档至错题本 [{challenge['title']}]", "warning")
+            
+            from app.agents.coordinator import AgentCommandBus
+            AgentCommandBus.send_command(
+                sender="错题诊断归档",
+                recipient="AI助教聊天",
+                command="PUSH_ERROR_DIAGNOSIS",
+                payload={"error_msg": short_error, "code": code, "node_id": node_id},
+                username=target_user
+            )
+            
             return {
                 "status": "failed",
                 "error": short_error,

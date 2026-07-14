@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lock, CheckCircle2, PlayCircle, ChevronRight, ArrowRight, Sparkles, Video, FileText, HelpCircle, FileCode, Map, MapPin, Star } from 'lucide-react';
+import { Lock, CheckCircle2, PlayCircle, ChevronRight, ArrowRight, Sparkles, Video, FileText, HelpCircle, FileCode, Map, MapPin, Star, MessageSquare } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 
 const getResourceIcon = (type) => {
@@ -107,7 +107,8 @@ export default function PathView() {
     handleRegeneratePath,
     isRegeneratingPath,
     fetchNodeResources,
-    setActiveTab
+    setActiveTab,
+    chat
   } = useAppContext();
 
   // Auto-select the active node (or first node) on load so details card isn't empty
@@ -424,7 +425,11 @@ export default function PathView() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
               <span style={{ fontSize: '9px', color: 'var(--secondary)', fontWeight: '700', letterSpacing: '0.08em' }}>STAGE PARAMETERS</span>
               <span className={`neon-badge neon-badge-${selectedNode.status === 'completed' ? 'success' : selectedNode.status === 'active' ? 'warning' : 'primary'}`} style={{ fontSize: '8px', padding: '1px 5px' }}>
-                {selectedNode.status === 'completed' ? '已完成' : selectedNode.status === 'active' ? '进行中' : '未解锁'}
+                {selectedNode.status === 'completed' 
+                  ? '已完成' 
+                  : selectedNode.status === 'active' 
+                    ? `进行中 (${selectedNode.completed_resources?.length || 0}/${selectedNode.resources?.length || 0})` 
+                    : '未解锁'}
               </span>
             </div>
             <h4 style={{ fontSize: '13.5px', fontWeight: '800', margin: '4px 0 2px 0', color: 'var(--text-main)' }}>{selectedNode.title}</h4>
@@ -449,6 +454,38 @@ export default function PathView() {
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={async () => {
+                chat.submitChatMessage(`我想和您讨论本关卡「${selectedNode.title}」的学习内容，您能为我做个简要介绍并指导一下吗？`);
+                setActiveTab('chat');
+              }}
+              style={{
+                background: 'linear-gradient(135deg, var(--accent-cyan) 0%, var(--primary-neon) 100%)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                color: '#ffffff',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                flexGrow: 1,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(45, 212, 191, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <MessageSquare size={12} /> 与导师讨论本关
+            </button>
             <button
               onClick={async () => {
                 await fetchNodeResources(selectedNode.id);

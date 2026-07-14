@@ -2087,4 +2087,77 @@ body.dark-mode .timeline-badge-wrapper {
   }
 }
 
+/* Dynamic Scientific Research Background Overlay 1 (Math/Physics) */
+.academic-bg-overlay-1 {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('/bg-pattern.jpg?v=edu');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.12;
+  z-index: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  animation: floatBg1 55s infinite ease-in-out;
+  transition: opacity 0.5s ease;
+}
+
+body.dark-mode .academic-bg-overlay-1 {
+  filter: invert(0.95) brightness(0.65) contrast(1.15);
+  opacity: 0.05;
+  mix-blend-mode: screen;
+}
+
+/* Dynamic Scientific Research Background Overlay 2 (Bio/Chem/Data) */
+.academic-bg-overlay-2 {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('/bg-pattern-2.jpg?v=edu');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0; /* Hidden initially, faded in via scroll */
+  z-index: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  animation: floatBg2 65s infinite ease-in-out;
+  transition: opacity 0.5s ease;
+}
+
+body.dark-mode .academic-bg-overlay-2 {
+  filter: invert(0.95) brightness(0.65) contrast(1.15);
+  mix-blend-mode: screen;
+}
+
+@keyframes floatBg1 {
+  0% {
+    transform: scale(1) translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.05) translate(-1%, -0.5%) rotate(0.5deg);
+  }
+  100% {
+    transform: scale(1) translate(0, 0) rotate(0deg);
+  }
+}
+
+@keyframes floatBg2 {
+  0% {
+    transform: scale(1.06) translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: scale(1) translate(1%, 0.5%) rotate(-0.5deg);
+  }
+  100% {
+    transform: scale(1.06) translate(0, 0) rotate(0deg);
+  }
+}
+
 

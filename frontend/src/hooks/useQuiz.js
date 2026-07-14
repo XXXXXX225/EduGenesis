@@ -8,7 +8,8 @@ export function useQuiz({
   setSelectedNode,
   setPathNodes,
   setProfileAlert,
-  setDiagnosticLogs
+  setDiagnosticLogs,
+  chat
 }) {
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
@@ -16,6 +17,7 @@ export function useQuiz({
   const [quizCorrectCount, setQuizCorrectCount] = useState(0);
   const [quizQuestionIdx, setQuizQuestionIdx] = useState(0);
   const [quizFeedback, setQuizFeedback] = useState('');
+  const [lastQuizScore, setLastQuizScore] = useState('');
 
   const handleCompleteQuiz = async (score, total) => {
     const wrongCount = total - score;
@@ -41,6 +43,7 @@ export function useQuiz({
     };
 
     try {
+      setLastQuizScore(`${score}/${total}`);
       const newData = await apiPost('/profile', updatedProfile);
       setProfile(newData);
 
@@ -65,6 +68,9 @@ export function useQuiz({
               log: `关卡解锁: 节点 [${selectedNode.title}] 已通关！下一节点已开启。`
             }
           ]);
+          if (chat) {
+            chat.submitChatMessage(`[系统感知] 学生完成了「${selectedNode?.title || '自适应测评'}」的自适应测评，得分：${score}/${total}，通过！`, 'system');
+          }
         } else {
           const extraNodeId = `${selectedNode.id}_extra`;
           const extraNodeObj = pathData.nodes.find(n => n.id === extraNodeId);
@@ -79,6 +85,9 @@ export function useQuiz({
               log: `路径加固: 测验正确率未达标，动态分支 [${selectedNode.title} 强化] 挂载并解锁。`
             }
           ]);
+          if (chat) {
+            chat.submitChatMessage(`[系统感知] 学生完成了「${selectedNode?.title || '自适应测评'}」的自适应测评，得分：${score}/${total}，未通过。画像智能体已动态挂载加固关卡。`, 'system');
+          }
         }
       }
 
@@ -109,6 +118,8 @@ export function useQuiz({
     setQuizQuestionIdx,
     quizFeedback,
     setQuizFeedback,
-    handleCompleteQuiz
+    handleCompleteQuiz,
+    lastQuizScore,
+    setLastQuizScore
   };
 }
