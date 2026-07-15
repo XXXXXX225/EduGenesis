@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="./docs/images/banner.png" alt="EduGenesis Banner" width="100%">
-</p>
+
 
 <h1 align="center">🚀 EduGenesis (启元智学)</h1>
 
